@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -18,15 +19,20 @@ export async function POST() {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options });
+          // Explicitly pass options so maxAge: 0 clears the auth token across subdomains/paths
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
         },
       },
     }
   );
 
-  // Sign out from Supabase (clears cookies server-side)
+  // 1. Sign out from Supabase (clears session cookies on server side)
   await supabase.auth.signOut();
 
-  // Redirect to login page
-  return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"));
+  // 2. Dynamically construct redirect URL using the request origin
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.search = ""; // clear any active query params
+
+  return NextResponse.redirect(loginUrl, { status: 302 });
 }

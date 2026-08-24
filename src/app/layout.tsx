@@ -66,7 +66,7 @@ return (
           <Sidebar />
           
           <div className="flex-1 flex flex-col overflow-hidden relative">
-            <Topbar />
+            {/* <Topbar /> */}
             <main className="flex-1 overflow-auto p-6">{children}</main>
           </div>
         </div>
