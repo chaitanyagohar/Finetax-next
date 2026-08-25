@@ -426,7 +426,11 @@ export default function TasksPage() {
             <div className="flex justify-between items-center border-b border-border pb-3">
               <h3 className="font-semibold text-base text-text-main flex items-center gap-2">
                 {editingTask ? "Manage Task Lifecycle" : "Add Task"}
-                {!canEditCoreDetails && <Lock className="h-4 w-4 text-text-muted" title="Core details locked for execution staff" />}
+                {!canEditCoreDetails && (
+  <span title="Core details locked for execution staff">
+    <Lock className="h-4 w-4 text-text-muted" />
+  </span>
+)}
               </h3>
               <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>
             </div>

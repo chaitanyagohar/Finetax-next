@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     let newEmailsCount = 0;
     try {
       // Fetch recent unread messages
-      for await (const msg of client.fetch({ unseen: true }, { source: true, envelope: true })) {
+      for await (const msg of client.fetch('UNSEEN', { source: true, envelope: true })) {
         if (!msg.source) continue;
 
         const parsed = await simpleParser(msg.source);
