@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, UserPlus, ArrowRightLeft, Calendar, Phone, Mail, Building } from "lucide-react";
+import { Search, Plus, Trash2, X, UserPlus, ArrowRightLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Lead } from "@/types/database";
+import { Lead, Profile } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 
 const SOURCES = ['Referral', 'Website', 'Social Media', 'Walk-in', 'Phone Enquiry', 'Existing Client', 'Other'];
@@ -11,6 +11,7 @@ const STATUSES = ['New', 'Contacted', 'Qualified', 'Quotation Sent', 'Won', 'Los
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [team, setTeam] = useState<Profile[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterSource, setFilterSource] = useState("");
@@ -23,6 +24,7 @@ export default function LeadsPage() {
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [serviceRequested, setServiceRequested] = useState("Tax Consultancy");
   const [source, setSource] = useState("Referral");
   const [status, setStatus] = useState("New");
   const [estimatedValue, setEstimatedValue] = useState<number>(0);
@@ -33,13 +35,18 @@ export default function LeadsPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    fetchLeads();
+    fetchInitialData();
   }, []);
 
-  async function fetchLeads() {
+  async function fetchInitialData() {
     setLoading(true);
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
-    if (data) setLeads(data);
+    const [{ data: leadsData }, { data: profilesData }] = await Promise.all([
+      supabase.from("leads").select("*").order("id", { ascending: false }),
+      supabase.from("profiles").select("*").order("name", { ascending: true }),
+    ]);
+
+    if (leadsData) setLeads(leadsData);
+    if (profilesData) setTeam(profilesData);
     setLoading(false);
   }
 
@@ -50,11 +57,12 @@ export default function LeadsPage() {
       setCompany((lead as any).company || "");
       setPhone(lead.phone || "");
       setEmail(lead.email || "");
+      setServiceRequested((lead as any).serviceRequested || (lead as any).service_requested || "Tax Consultancy");
       setSource((lead as any).source || "Referral");
       setStatus(lead.status || "New");
-      setEstimatedValue((lead as any).estimated_value || (lead as any).estimatedValue || 0);
-      setAssignedTo((lead as any).assigned_to || (lead as any).assignedTo || "");
-      setFollowUpDate((lead as any).follow_up_date || (lead as any).followUpDate || "");
+      setEstimatedValue((lead as any).estimatedValue || (lead as any).estimated_value || 0);
+      setAssignedTo((lead as any).assignedTo || (lead as any).assigned_to || "");
+      setFollowUpDate((lead as any).followUpDate || (lead as any).follow_up_date || "");
       setNotes(lead.notes || "");
     } else {
       setEditingLead(null);
@@ -74,6 +82,7 @@ export default function LeadsPage() {
     setCompany("");
     setPhone("");
     setEmail("");
+    setServiceRequested("Tax Consultancy");
     setSource("Referral");
     setStatus("New");
     setEstimatedValue(0);
@@ -85,16 +94,16 @@ export default function LeadsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const payload = {
+    const isNewAssignment = assignedTo && assignedTo !== ((editingLead as any)?.assignedTo || (editingLead as any)?.assigned_to);
+
+    const payload: Record<string, any> = {
       name: name.trim(),
-      company: company.trim(),
       phone: phone.trim(),
       email: email.trim(),
-      source,
-      status,
-      estimated_value: Number(estimatedValue || 0),
-      assigned_to: assignedTo.trim(),
-      follow_up_date: followUpDate || null,
+      serviceRequested: serviceRequested.trim(),
+      status: status || "New",
+      assignedTo: assignedTo || null,
+      followUpDate: followUpDate || null,
       notes: notes.trim(),
     };
 
@@ -102,25 +111,60 @@ export default function LeadsPage() {
       const { error } = await supabase.from("leads").update(payload).eq("id", editingLead.id);
       if (!error) {
         logAuditEvent("UPDATE_LEAD", "LEADS", editingLead.id, payload);
+        
+        // Notify Assigned Staff if re-assigned
+        if (isNewAssignment) {
+          await notifyAssignedStaff(assignedTo, name, serviceRequested);
+        }
+
         closeModal();
-        fetchLeads();
+        fetchInitialData();
       } else {
         alert("Error updating lead: " + error.message);
       }
     } else {
+      // Explicitly generate a UUID to prevent 'null value in column id' constraint errors
+      const newLeadId = crypto.randomUUID();
+
       const { data, error } = await supabase
         .from("leads")
-        .insert([{ ...payload, created_at: new Date().toISOString() }])
+        .insert([{ id: newLeadId, ...payload, createdAt: new Date().toISOString() }])
         .select()
         .single();
 
       if (!error) {
         logAuditEvent("CREATE_LEAD", "LEADS", data.id, payload);
+        
+        // Notify Assigned Staff on creation
+        if (assignedTo) {
+          await notifyAssignedStaff(assignedTo, name, serviceRequested);
+        }
+
         closeModal();
-        fetchLeads();
+        fetchInitialData();
       } else {
         alert("Error creating lead: " + error.message);
       }
+    }
+  }
+
+  // Outbound Email Engine for Assigned Staff
+  async function notifyAssignedStaff(profileId: string, leadName: string, service: string) {
+    const assignee = team.find((t) => String(t.id) === String(profileId));
+    if (!assignee?.email) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("to", assignee.email);
+      formData.append("subject", `New Lead Assigned: ${leadName}`);
+      formData.append(
+        "body",
+        `Hello ${assignee.name},\n\nYou have been assigned a new lead/enquiry in the Practice Manager portal:\n\nClient/Prospect Name: ${leadName}\nService Requested: ${service}\nPhone: ${phone || "N/A"}\nEmail: ${email || "N/A"}\nFollow-Up Date: ${followUpDate || "N/A"}\n\nPlease check your portal to initiate contact.`
+      );
+
+      await fetch("/api/send-email", { method: "POST", body: formData });
+    } catch (err) {
+      console.error("Failed to send lead assignment email:", err);
     }
   }
 
@@ -131,13 +175,12 @@ export default function LeadsPage() {
     if (!error) {
       logAuditEvent("DELETE_LEAD", "LEADS", editingLead.id);
       closeModal();
-      fetchLeads();
+      fetchInitialData();
     } else {
       alert("Error deleting lead: " + error.message);
     }
   }
 
-  // Automates converting lead into a Client record
   async function handleConvert() {
     if (!editingLead) return;
     if ((editingLead as any).converted_client_id) {
@@ -146,8 +189,6 @@ export default function LeadsPage() {
     }
 
     if (!confirm(`Convert lead "${editingLead.name}" into an active Client record?`)) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
 
     const clientPayload = {
       name: company || name,
@@ -158,7 +199,7 @@ export default function LeadsPage() {
       phone: phone || "",
       address: "",
       state: "",
-      assigned_to: assignedTo || user?.email || "",
+      assigned_to: assignedTo || null,
       notes: `Converted from lead: ${name}${notes ? " — " + notes : ""}`,
       status: "Active",
       total_revenue: 0,
@@ -177,7 +218,6 @@ export default function LeadsPage() {
       return;
     }
 
-    // Update lead status to Won and record client link
     const { error: leadErr } = await supabase
       .from("leads")
       .update({
@@ -190,7 +230,7 @@ export default function LeadsPage() {
       logAuditEvent("CONVERT_LEAD_TO_CLIENT", "LEADS", editingLead.id, { clientId: newClient.id });
       alert(`Converted! New client "${newClient.name}" created.`);
       closeModal();
-      fetchLeads();
+      fetchInitialData();
     } else {
       alert("Error updating lead conversion state: " + leadErr.message);
     }
@@ -207,13 +247,15 @@ export default function LeadsPage() {
     return matchesSearch && matchesStatus && matchesSource;
   });
 
-  function formatMoney(amount: number) {
-    return `₹${(amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
   function formatDate(dateStr?: string) {
     if (!dateStr) return "-";
     return new Date(dateStr).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  function getAssigneeName(profileId?: string) {
+    if (!profileId) return "-";
+    const found = team.find((t) => String(t.id) === String(profileId));
+    return found ? found.name : profileId;
   }
 
   return (
@@ -273,14 +315,12 @@ export default function LeadsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Company</th>
-                  <th>Source</th>
-                  <th>Status</th>
-                  <th>Est. Value</th>
-                  <th>Assigned To</th>
-                  <th>Follow-up</th>
+                <tr className="border-b border-border text-left text-text-muted bg-background/50">
+                  <th className="p-3">Name</th>
+                  <th className="p-3">Service Requested</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Assigned To</th>
+                  <th className="p-3">Follow-up</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -290,12 +330,11 @@ export default function LeadsPage() {
                     className="hover:bg-background/50 transition cursor-pointer"
                     onClick={() => openModal(l)}
                   >
-                    <td className="font-semibold text-text-main flex items-center gap-2">
+                    <td className="p-3 font-semibold text-text-main flex items-center gap-2">
                       <UserPlus className="h-3.5 w-3.5 text-navy shrink-0" /> {l.name}
                     </td>
-                    <td>{l.company || "-"}</td>
-                    <td>{l.source || "Other"}</td>
-                    <td>
+                    <td className="p-3">{l.serviceRequested || l.service_requested || "Consultancy"}</td>
+                    <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded font-medium ${
                           l.status === "Won"
@@ -310,11 +349,10 @@ export default function LeadsPage() {
                         {l.status || "New"}
                       </span>
                     </td>
-                    <td className="font-mono">{formatMoney(l.estimated_value || l.estimatedValue || 0)}</td>
-                    <td>{l.assigned_to || l.assignedTo || "-"}</td>
-                    <td>
-                      {l.follow_up_date || l.followUpDate ? (
-                        formatDate(l.follow_up_date || l.followUpDate)
+                    <td className="p-3">{getAssigneeName(l.assignedTo || l.assigned_to)}</td>
+                    <td className="p-3">
+                      {l.followUpDate || l.follow_up_date ? (
+                        formatDate(l.followUpDate || l.follow_up_date)
                       ) : (
                         <span className="text-text-muted">-</span>
                       )}
@@ -354,20 +392,10 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">COMPANY</label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
-                  />
-                </div>
-
-                <div>
                   <label className="block font-semibold text-text-muted mb-1">PHONE</label>
                   <input
                     type="text"
-                    placeholder="10-digit or with country code"
+                    placeholder="10-digit phone"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
@@ -385,16 +413,14 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">SOURCE</label>
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface"
-                  >
-                    {SOURCES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+                  <label className="block font-semibold text-text-muted mb-1">SERVICE REQUESTED</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Audit, GST Registration"
+                    value={serviceRequested}
+                    onChange={(e) => setServiceRequested(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
+                  />
                 </div>
 
                 <div>
@@ -411,25 +437,19 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">ESTIMATED VALUE (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={estimatedValue}
-                    onChange={(e) => setEstimatedValue(Number(e.target.value))}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
-                  />
-                </div>
-
-                <div>
                   <label className="block font-semibold text-text-muted mb-1">ASSIGNED TO</label>
-                  <input
-                    type="text"
-                    placeholder="Staff name"
+                  <select
                     value={assignedTo}
                     onChange={(e) => setAssignedTo(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
-                  />
+                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface"
+                  >
+                    <option value="">-- Unassigned --</option>
+                    {team.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.role})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -483,7 +503,10 @@ export default function LeadsPage() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90"
+                  >
                     Save
                   </button>
                 </div>

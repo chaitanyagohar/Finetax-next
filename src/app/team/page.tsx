@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { UserCheck, Plus, Edit2, Shield, Trash2, X, Check, Lock, Phone, Briefcase, Zap, UserX, UserCheck2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
-import AsyncButton from "@/components/ui/AsyncButton";
 
 const MODULE_OPTIONS = [
   { id: "leads", label: "Enquiries & Business Growth", desc: "Leads, pipeline stages, and conversion tracking" },
@@ -118,7 +117,7 @@ export default function TeamPage() {
     setModuleAccess(["leads", "tasks", "time_tracking"]);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const payload = {
@@ -133,7 +132,11 @@ export default function TeamPage() {
     };
 
     if (editingMember) {
-      const { error } = await supabase.from("profiles").update(payload).eq("id", editingMember.id);
+      const { error } = await supabase
+        .from("profiles")
+        .update(payload)
+        .eq("id", editingMember.id);
+
       if (error) return alert("Error updating member: " + error.message);
 
       logAuditEvent("UPDATE_TEAM_MEMBER", "PROFILES", editingMember.id, payload);
@@ -143,27 +146,23 @@ export default function TeamPage() {
         return alert("Please provide a password of at least 6 characters.");
       }
 
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: payload.email,
-        password,
-        options: {
-          data: { name: payload.name, role: payload.role }
-        }
+      // Call Admin Route to bypass Supabase Email Rate Limit
+      const res = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          password,
+        }),
       });
 
-      if (authErr) return alert("Error creating account: " + authErr.message);
+      const data = await res.json();
 
-      if (authData.user) {
-        const { error: profErr } = await supabase.from("profiles").upsert([
-          {
-            id: authData.user.id,
-            ...payload
-          }
-        ]);
-
-        if (profErr) alert("Auth created, but profile save failed: " + profErr.message);
-        else logAuditEvent("CREATE_TEAM_MEMBER", "PROFILES", authData.user.id, payload);
+      if (!res.ok || data.error) {
+        return alert("Error creating account: " + (data.error || "Failed to create user"));
       }
+
+      logAuditEvent("CREATE_TEAM_MEMBER", "PROFILES", data.user.id, payload);
       alert("New team member added successfully!");
     }
 
@@ -462,9 +461,9 @@ export default function TeamPage() {
                 >
                   Cancel
                 </button>
-                <AsyncButton type="submit" className="px-4 py-2 bg-navy text-white rounded font-bold hover:bg-navy/90">
+                <button type="submit" className="px-4 py-2 bg-navy text-white rounded font-bold hover:bg-navy/90">
                   {editingMember ? "Save Changes" : "Create Team Member"}
-                </AsyncButton>
+                </button>
               </div>
             </form>
           </div>

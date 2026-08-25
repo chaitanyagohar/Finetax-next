@@ -5,7 +5,6 @@ import { Search, Plus, Trash2, X, AlertCircle, RefreshCw, Clock, Activity, Lock 
 import { createClient } from "@/lib/supabase/client";
 import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
-import AsyncButton from "@/components/ui/AsyncButton";  
 
 const CATEGORIES: TaskCategory[] = ['GST', 'Income Tax', 'Audit', 'ROC', 'Other'];
 const STAGES: TaskStage[] = ['Assigned', 'In Progress', 'Submitted for Review', 'Changes Required', 'Approved'];
@@ -593,7 +592,7 @@ export default function TasksPage() {
 
               <div className="flex gap-2 ml-auto">
                 <button type="button" onClick={closeModal} className="px-4 py-1.5 border border-border rounded text-text-main hover:bg-background">Cancel</button>
-                <AsyncButton type="submit" form="task-form" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</AsyncButton>
+                <button type="submit" form="task-form" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</button>
               </div>
             </div>
           </div>
