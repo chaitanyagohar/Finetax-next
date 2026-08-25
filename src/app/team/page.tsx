@@ -287,7 +287,7 @@ async function handleSubmit(e: React.FormEvent) {
       {/* Upgraded Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-xl p-6 space-y-4 shadow-2xl text-xs my-8">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-xl p-6 -space-y-[0.5] shadow-2xl text-xs my-8">
             <div className="flex justify-between items-center border-b border-border pb-3">
               <div>
                 <h3 className="font-bold text-base text-text-main">
