@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, FileText, Send, Printer, Receipt } from "lucide-react";
+import { Search, Plus, Trash2, X, Send, Printer, Receipt, Mail, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
@@ -18,6 +18,7 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sendingId, setSendingId] = useState<string | null>(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
@@ -43,10 +44,10 @@ export default function InvoicesPage() {
   async function loadData() {
     setLoading(true);
     
-const { data: invData, error: invError } = await supabase
-  .from("invoices")
-  .select("*, clients!client_id(name, email, phone)")
-  .order("id", { ascending: false });
+    const { data: invData, error: invError } = await supabase
+      .from("invoices")
+      .select("*, clients!client_id(name, email, phone)")
+      .order("id", { ascending: false });
 
     if (invError) {
       console.error("Fetch Invoices Error:", invError);
@@ -165,21 +166,18 @@ const { data: invData, error: invError } = await supabase
       } else alert("Error updating invoice: " + error.message);
     } else {
       try {
-        console.log("Sending payload to API:", payload);
         const res = await fetch("/api/invoices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
 
-        const responseData = await res.json(); // Safely parse the response
+        const responseData = await res.json();
 
         if (res.ok) {
-          console.log("Invoice successfully created:", responseData);
           closeModal();
           loadData();
         } else {
-          console.error("API Error Response:", responseData);
           alert("Error creating invoice: " + (responseData.error || "Unknown server error"));
         }
       } catch (err: any) {
@@ -199,30 +197,50 @@ const { data: invData, error: invError } = await supabase
     } else alert("Error deleting invoice: " + error.message);
   }
 
-  async function sendEmail() {
-    if (!editingInvoice) return;
-    const client = clients.find(c => c.id === editingInvoice.client_id);
-    const to = prompt("Send this invoice to which email address?", client?.email || "");
-    if (!to) return;
+  // Improved Email Dispatch Function
+  async function sendInvoiceEmail(inv: any, e?: React.MouseEvent) {
+    if (e) e.stopPropagation();
 
-    await fetch("/api/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to,
-        subject: `Invoice ${editingInvoice.invoice_number} from Practice Manager`,
-        body: `Dear ${client?.name || "Client"},\n\nPlease find your formal invoice #${editingInvoice.invoice_number} attached for ₹${editingInvoice.total.toLocaleString("en-IN")}.\n\nBest regards,\nPractice Manager Portal`,
-        templateType: "INVOICE_DISPATCH",
-        entityId: editingInvoice.id,
-      }),
-    });
-    
-    // Auto mark as sent if it was a draft
-    if (editingInvoice.status === "Draft") {
-      await supabase.from("invoices").update({ status: "Sent" }).eq("id", editingInvoice.id);
-      loadData();
+    const recipientEmail = inv.clients?.email;
+    if (!recipientEmail) {
+      alert("No email address associated with this client.");
+      return;
     }
-    alert(`Invoice emailed to ${to}`);
+
+    if (!confirm(`Send Invoice ${inv.invoice_number} to ${recipientEmail}?`)) return;
+
+    setSendingId(inv.id);
+
+    try {
+      const res = await fetch("/api/invoices/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: inv.id,
+          recipientEmail,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Optimistically update the UI without refetching the whole DB
+      setInvoices((prev) =>
+        prev.map((item) =>
+          item.id === inv.id
+            ? { ...item, status: item.status === "Draft" ? "Sent" : item.status, email_sent_at: new Date().toISOString() }
+            : item
+        )
+      );
+      
+      logAuditEvent("SEND_INVOICE_EMAIL", "INVOICES", inv.id);
+      alert("Invoice email dispatched successfully!");
+    } catch (err: any) {
+      console.error("Send Email Error:", err);
+      alert("Failed to send invoice email: " + (err.message || "Unknown error"));
+    } finally {
+      setSendingId(null);
+    }
   }
 
   function formatMoney(amount: number) {
@@ -275,7 +293,7 @@ const { data: invData, error: invError } = await supabase
                   <th>Total</th>
                   <th>Paid</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th className="text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -287,22 +305,42 @@ const { data: invData, error: invError } = await supabase
                     <td className="font-bold text-navy">{formatMoney(i.total)}</td>
                     <td className="text-success font-medium">{formatMoney(i.amount_paid)}</td>
                     <td>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                        i.status === "Paid" ? "bg-success/10 text-success" : i.status === "Partially Paid" ? "bg-accent/10 text-accent" : "bg-navy/10 text-navy"
-                      }`}>
-                        {i.status}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                          i.status === "Paid" ? "bg-success/10 text-success" : i.status === "Partially Paid" ? "bg-accent/10 text-accent" : "bg-navy/10 text-navy"
+                        }`}>
+                          {i.status}
+                        </span>
+                        {i.email_sent_at ? (
+                          <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">✓ Email Sent</span>
+                        ) : (
+                          <span className="text-[10px] text-text-muted">Not emailed</span>
+                        )}
+                      </div>
                     </td>
-                    <td>
-                    <button 
-  onClick={(e) => { 
-    e.stopPropagation(); 
-    window.open(`/invoices/${i.id}/pdf`, '_self'); 
-  }} 
-  className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold"
->
-  PDF
-</button>
+                    <td className="text-right whitespace-nowrap space-x-2">
+                      <button
+                        onClick={(e) => sendInvoiceEmail(i, e)}
+                        disabled={sendingId === i.id}
+                        className={`px-2.5 py-1 border rounded font-semibold inline-flex items-center gap-1 text-[11px] transition ${
+                          i.email_sent_at 
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" 
+                            : "border-border hover:bg-background"
+                        }`}
+                        title={i.email_sent_at ? `Resend Invoice (Last sent ${new Date(i.email_sent_at).toLocaleDateString()})` : "Email Invoice"}
+                      >
+                        {sendingId === i.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
+                        {i.email_sent_at ? "Resend" : "Email"}
+                      </button>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          window.open(`/invoices/${i.id}/pdf`, '_self'); 
+                        }} 
+                        className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold"
+                      >
+                        PDF
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -415,14 +453,22 @@ const { data: invData, error: invError } = await supabase
                 <div className="flex flex-wrap gap-1.5">
                   {editingInvoice && (
                     <>
-                     <button 
-  type="button" 
-  onClick={() => editingInvoice?.id && window.open(`/invoices/${editingInvoice.id}/pdf`, '_self')} 
-  className="px-2.5 py-1.5 border border-border rounded text-text-main hover:bg-background flex items-center gap-1 font-semibold"
->
-  <Printer className="h-3.5 w-3.5" /> PDF
-</button>
-                      <button type="button" onClick={sendEmail} className="px-2.5 py-1.5 border border-border rounded text-text-main hover:bg-background flex items-center gap-1 font-semibold"><Send className="h-3.5 w-3.5" /> Email</button>
+                      <button 
+                        type="button" 
+                        onClick={() => editingInvoice?.id && window.open(`/invoices/${editingInvoice.id}/pdf`, '_self')} 
+                        className="px-2.5 py-1.5 border border-border rounded text-text-main hover:bg-background flex items-center gap-1 font-semibold"
+                      >
+                        <Printer className="h-3.5 w-3.5" /> PDF
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => sendInvoiceEmail(editingInvoice)} 
+                        disabled={sendingId === editingInvoice.id}
+                        className="px-2.5 py-1.5 border border-border rounded text-text-main hover:bg-background flex items-center gap-1 font-semibold disabled:opacity-50"
+                      >
+                        {sendingId === editingInvoice.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} 
+                        {editingInvoice.email_sent_at ? "Resend Email" : "Send Email"}
+                      </button>
                       <button type="button" onClick={handleDelete} className="px-2.5 py-1.5 bg-danger text-white rounded font-semibold flex items-center gap-1 hover:bg-danger/90"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                     </>
                   )}

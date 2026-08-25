@@ -36,7 +36,7 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     "next.config.mjs"
-, "src/components/layout/Topbar.tsx"  ],
+, "src/components/layout/Topbar.tsx", "src/app/audit-page"  ],
   "exclude": [
     "node_modules"
   ]

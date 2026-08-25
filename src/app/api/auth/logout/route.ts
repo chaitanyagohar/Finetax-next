@@ -34,5 +34,10 @@ export async function POST(request: NextRequest) {
   loginUrl.pathname = "/login";
   loginUrl.search = ""; // clear any active query params
 
+  const handleLogout = async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.href = "/login"; // Force full browser reload to clear cached layout states
+};
+
   return NextResponse.redirect(loginUrl, { status: 302 });
 }

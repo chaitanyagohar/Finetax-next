@@ -1,33 +1,33 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, FileText, Download } from "lucide-react";
+import { Search, Plus, Trash2, X, FileText, Download, Mail, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 
 export default function QuotationsPage() {
   function getStatusBadgeClass(status: string) {
-  switch (status) {
-    case "Converted":
-      return "bg-purple-100 text-purple-700 border-purple-200";
-    case "Sent":
-      return "bg-blue-100 text-blue-700 border-blue-200";
-    case "Accepted":
-      return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    case "Rejected":
-      return "bg-rose-100 text-rose-700 border-rose-200";
-    default: // Draft
-      return "bg-amber-100 text-amber-700 border-amber-200";
+    switch (status) {
+      case "Converted":
+        return "bg-purple-100 text-purple-700 border-purple-200";
+      case "Sent":
+        return "bg-blue-100 text-blue-700 border-blue-200";
+      case "Accepted":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "Rejected":
+        return "bg-rose-100 text-rose-700 border-rose-200";
+      default: // Draft
+        return "bg-amber-100 text-amber-700 border-amber-200";
+    }
   }
-}
-
 
   const [quotations, setQuotations] = useState<any[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuotation, setEditingQuotation] = useState<any | null>(null);
@@ -66,7 +66,7 @@ export default function QuotationsPage() {
       await Promise.all([
         supabase
           .from("quotations")
-          .select("*, clients!client_id(name)")
+          .select("*, clients!client_id(name, email)")
           .order("created_at", { ascending: false }),
         supabase.from("clients").select("*").order("name", { ascending: true }),
         supabase
@@ -251,6 +251,52 @@ export default function QuotationsPage() {
     } else alert("Error deleting quotation: " + error.message);
   }
 
+  // Handle Send Email Action
+async function sendQuotationEmail(q: any, e: React.MouseEvent) {
+  e.stopPropagation();
+
+  const recipientEmail = q.clients?.email || q.recipient_email;
+
+  if (!recipientEmail) {
+    alert("No email address associated with this client/lead.");
+    return;
+  }
+
+  if (!confirm(`Send Quotation ${q.quote_number || q.id} to ${recipientEmail}?`)) return;
+
+  setSendingId(q.id);
+
+  try {
+    const res = await fetch("/api/quotations/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quotationId: q.id,
+        recipientEmail,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Optimistically update local state so UI updates instantly
+    setQuotations((prev) =>
+      prev.map((item) =>
+        item.id === q.id
+          ? { ...item, status: "Sent", email_sent_at: new Date().toISOString() }
+          : item
+      )
+    );
+
+    alert("Quotation email dispatched successfully!");
+  } catch (err: any) {
+    console.error("Send Email Error:", err);
+    alert("Failed to send quotation email: " + (err.message || "Unknown error"));
+  } finally {
+    setSendingId(null);
+  }
+}
+
   const filteredQuotations = quotations.filter((q: any) => {
     const nameStr = q.clients?.name || q.recipient_name || q.organisation || "";
     const matchesSearch = [q.quote_number, nameStr, q.notes]
@@ -384,23 +430,59 @@ export default function QuotationsPage() {
       className="hover:bg-background/50 transition cursor-pointer"
       onClick={() => openModal(q)}
     >
-      <td className="font-bold text-navy whitespace-nowrap">{q.quote_number || q.quotation_number || "-"}</td>
+      <td className="font-bold text-navy whitespace-nowrap">
+        {q.quote_number || q.quotation_number || "-"}
+      </td>
       <td>{q.date}</td>
       <td className="font-medium text-text-main">
         {q.clients?.name || q.recipient_name || q.organisation || "-"}
       </td>
-      <td className="font-semibold text-text-main">₹{Number(q.total || 0).toLocaleString("en-IN")}</td>
+      <td className="font-semibold text-text-main">
+        ₹{Number(q.total || 0).toLocaleString("en-IN")}
+      </td>
       <td>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(q.status)}`}>
-          {q.status || "Draft"}
-        </span>
+        <div className="flex flex-col gap-1 items-start">
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(
+              q.status,
+            )}`}
+          >
+            {q.status || "Draft"}
+          </span>
+
+          {/* Real-time Email Delivery Status */}
+          {q.email_sent_at ? (
+            <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+              ✓ Email Sent
+            </span>
+          ) : (
+            <span className="text-[10px] text-text-muted">Not emailed</span>
+          )}
+        </div>
       </td>
       <td className="text-right whitespace-nowrap space-x-2">
+        <button
+          onClick={(e) => sendQuotationEmail(q, e)}
+          disabled={sendingId === q.id}
+          className={`px-2.5 py-1 border rounded font-semibold inline-flex items-center gap-1 text-[11px] transition ${
+            q.email_sent_at 
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" 
+              : "border-border hover:bg-background"
+          }`}
+          title={q.email_sent_at ? `Resend Quotation Email (Last sent ${new Date(q.email_sent_at).toLocaleDateString()})` : "Send Quotation via Email"}
+        >
+          {sendingId === q.id ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Mail className="h-3 w-3" />
+          )}
+          {q.email_sent_at ? "Resend Email" : "Email"}
+        </button>
+
         {q.status !== "Converted" && q.client_id && (
           <button
             onClick={(e) => convertToInvoice(q, e)}
             className="px-2.5 py-1 bg-navy text-white rounded text-[11px] font-semibold hover:bg-navy/90 transition"
-            title="Create Tax Invoice from this quotation"
           >
             + Invoice
           </button>
@@ -408,9 +490,9 @@ export default function QuotationsPage() {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            window.open(`/quotations/${q.id}/pdf`, '_self');
+            window.open(`/quotations/${q.id}/pdf`, "_self");
           }}
-          className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold"
+          className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold text-[11px]"
         >
           PDF
         </button>

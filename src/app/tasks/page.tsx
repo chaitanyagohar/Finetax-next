@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, CheckCircle2, AlertCircle, RefreshCw, Clock } from "lucide-react";
+import { Search, Plus, Trash2, X, AlertCircle, RefreshCw, Clock, Activity, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
+import AsyncButton from "@/components/ui/AsyncButton";  
 
 const CATEGORIES: TaskCategory[] = ['GST', 'Income Tax', 'Audit', 'ROC', 'Other'];
 const STAGES: TaskStage[] = ['Assigned', 'In Progress', 'Submitted for Review', 'Changes Required', 'Approved'];
@@ -27,6 +28,8 @@ export default function TasksPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [taskTimeline, setTaskTimeline] = useState<any[]>([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -40,6 +43,7 @@ export default function TasksPage() {
   const [recurrence, setRecurrence] = useState("None");
   const [notes, setNotes] = useState("");
   const [reviewComments, setReviewComments] = useState("");
+  const [timeSpent, setTimeSpent] = useState<number>(0);
 
   const supabase = createClient();
 
@@ -62,7 +66,6 @@ export default function TasksPage() {
     if (cData) setClients(cData);
     if (pData) setTeam(pData);
 
-    // Precise Role-Based Viewing Scopes
     let query = supabase.from("tasks").select("*, clients(id, name, email), profiles!tasks_assigned_to_fkey(id, name, email), reviewer:profiles!tasks_reviewer_id_fkey(id, name, email)");
 
     const isAdmin = profile?.role === "admin";
@@ -70,11 +73,9 @@ export default function TasksPage() {
 
     if (!isAdmin) {
       if (isReviewer) {
-        // Reviewer sees work assigned to them OR tasks explicitly submitted to them for review
-        query = query.or(`assigned_to.eq.${profile.id},reviewer_id.eq.${profile.id}`);
+        query = query.or(`assigned_to.eq.${profile?.id},reviewer_id.eq.${profile?.id}`);
       } else {
-        // Standard Execution Staff ONLY sees tasks assigned directly to them
-        query = query.eq("assigned_to", profile.id);
+        query = query.eq("assigned_to", profile?.id);
       }
     }
 
@@ -82,6 +83,19 @@ export default function TasksPage() {
     
     if (tData) setTasks(tData);
     setLoading(false);
+  }
+
+  async function loadTaskTimeline(taskId: string) {
+    setLoadingTimeline(true);
+    const { data: logs } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("entity", "TASKS")
+      .eq("entity_id", taskId)
+      .order("timestamp", { ascending: false });
+
+    if (logs) setTaskTimeline(logs);
+    setLoadingTimeline(false);
   }
 
   function calculateNextDueDate(currentDate: string, recOption: string) {
@@ -92,6 +106,21 @@ export default function TasksPage() {
     else if (recOption === 'Yearly') d.setFullYear(d.getFullYear() + 1);
     else return null;
     return d.toISOString().slice(0, 10);
+  }
+
+  // Helper to send emails
+  async function dispatchEmail(to: string, subject: string, body: string) {
+    if (!to) return false;
+    const formData = new FormData();
+    formData.append("to", to);
+    formData.append("subject", subject);
+    formData.append("body", body);
+    try {
+      const res = await fetch("/api/send-email", { method: "POST", body: formData });
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -109,106 +138,97 @@ export default function TasksPage() {
       recurrence,
       notes: notes.trim(),
       review_comments: reviewComments.trim(),
+      time_spent_minutes: timeSpent
     };
 
-    const isCompleting = stage === "Approved" && editingTask?.stage !== "Approved";
-    const isNewAssignment = assignedTo && assignedTo !== editingTask?.assigned_to;
-    const isStageChange = editingTask && stage !== editingTask.stage;
-
-    let taskId = editingTask?.id;
+    const isNewTask = !editingTask;
+    const isReassigned = editingTask && assignedTo !== editingTask.assigned_to;
+    const stageChangedTo = editingTask && stage !== editingTask.stage ? stage : null;
 
     if (editingTask) {
       const { error } = await supabase.from("tasks").update(payload).eq("id", editingTask.id);
-      if (!error) {
-        logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, { stage });
+      if (error) return alert("Error updating task: " + error.message);
 
-        // Auto-Generate Next Recurrence
-        if (isCompleting && recurrence !== "None") {
-          const nextDate = calculateNextDueDate(dueDate, recurrence);
-          if (nextDate) {
-            const nextTaskPayload = { ...payload, due_date: nextDate, stage: "Assigned" as TaskStage, review_comments: "" };
-            await supabase.from("tasks").insert([nextTaskPayload]);
-            alert(`Next occurrence auto-created for ${nextDate}`);
-          }
+      const metadata: any = {};
+      if (stageChangedTo) metadata.stage_changed_to = stage;
+      if (isReassigned) metadata.reassigned = true;
+      if (timeSpent !== editingTask.time_spent_minutes) metadata.time_logged = `${timeSpent} mins`;
+      
+      await logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, metadata);
+
+      if (stageChangedTo === "Approved" && recurrence !== "None") {
+        const nextDate = calculateNextDueDate(dueDate, recurrence);
+        if (nextDate) {
+          const nextTaskPayload = { ...payload, due_date: nextDate, stage: "Assigned" as TaskStage, review_comments: "", time_spent_minutes: 0 };
+          await supabase.from("tasks").insert([nextTaskPayload]);
         }
-      } else alert("Error updating task: " + error.message);
+      }
     } else {
       const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
-      if (!error) {
-        taskId = data.id;
-        logAuditEvent("CREATE_TASK", "TASKS", data.id, payload);
-      } else alert("Error creating task: " + error.message);
+      if (error) return alert("Error creating task: " + error.message);
+      await logAuditEvent("CREATE_TASK", "TASKS", data.id, { title, stage });
     }
 
-    // Dual Nodemailer Email Engine
-    if (isNewAssignment || isStageChange) {
-      const assignee = team.find((t) => String(t.id) === String(assignedTo));
-      const selectedClient = clients.find((c) => String(c.id) === String(clientId));
-      const reviewer = team.find((t) => String(t.id) === String(reviewerId));
+    // --- EXACT WORKFLOW EMAIL ENGINE ---
+    const assignee = team.find((t) => String(t.id) === String(assignedTo));
+    const selectedClient = clients.find((c) => String(c.id) === String(clientId));
+    const reviewer = team.find((t) => String(t.id) === String(reviewerId));
 
-      let emailsAttempted = 0;
-      let emailsSent = 0;
+    let emailsSent = 0;
 
-      // 1. Notify Assigned Staff Member
-      if (isNewAssignment && assignee?.email) {
-        emailsAttempted++;
-        try {
-          const staffForm = new FormData();
-          staffForm.append("to", assignee.email);
-          staffForm.append("subject", `New Task Assigned: ${title}`);
-          staffForm.append(
-            "body",
-            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${title}".\n\nClient: ${selectedClient?.name || "N/A"}\nDue Date: ${dueDate}\nPriority: ${priority}\n\nPlease check your Practice Manager portal to review and execute.`
-          );
-
-          const res = await fetch("/api/send-email", { method: "POST", body: staffForm });
-          if (res.ok) emailsSent++;
-        } catch (err) {
-          console.error("Staff Email Network Error:", err);
-        }
+    // STEP 1: Task is created or reassigned -> Email Client AND Staff
+    if (isNewTask || isReassigned) {
+      if (selectedClient?.email) {
+        const sent = await dispatchEmail(
+          selectedClient.email, 
+          `New Service Request Initiated: ${title}`, 
+          `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${title}". Our team will notify you upon completion.\n\nBest regards,\nPractice Team`
+        );
+        if (sent) emailsSent++;
       }
-
-      // 2. Notify Reviewer when submitted for review
-      if (stage === "Submitted for Review" && reviewer?.email) {
-        emailsAttempted++;
-        try {
-          const revForm = new FormData();
-          revForm.append("to", reviewer.email);
-          revForm.append("subject", `Task Submitted for Review: ${title}`);
-          revForm.append(
-            "body",
-            `Hello ${reviewer.name},\n\nThe task "${title}" has been submitted for your review by ${assignee?.name || 'Staff'}.\n\nClient: ${selectedClient?.name || 'N/A'}\nNotes: ${notes}\n\nPlease open your Reviewer Queue to verify.`
-          );
-
-          const res = await fetch("/api/send-email", { method: "POST", body: revForm });
-          if (res.ok) emailsSent++;
-        } catch (err) {
-          console.error("Reviewer Email Network Error:", err);
-        }
+      if (assignee?.email) {
+        const sent = await dispatchEmail(
+          assignee.email, 
+          `New Task Assigned: ${title}`, 
+          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${title}".\n\nClient: ${selectedClient?.name || "N/A"}\nDue Date: ${dueDate}\n\nPlease log into the portal, mark as 'In Progress', and execute.`
+        );
+        if (sent) emailsSent++;
       }
+    }
 
-      // 3. Notify Client when Completed / Approved
-      if (stage === "Approved" && selectedClient?.email) {
-        emailsAttempted++;
-        try {
-          const clientForm = new FormData();
-          clientForm.append("to", selectedClient.email);
-          clientForm.append("subject", `Task Completed: ${title}`);
-          clientForm.append(
-            "body",
-            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${title}" has been completed and verified by our team.\n\nBest regards,\nMy CA Practice Team`
-          );
-
-          const res = await fetch("/api/send-email", { method: "POST", body: clientForm });
-          if (res.ok) emailsSent++;
-        } catch (err) {
-          console.error("Client Email Network Error:", err);
-        }
+    // STEP 2 & 3: Stage Transitions
+    if (stageChangedTo) {
+      if (stageChangedTo === "Submitted for Review" && reviewer?.email) {
+        // Staff finished, notify Reviewer
+        const sent = await dispatchEmail(
+          reviewer.email, 
+          `Task Ready for Review: ${title}`, 
+          `Hello ${reviewer.name},\n\nThe task "${title}" was submitted for review by ${assignee?.name || 'Staff'}.\n\nPlease review it in your queue.`
+        );
+        if (sent) emailsSent++;
+      } 
+      else if (stageChangedTo === "Changes Required" && assignee?.email) {
+        // Reviewer rejected, notify Staff
+        const sent = await dispatchEmail(
+          assignee.email, 
+          `Task Needs Correction: ${title}`, 
+          `Hello ${assignee.name},\n\nYour submitted task "${title}" requires corrections.\n\nReviewer Feedback: ${reviewComments}\n\nPlease revise and resubmit.`
+        );
+        if (sent) emailsSent++;
+      } 
+      else if (stageChangedTo === "Approved" && selectedClient?.email) {
+        // Reviewer approved, notify Client
+        const sent = await dispatchEmail(
+          selectedClient.email, 
+          `Task Completed: ${title}`, 
+          `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${title}" has been completed and verified.\n\nBest regards,\nPractice Team`
+        );
+        if (sent) emailsSent++;
       }
+    }
 
-      if (emailsAttempted > 0) {
-        alert(`Task saved! ${emailsSent}/${emailsAttempted} notification emails dispatched successfully.`);
-      }
+    if (emailsSent > 0) {
+      alert(`Task saved! ${emailsSent} workflow notification emails dispatched.`);
     }
 
     closeModal();
@@ -229,8 +249,12 @@ export default function TasksPage() {
       setRecurrence(task.recurrence || "None");
       setNotes(task.notes || "");
       setReviewComments(task.review_comments || "");
+      setTimeSpent(task.time_spent_minutes || 0);
+      
+      loadTaskTimeline(task.id);
     } else {
       setEditingTask(null);
+      setTaskTimeline([]);
       resetForm();
     }
     setIsModalOpen(true);
@@ -239,6 +263,7 @@ export default function TasksPage() {
   function closeModal() {
     setIsModalOpen(false);
     setEditingTask(null);
+    setTaskTimeline([]);
     resetForm();
   }
 
@@ -254,6 +279,7 @@ export default function TasksPage() {
     setRecurrence("None");
     setNotes("");
     setReviewComments("");
+    setTimeSpent(0);
   }
 
   async function handleDelete() {
@@ -278,7 +304,28 @@ export default function TasksPage() {
     return matchesSearch && matchesStage && matchesCategory && matchesClient && matchesRecurring;
   });
 
-  const canEditReviewerFeedback = currentUser?.role === "admin" || currentUser?.is_reviewer || currentUser?.role === "reviewer";
+  // --- ROLE BASED ACCESS CONTROL ---
+  const isAdmin = currentUser?.role === "admin";
+  const isTaskReviewer = currentUser?.id === reviewerId;
+  const isTaskAssignee = currentUser?.id === assignedTo;
+  
+  // Who can edit Core details (Title, Client, Dates, Reviewer Assignment)?
+  const canEditCoreDetails = !editingTask || isAdmin || isTaskReviewer;
+  
+  // Who can edit the Reviewer Comments?
+  const canEditReviewerFeedback = isAdmin || isTaskReviewer || currentUser?.role === "reviewer";
+
+  // Strict Stage Dropdown Control based on Role
+  let availableStages = STAGES;
+  if (editingTask && !isAdmin && !isTaskReviewer && isTaskAssignee) {
+    // If they are strictly the execution staff, they CANNOT approve tasks or send them back to assigned
+    availableStages = ['Assigned', 'In Progress', 'Submitted for Review'];
+    
+    // If the task was rejected, they can keep it in 'Changes Required' while working, then submit it again
+    if (editingTask.stage === 'Changes Required') {
+      availableStages = ['Changes Required', 'In Progress', 'Submitted for Review'];
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -312,9 +359,11 @@ export default function TasksPage() {
           </select>
         </div>
 
-        <button onClick={() => openModal()} className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-xs hover:bg-navy/90 transition w-full md:w-auto justify-center">
-          <Plus className="h-4 w-4" /> Add Task
-        </button>
+        {isAdmin && (
+          <button onClick={() => openModal()} className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-xs hover:bg-navy/90 transition w-full md:w-auto justify-center">
+            <Plus className="h-4 w-4" /> Add Task
+          </button>
+        )}
       </div>
 
       {/* Task Table */}
@@ -340,8 +389,10 @@ export default function TasksPage() {
               <tbody className="divide-y divide-border">
                 {filteredTasks.map((t: any) => {
                   const isOverdue = t.due_date < today && t.stage !== "Approved";
+                  const needsAction = t.assigned_to === currentUser?.id && (t.stage === 'Assigned' || t.stage === 'Changes Required');
+                  
                   return (
-                    <tr key={t.id} className="hover:bg-background/50 transition cursor-pointer" onClick={() => openModal(t)}>
+                    <tr key={t.id} className={`hover:bg-background/50 transition cursor-pointer ${needsAction ? 'bg-amber-50/30' : ''}`} onClick={() => openModal(t)}>
                       <td className="p-3 whitespace-nowrap">
                         <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
                           {isOverdue && <AlertCircle className="h-3 w-3" />} {t.due_date}
@@ -349,7 +400,7 @@ export default function TasksPage() {
                       </td>
                       <td className="p-3 font-semibold text-navy">
                         {t.title}
-                        {t.recurrence && t.recurrence !== 'None' && <span className="ml-1 text-[10px] bg-navy/10 text-navy px-1.5 py-0.5 rounded">↻ {t.recurrence}</span>}
+                        {needsAction && <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 inline-block animate-pulse" title="Action Required"></span>}
                       </td>
                       <td className="p-3">{t.category}</td>
                       <td className="p-3">{t.clients?.name || "-"}</td>
@@ -369,120 +420,182 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Task Modal */}
+      {/* Task Modal (2-Column Layout for Timeline) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-2xl p-6 space-y-4 shadow-lg text-xs my-8">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-5xl p-6 space-y-4 shadow-lg text-xs my-8">
             <div className="flex justify-between items-center border-b border-border pb-3">
-              <h3 className="font-semibold text-base text-text-main">{editingTask ? "Edit Task" : "Add Task"}</h3>
+              <h3 className="font-semibold text-base text-text-main flex items-center gap-2">
+                {editingTask ? "Manage Task Lifecycle" : "Add Task"}
+                {!canEditCoreDetails && <Lock className="h-4 w-4 text-text-muted" title="Core details locked for execution staff" />}
+              </h3>
               <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block font-semibold text-text-muted mb-1">TASK TITLE *</label>
-                <input required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              
+              {/* LEFT COLUMN: Form Execution */}
+              <div className="md:col-span-2 space-y-4">
+                <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block font-semibold text-text-muted mb-1">TASK TITLE *</label>
+                    <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
+                      <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                        <option value="">(Internal / No Client)</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
+                      <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">DUE DATE *</label>
+                      <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1 text-navy">WORKFLOW STAGE *</label>
+                      <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className="w-full border border-navy/30 rounded p-2 text-xs bg-navy/5 font-semibold text-navy">
+                        {availableStages.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">ASSIGN EXECUTION TO</label>
+                      <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                        <option value="">-- Unassigned --</option>
+                        {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">ASSIGN REVIEWER</label>
+                      <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                        <option value="">-- No Reviewer --</option>
+                        {team.filter(t => t.role === 'admin' || (t as any).is_reviewer || t.role === 'reviewer').map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">PRIORITY</label>
+                      <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                        <option>Low</option><option>Medium</option><option>High</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">TIME SPENT (MINUTES)</label>
+                      <div className="relative">
+                        <Clock className="absolute left-2.5 top-2 h-4 w-4 text-text-muted" />
+                        <input type="number" min="0" value={timeSpent} onChange={(e) => setTimeSpent(Number(e.target.value))} className="w-full pl-8 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {recurrence !== 'None' && (
+                    <div className="bg-navy/5 border border-navy/20 text-navy p-2 rounded flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" /> 
+                      When this task is approved, the next occurrence will auto-generate.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block font-semibold text-text-muted mb-1">EXECUTION NOTES</label>
+                    <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+                  </div>
+
+                  <div className="bg-background p-3 rounded-lg border border-border">
+                    <label className="block font-semibold text-navy mb-1">REVIEWER FEEDBACK / REQUIRED CHANGES</label>
+                    <textarea
+                      rows={2}
+                      value={reviewComments}
+                      onChange={(e) => setReviewComments(e.target.value)}
+                      disabled={!canEditReviewerFeedback}
+                      className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-surface disabled:opacity-60"
+                      placeholder="Reviewers: Specify required changes here before returning task to 'Changes Required'..."
+                    />
+                  </div>
+                </form>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
-                  <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    <option value="">(Internal / No Client)</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">DUE DATE *</label>
-                  <input required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">WORKFLOW STAGE</label>
-                  <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">ASSIGN EXECUTION TO</label>
-                  <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    <option value="">-- Unassigned --</option>
-                    {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">ASSIGN REVIEWER</label>
-                  <select value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    <option value="">-- No Reviewer --</option>
-                    {team.filter(t => t.role === 'admin' || (t as any).is_reviewer || t.role === 'reviewer').map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">PRIORITY</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    <option>Low</option><option>Medium</option><option>High</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">RECURRENCE</label>
-                  <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
-                    {RECURRENCE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {recurrence !== 'None' && (
-                <div className="bg-navy/5 border border-navy/20 text-navy p-2 rounded flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4" /> 
-                  When this task is moved to "Approved", the next occurrence will be auto-generated.
+              {/* RIGHT COLUMN: The Audit Timeline Feed */}
+              {editingTask && (
+                <div className="md:col-span-1 border-l border-border pl-6 max-h-[60vh] overflow-y-auto">
+                  <div className="flex items-center gap-2 text-navy font-bold mb-4 border-b border-border pb-2 sticky top-0 bg-surface">
+                    <Activity className="h-4 w-4" /> Task Timeline Feed
+                  </div>
+                  
+                  {loadingTimeline ? (
+                    <div className="text-text-muted italic">Loading task history...</div>
+                  ) : taskTimeline.length === 0 ? (
+                    <div className="text-text-muted italic">No historical data recorded yet.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {taskTimeline.map((log: any) => {
+                        const dt = new Date(log.timestamp);
+                        const isCreate = log.action === "CREATE_TASK";
+                        
+                        return (
+                          <div key={log.id} className="relative pl-4 border-l-2 border-border pb-4 last:border-0 last:pb-0">
+                            <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? 'bg-emerald-500' : 'bg-navy'}`}></div>
+                            
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-semibold text-text-main">
+                                {isCreate ? "Task Created" : log.action.replace("_", " ")}
+                              </span>
+                              <span className="text-[10px] text-text-muted whitespace-nowrap pl-2">
+                                {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            
+                            <div className="text-text-muted">
+                              by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
+                            </div>
+                            
+                            {log.metadata?.stage_changed_to && (
+                              <div className="mt-1 bg-navy/5 text-navy px-2 py-1 rounded inline-block text-[10px] font-medium border border-navy/10">
+                                Moved to <span className="font-bold">{log.metadata.stage_changed_to}</span>
+                              </div>
+                            )}
+                            {log.metadata?.time_logged && (
+                              <div className="mt-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded inline-block text-[10px] font-medium border border-emerald-200">
+                                Logged <span className="font-bold">{log.metadata.time_logged}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
+            </div>
 
-              <div>
-                <label className="block font-semibold text-text-muted mb-1">EXECUTION NOTES</label>
-                <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+            {/* Footer Buttons */}
+            <div className="flex justify-between items-center pt-3 border-t border-border mt-4">
+              {editingTask && canEditCoreDetails ? (
+                <button type="button" onClick={handleDelete} className="px-3 py-1.5 bg-rose-600 text-white rounded font-semibold flex items-center gap-1 hover:bg-rose-700">
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              ) : <div />}
+
+              <div className="flex gap-2 ml-auto">
+                <button type="button" onClick={closeModal} className="px-4 py-1.5 border border-border rounded text-text-main hover:bg-background">Cancel</button>
+                <AsyncButton type="submit" form="task-form" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</AsyncButton>
               </div>
-
-              {/* Reviewer Feedback Section */}
-              <div className="bg-background p-3 rounded-lg border border-border">
-                <label className="block font-semibold text-navy mb-1">REVIEWER FEEDBACK / REQUIRED CHANGES</label>
-                <textarea
-                  rows={2}
-                  value={reviewComments}
-                  onChange={(e) => setReviewComments(e.target.value)}
-                  disabled={!canEditReviewerFeedback}
-                  className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-surface disabled:opacity-70"
-                  placeholder="Reviewers: Specify required changes here before returning task to 'Changes Required'..."
-                />
-              </div>
-
-              <div className="flex justify-between items-center pt-3 border-t border-border">
-                {editingTask ? (
-                  <button type="button" onClick={handleDelete} className="px-3 py-1.5 bg-rose-600 text-white rounded font-semibold flex items-center gap-1 hover:bg-rose-700">
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
-                ) : <div />}
-
-                <div className="flex gap-2 ml-auto">
-                  <button type="button" onClick={closeModal} className="px-4 py-1.5 border border-border rounded text-text-main hover:bg-background">Cancel</button>
-                  <button type="submit" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</button>
-                </div>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

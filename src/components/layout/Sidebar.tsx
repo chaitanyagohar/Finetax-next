@@ -78,6 +78,7 @@ export default function Sidebar() {
     { name: "Documents", href: "/documents", icon: Folder, moduleId: "documents" },
     { name: "Team Management", href: "/team", icon: UserCheck, adminOnly: true, moduleId: "team" },
     { name: "Service Packages", href: "/packages", icon: Package, adminOnly: true, moduleId: "packages" },
+    { name: "Logs", href: "/audit-page", icon: ShieldAlert, adminOnly: true, moduleId: "audit-page" },
     { name: "Firm Settings", href: "/settings", icon: Settings, adminOnly: true, moduleId: "settings" },
   ];
 
@@ -130,7 +131,7 @@ export default function Sidebar() {
               className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-accent hover:text-white transition"
             >
               <span className="flex items-center gap-2">
-                <Shield className="h-4 w-4" /> Reviewer Gatekeeper
+                <Shield className="h-4 w-4" /> Review Tasks
               </span>
               {isReviewerOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             </button>

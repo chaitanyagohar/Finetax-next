@@ -29,20 +29,26 @@ export default function ReviewerQueuePage() {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user?.id || "").single();
-    setCurrentUser(profile || null);
-
-    let query = supabase
-      .from("tasks")
-      .select("*, clients(name, email), assignee:profiles!tasks_assigned_to_fkey(name, email)");
-
-    const isAdmin = profile?.role === "admin";
-    if (!isAdmin) {
-      query = query.eq("reviewer_id", profile?.id);
+    if (!user) {
+      setLoading(false);
+      return;
     }
 
-    const { data } = await query.order("due_date", { ascending: true });
-    if (data) setTasks(data);
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    setCurrentUser(profile || null);
+
+    // FIX: Strictly fetch tasks where THIS user is the designated reviewer_id, regardless of admin status.
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*, clients(name, email), assignee:profiles!tasks_assigned_to_fkey(name, email)")
+      .eq("reviewer_id", user.id)
+      .order("due_date", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching reviewer tasks:", error);
+    } else if (data) {
+      setTasks(data);
+    }
 
     setLoading(false);
   }
@@ -65,22 +71,50 @@ export default function ReviewerQueuePage() {
 
     if (error) return alert("Error processing decision: " + error.message);
 
-    logAuditEvent("REVIEW_DECISION", "TASKS", inspectTask.id, { decision: newStage });
+    logAuditEvent("REVIEW_DECISION", "TASKS", inspectTask.id, { decision: newStage, comments: reviewComments.trim() });
 
-    // Outbound Email Notification to Execution Staff
+    let emailsAttempted = 0;
+    let emailsSent = 0;
+
+    // 1. Always notify Execution Staff of the decision
     if (inspectTask.assignee?.email) {
+      emailsAttempted++;
       const formData = new FormData();
       formData.append("to", inspectTask.assignee.email);
       formData.append("subject", `[Task Review Update] ${inspectTask.title} -> ${newStage}`);
       formData.append(
         "body",
-        `Hello ${inspectTask.assignee.name},\n\nYour submitted task "${inspectTask.title}" has been updated to "${newStage}" by ${currentUser?.name}.\n\nFeedback: ${reviewComments || "No additional comments."}\n\nPlease check your Practice Manager portal.`
+        `Hello ${inspectTask.assignee.name},\n\nYour submitted task "${inspectTask.title}" has been updated to "${newStage}" by ${currentUser?.name || 'your Reviewer'}.\n\nFeedback: ${reviewComments || "No additional comments."}\n\nPlease log into the Practice Manager portal to view details.`
       );
 
-      await fetch("/api/send-email", { method: "POST", body: formData }).catch(() => {});
+      try {
+        const res = await fetch("/api/send-email", { method: "POST", body: formData });
+        if (res.ok) emailsSent++;
+      } catch (err) {
+        console.error("Failed to email staff:", err);
+      }
     }
 
-    alert(`Task status updated to ${newStage}!`);
+    // 2. Notify Client if the task is Approved
+    if (newStage === "Approved" && inspectTask.clients?.email) {
+      emailsAttempted++;
+      const clientForm = new FormData();
+      clientForm.append("to", inspectTask.clients.email);
+      clientForm.append("subject", `Task Completed: ${inspectTask.title}`);
+      clientForm.append(
+        "body",
+        `Dear ${inspectTask.clients.name},\n\nWe are pleased to inform you that your task "${inspectTask.title}" has been completed and verified by our team.\n\nBest regards,\nPractice Team`
+      );
+
+      try {
+        const res = await fetch("/api/send-email", { method: "POST", body: clientForm });
+        if (res.ok) emailsSent++;
+      } catch (err) {
+        console.error("Failed to email client:", err);
+      }
+    }
+
+    alert(`Task status updated to ${newStage}! ${emailsSent}/${emailsAttempted} notification emails dispatched.`);
     setInspectTask(null);
     setReviewComments("");
     loadReviewData();
@@ -104,11 +138,11 @@ export default function ReviewerQueuePage() {
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-text-main">Reviewer Verification Hub</h2>
             <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-bold rounded text-[10px] uppercase">
-              Staff + Reviewer Mode
+              My Queue
             </span>
           </div>
           <p className="text-xs text-text-muted mt-1">
-            Verify submitted staff work, request revision edits, and track practice quality metrics.
+            Verify submitted staff work, request revision edits, and track your practice quality metrics.
           </p>
         </div>
 
@@ -135,7 +169,7 @@ export default function ReviewerQueuePage() {
             <div className="p-8 text-center text-text-muted text-xs">Loading queue...</div>
           ) : pendingTasks.length === 0 ? (
             <div className="p-8 text-center text-text-muted text-xs bg-surface rounded-lg border border-border">
-              No tasks currently pending review!
+              No tasks currently pending review in your queue!
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -177,7 +211,7 @@ export default function ReviewerQueuePage() {
       {activeTab === "revisions" && (
         <div className="space-y-4">
           <h3 className="font-bold text-sm text-navy flex items-center gap-2 border-b border-border pb-2">
-            <AlertTriangle className="h-4 w-4 text-rose-500" /> Active Revision Requests ({revisionTasks.length})
+            <AlertTriangle className="h-4 w-4 text-rose-500" /> Sent for Revision ({revisionTasks.length})
           </h3>
 
           {loading ? (
@@ -219,7 +253,7 @@ export default function ReviewerQueuePage() {
       {activeTab === "analytics" && (
         <div className="space-y-4">
           <h3 className="font-bold text-sm text-navy flex items-center gap-2 border-b border-border pb-2">
-            <BarChart3 className="h-4 w-4 text-emerald-600" /> Practice Verification Metrics
+            <BarChart3 className="h-4 w-4 text-emerald-600" /> My Verification Metrics
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -276,13 +310,13 @@ export default function ReviewerQueuePage() {
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
                 <button
                   onClick={() => handleDecision("Changes Required")}
-                  className="py-2 bg-rose-600 text-white rounded font-bold hover:bg-rose-700"
+                  className="py-2 bg-rose-600 text-white rounded font-bold hover:bg-rose-700 transition"
                 >
                   Request Changes
                 </button>
                 <button
                   onClick={() => handleDecision("Approved")}
-                  className="py-2 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700"
+                  className="py-2 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition"
                 >
                   Approve & Sign-Off
                 </button>

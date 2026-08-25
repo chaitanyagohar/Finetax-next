@@ -5,6 +5,7 @@ import { Search, Plus, Trash2, X, Building2, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
+import AsyncButton from "@/components/ui/AsyncButton";
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -354,9 +355,9 @@ export default function ClientsPage() {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="px-4 py-2 bg-navy text-white rounded font-medium hover:bg-navy/90">
+                  <AsyncButton type="submit" className="px-4 py-2 bg-navy text-white rounded font-medium hover:bg-navy/90">
                     Save Client
-                  </button>
+                  </AsyncButton>
                 </div>
               </div>
             </form>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { UserCheck, Plus, Edit2, Shield, Trash2, X, Check, Lock, Phone, Briefcase, Zap, UserX, UserCheck2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
+import AsyncButton from "@/components/ui/AsyncButton";
 
 const MODULE_OPTIONS = [
   { id: "leads", label: "Enquiries & Business Growth", desc: "Leads, pipeline stages, and conversion tracking" },
@@ -461,9 +462,9 @@ export default function TeamPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-navy text-white rounded font-bold hover:bg-navy/90">
+                <AsyncButton type="submit" className="px-4 py-2 bg-navy text-white rounded font-bold hover:bg-navy/90">
                   {editingMember ? "Save Changes" : "Create Team Member"}
-                </button>
+                </AsyncButton>
               </div>
             </form>
           </div>
