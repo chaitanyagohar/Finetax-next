@@ -35,6 +35,7 @@ export default function TasksPage() {
   const [clientId, setClientId] = useState("");
   const [category, setCategory] = useState<TaskCategory>("Other");
   const [dueDate, setDueDate] = useState("");
+  const [officialDueDate, setOfficialDueDate] = useState(""); // <-- ADDED OFFICIAL DEADLINE
   const [assignedTo, setAssignedTo] = useState("");
   const [reviewerId, setReviewerId] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -79,7 +80,7 @@ export default function TasksPage() {
     }
 
     const { data: tData } = await query.order("due_date", { ascending: true });
-    
+
     if (tData) setTasks(tData);
     setLoading(false);
   }
@@ -130,6 +131,7 @@ export default function TasksPage() {
       client_id: clientId || null,
       category,
       due_date: dueDate,
+      official_due_date: officialDueDate || null, // <-- ADDED TO PAYLOAD
       assigned_to: assignedTo || null,
       reviewer_id: reviewerId || null,
       priority,
@@ -152,7 +154,7 @@ export default function TasksPage() {
       if (stageChangedTo) metadata.stage_changed_to = stage;
       if (isReassigned) metadata.reassigned = true;
       if (timeSpent !== editingTask.time_spent_minutes) metadata.time_logged = `${timeSpent} mins`;
-      
+
       await logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, metadata);
 
       if (stageChangedTo === "Approved" && recurrence !== "None") {
@@ -240,7 +242,8 @@ export default function TasksPage() {
       setTitle(task.title);
       setClientId(task.client_id || "");
       setCategory(task.category);
-      setDueDate(task.due_date);
+      setDueDate(task.due_date || "");
+      setOfficialDueDate(task.official_due_date || ""); // <-- LOAD OFFICIAL DATE
       setAssignedTo(task.assigned_to || "");
       setReviewerId(task.reviewer_id || "");
       setPriority(task.priority || "Medium");
@@ -249,7 +252,7 @@ export default function TasksPage() {
       setNotes(task.notes || "");
       setReviewComments(task.review_comments || "");
       setTimeSpent(task.time_spent_minutes || 0);
-      
+
       loadTaskTimeline(task.id);
     } else {
       setEditingTask(null);
@@ -271,6 +274,7 @@ export default function TasksPage() {
     setClientId("");
     setCategory("Other");
     setDueDate("");
+    setOfficialDueDate(""); // <-- RESET OFFICIAL DATE
     setAssignedTo("");
     setReviewerId("");
     setPriority("Medium");
@@ -307,10 +311,10 @@ export default function TasksPage() {
   const isAdmin = currentUser?.role === "admin";
   const isTaskReviewer = currentUser?.id === reviewerId;
   const isTaskAssignee = currentUser?.id === assignedTo;
-  
+
   // Who can edit Core details (Title, Client, Dates, Reviewer Assignment)?
   const canEditCoreDetails = !editingTask || isAdmin || isTaskReviewer;
-  
+
   // Who can edit the Reviewer Comments?
   const canEditReviewerFeedback = isAdmin || isTaskReviewer || currentUser?.role === "reviewer";
 
@@ -319,7 +323,7 @@ export default function TasksPage() {
   if (editingTask && !isAdmin && !isTaskReviewer && isTaskAssignee) {
     // If they are strictly the execution staff, they CANNOT approve tasks or send them back to assigned
     availableStages = ['Assigned', 'In Progress', 'Submitted for Review'];
-    
+
     // If the task was rejected, they can keep it in 'Changes Required' while working, then submit it again
     if (editingTask.stage === 'Changes Required') {
       availableStages = ['Changes Required', 'In Progress', 'Submitted for Review'];
@@ -350,7 +354,7 @@ export default function TasksPage() {
             <option value="">All Clients</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          
+
           <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface">
             <option value="">One-time & Recurring</option>
             <option value="recurring">Recurring Only</option>
@@ -376,7 +380,7 @@ export default function TasksPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border text-left text-text-muted bg-background/50">
-                  <th className="p-3">Due Date</th>
+                  <th className="p-3">Deadlines (Int / Off)</th> {/* <-- UPDATED TABLE HEADER */}
                   <th className="p-3">Task</th>
                   <th className="p-3">Category</th>
                   <th className="p-3">Client</th>
@@ -389,14 +393,22 @@ export default function TasksPage() {
                 {filteredTasks.map((t: any) => {
                   const isOverdue = t.due_date < today && t.stage !== "Approved";
                   const needsAction = t.assigned_to === currentUser?.id && (t.stage === 'Assigned' || t.stage === 'Changes Required');
-                  
+
                   return (
                     <tr key={t.id} className={`hover:bg-background/50 transition cursor-pointer ${needsAction ? 'bg-amber-50/30' : ''}`} onClick={() => openModal(t)}>
+                      
+                      {/* <-- UPDATED TABLE CELL FOR DUAL DEADLINES */}
                       <td className="p-3 whitespace-nowrap">
-                        <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
-                          {isOverdue && <AlertCircle className="h-3 w-3" />} {t.due_date}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
+                            {isOverdue && <AlertCircle className="h-3 w-3" />} Int: {t.due_date || "-"}
+                          </span>
+                          <span className="text-[10px] text-text-muted mt-0.5">
+                            Off: {t.official_due_date || "-"}
+                          </span>
+                        </div>
                       </td>
+
                       <td className="p-3 font-semibold text-navy">
                         {t.title}
                         {needsAction && <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 inline-block animate-pulse" title="Action Required"></span>}
@@ -427,16 +439,16 @@ export default function TasksPage() {
               <h3 className="font-semibold text-base text-text-main flex items-center gap-2">
                 {editingTask ? "Manage Task Lifecycle" : "Add Task"}
                 {!canEditCoreDetails && (
-  <span title="Core details locked for execution staff">
-    <Lock className="h-4 w-4 text-text-muted" />
-  </span>
-)}
+                  <span title="Core details locked for execution staff">
+                    <Lock className="h-4 w-4 text-text-muted" />
+                  </span>
+                )}
               </h3>
               <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              
+
               {/* LEFT COLUMN: Form Execution */}
               <div className="md:col-span-2 space-y-4">
                 <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
@@ -453,7 +465,7 @@ export default function TasksPage() {
                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
-                    
+
                     <div>
                       <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
                       <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
@@ -461,9 +473,15 @@ export default function TasksPage() {
                       </select>
                     </div>
 
+                    {/* <-- UPDATED DUAL DEADLINE INPUTS */}
                     <div>
-                      <label className="block font-semibold text-text-muted mb-1">DUE DATE *</label>
-                      <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                      <label className="block font-semibold text-amber-600 mb-1">INTERNAL TEAM DEADLINE *</label>
+                      <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-amber-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-rose-600 mb-1">OFFICIAL STATUTORY DEADLINE</label>
+                      <input disabled={!canEditCoreDetails} type="date" value={officialDueDate} onChange={(e) => setOfficialDueDate(e.target.value)} className="w-full border border-rose-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
                     </div>
 
                     <div>
@@ -539,7 +557,7 @@ export default function TasksPage() {
                   <div className="flex items-center gap-2 text-navy font-bold mb-4 border-b border-border pb-2 sticky top-0 bg-surface">
                     <Activity className="h-4 w-4" /> Task Timeline Feed
                   </div>
-                  
+
                   {loadingTimeline ? (
                     <div className="text-text-muted italic">Loading task history...</div>
                   ) : taskTimeline.length === 0 ? (
@@ -549,11 +567,11 @@ export default function TasksPage() {
                       {taskTimeline.map((log: any) => {
                         const dt = new Date(log.timestamp);
                         const isCreate = log.action === "CREATE_TASK";
-                        
+
                         return (
                           <div key={log.id} className="relative pl-4 border-l-2 border-border pb-4 last:border-0 last:pb-0">
                             <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? 'bg-emerald-500' : 'bg-navy'}`}></div>
-                            
+
                             <div className="flex justify-between items-start mb-1">
                               <span className="font-semibold text-text-main">
                                 {isCreate ? "Task Created" : log.action.replace("_", " ")}
@@ -562,11 +580,11 @@ export default function TasksPage() {
                                 {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
-                            
+
                             <div className="text-text-muted">
                               by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
                             </div>
-                            
+
                             {log.metadata?.stage_changed_to && (
                               <div className="mt-1 bg-navy/5 text-navy px-2 py-1 rounded inline-block text-[10px] font-medium border border-navy/10">
                                 Moved to <span className="font-bold">{log.metadata.stage_changed_to}</span>
