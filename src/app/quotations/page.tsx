@@ -305,7 +305,7 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
     return matchesSearch;
   });
 
-  async function convertToInvoice(quotation: any, e: React.MouseEvent) {
+async function convertToInvoice(quotation: any, e: React.MouseEvent) {
     e.stopPropagation();
 
     if (!quotation.client_id) {
@@ -323,19 +323,11 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
       return;
 
     try {
-      const year = new Date().getFullYear();
-      const { count } = await supabase
-        .from("invoices")
-        .select("*", { count: "exact", head: true });
-      const seqStr = String((count || 0) + 1).padStart(3, "0");
-      const invoiceNumber = `INV/${year}/${seqStr}`;
-
-      const invoicePayload = {
+      // Setup payload without an invoice number (API will handle the prefix logic)
+      const payload = {
         client_id: quotation.client_id,
-        invoice_number: invoiceNumber,
         date: new Date().toISOString().slice(0, 10),
-        due_date:
-          quotation.valid_until || new Date().toISOString().slice(0, 10),
+        due_date: quotation.valid_until || new Date().toISOString().slice(0, 10),
         items: quotation.items || [],
         is_inter_state: quotation.is_inter_state || false,
         gst_rate: quotation.gst_rate || 18,
@@ -346,17 +338,23 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
         total: quotation.total || 0,
         notes: quotation.notes || "",
         organisation: quotation.organisation || "",
-        status: "Unpaid",
+        status: "Draft", // Always start as Draft to allow final review
       };
 
-      // 1. Insert new Invoice
-      const { data: newInvoice, error: invError } = await supabase
-        .from("invoices")
-        .insert([invoicePayload])
-        .select()
-        .single();
+      // 1. Send to the API route to apply Firm Settings & Auto-numbering
+      const res = await fetch("/api/invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (invError) throw invError;
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to generate invoice");
+      }
+
+      const newInvoice = data;
 
       // 2. Mark Quotation as Converted
       await supabase
@@ -366,11 +364,11 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
 
       logAuditEvent("CONVERT_QUOTATION_TO_INVOICE", "QUOTATIONS", quotation.id);
 
-      alert(`Invoice ${invoiceNumber} created successfully!`);
+      alert(`Invoice ${newInvoice.invoice_number} created successfully!`);
       loadData();
 
-      // 3. Open the newly created invoice PDF in the same tab
-      window.open(`/invoices/${newInvoice.id}/pdf`, "_self");
+      // 3. Open the newly created invoice PDF in the same tab using the API generated URL
+      window.open(newInvoice.pdf_url || `/invoices/${newInvoice.id}/pdf`, "_self");
     } catch (err: any) {
       console.error("Conversion Error:", err);
       alert("Failed to convert quotation: " + (err.message || "Unknown error"));
