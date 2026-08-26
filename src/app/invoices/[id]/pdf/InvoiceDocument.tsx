@@ -76,7 +76,7 @@ export default function InvoiceDocument({ invoice, client }: { invoice: any; cli
         <Page size="A4" style={styles.page}>
           {/* Header Band */}
           <View style={styles.header}>
-            <View><Text style={styles.brand}>My CA Practice</Text></View>
+            <View><Text style={styles.brand}>Finetax</Text></View>
             <View style={styles.titleGroup}>
               <Text style={styles.title}>TAX INVOICE</Text>
               <Text style={styles.subTitle}>Invoice No: {invoice.invoice_number}</Text>

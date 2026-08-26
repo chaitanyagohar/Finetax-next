@@ -244,7 +244,7 @@ export default function UnifiedInboxPage() {
 
   function handleAutoReplyGenerate() {
     setComposeBody(
-      `Dear Client,\n\nThank you for reaching out regarding "${composeSubject.replace("Re: ", "")}". \n\nWe have received your query and our execution team is currently reviewing your file. We will provide a comprehensive update shortly.\n\nPlease find the requested attachments enclosed below.\n\nBest regards,\n${accounts.find((a) => a.id === composeFromId)?.display_name || "Practice Team"}`,
+      `Dear Client,\n\nThank you for reaching out regarding "${composeSubject.replace("Re: ", "")}". \n\nWe have received your query and our execution team is currently reviewing your file. We will provide a comprehensive update shortly.\n\nPlease find the requested attachments enclosed below.\n\nBest regards,\n${accounts.find((a) => a.id === composeFromId)?.display_name || "Finetax Team"}`,
     );
   }
 

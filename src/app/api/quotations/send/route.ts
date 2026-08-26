@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
         <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">
           Best regards,<br/>
-          <strong>Practice Management Team</strong>
+          <strong>Finetax Team</strong>
         </p>
       </div>
     `;

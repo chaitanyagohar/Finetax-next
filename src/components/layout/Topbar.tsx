@@ -13,7 +13,7 @@ export default function Topbar({ user = { name: "Chaitanya Gohar", role: "admin"
   return (
     <header className="h-16 bg-surface border-b border-border px-6 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-4">
-        <h2 className="text-sm font-semibold text-text-main">CA Practice Management Portal</h2>
+        <h2 className="text-sm font-semibold text-text-main">Finetax Management Portal</h2>
       </div>
 
       <div className="flex items-center gap-4">

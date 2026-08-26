@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="h-12 w-12 bg-navy text-white rounded-lg flex items-center justify-center mb-4 shadow-sm">
             <ShieldCheck className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold text-navy">Practice Manager</h1>
+          <h1 className="text-2xl font-bold text-navy">Finetax Manager</h1>
           <p className="text-sm text-text-muted mt-1">Sign in to your workspace</p>
         </div>
 

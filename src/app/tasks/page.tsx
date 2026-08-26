@@ -183,7 +183,7 @@ export default function TasksPage() {
         const sent = await dispatchEmail(
           selectedClient.email, 
           `New Service Request Initiated: ${title}`, 
-          `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${title}". Our team will notify you upon completion.\n\nBest regards,\nPractice Team`
+          `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${title}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
         );
         if (sent) emailsSent++;
       }
@@ -222,7 +222,7 @@ export default function TasksPage() {
         const sent = await dispatchEmail(
           selectedClient.email, 
           `Task Completed: ${title}`, 
-          `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${title}" has been completed and verified.\n\nBest regards,\nPractice Team`
+          `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${title}" has been completed and verified.\n\nBest regards,\nFinetax Team`
         );
         if (sent) emailsSent++;
       }

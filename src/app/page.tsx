@@ -157,7 +157,7 @@ export default function DashboardPage() {
       <div className="bg-surface p-5 rounded-lg border border-border shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-text-main">Practice Dashboard</h2>
+            <h2 className="text-xl font-bold text-text-main">Finetax Dashboard</h2>
             {isAdmin}
           </div>
           <p className="text-xs text-text-muted mt-1">
@@ -278,11 +278,11 @@ export default function DashboardPage() {
 
           {/* Workload Monitor & Invoice Quick Feed */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Practice Tasks Stream */}
+            {/* Finetax Tasks Stream */}
             <div className="lg:col-span-2 bg-surface rounded-lg border border-border shadow-sm p-4 space-y-4">
               <div className="flex justify-between items-center border-b border-border pb-3">
                 <h3 className="font-bold text-sm text-text-main flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4 text-navy" /> Practice-Wide Task Stream
+                  <CheckSquare className="h-4 w-4 text-navy" /> Finetax-Wide Task Stream
                 </h3>
                 <Link href="/tasks" className="text-xs font-semibold text-navy hover:underline flex items-center gap-1">
                   Manage Tasks <ArrowRight className="h-3 w-3" />

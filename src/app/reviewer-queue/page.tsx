@@ -84,7 +84,7 @@ export default function ReviewerQueuePage() {
       formData.append("subject", `[Task Review Update] ${inspectTask.title} -> ${newStage}`);
       formData.append(
         "body",
-        `Hello ${inspectTask.assignee.name},\n\nYour submitted task "${inspectTask.title}" has been updated to "${newStage}" by ${currentUser?.name || 'your Reviewer'}.\n\nFeedback: ${reviewComments || "No additional comments."}\n\nPlease log into the Practice Manager portal to view details.`
+        `Hello ${inspectTask.assignee.name},\n\nYour submitted task "${inspectTask.title}" has been updated to "${newStage}" by ${currentUser?.name || 'your Reviewer'}.\n\nFeedback: ${reviewComments || "No additional comments."}\n\nPlease log into the Finetax Manager portal to view details.`
       );
 
       try {
@@ -103,7 +103,7 @@ export default function ReviewerQueuePage() {
       clientForm.append("subject", `Task Completed: ${inspectTask.title}`);
       clientForm.append(
         "body",
-        `Dear ${inspectTask.clients.name},\n\nWe are pleased to inform you that your task "${inspectTask.title}" has been completed and verified by our team.\n\nBest regards,\nPractice Team`
+        `Dear ${inspectTask.clients.name},\n\nWe are pleased to inform you that your task "${inspectTask.title}" has been completed and verified by our team.\n\nBest regards,\nFinetax Team`
       );
 
       try {
@@ -142,7 +142,7 @@ export default function ReviewerQueuePage() {
             </span>
           </div>
           <p className="text-xs text-text-muted mt-1">
-            Verify submitted staff work, request revision edits, and track your practice quality metrics.
+            Verify submitted staff work, request revision edits, and track your Finetax quality metrics.
           </p>
         </div>
 

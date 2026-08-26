@@ -23,6 +23,9 @@ export default function InvoicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
 
+  // 1. Add state for settings
+const [firmSettings, setFirmSettings] = useState<any>(null);
+
   // Form State
   const [selectedClientId, setSelectedClientId] = useState("");
   const [organisation, setOrganisation] = useState("");
@@ -44,6 +47,10 @@ export default function InvoicesPage() {
   async function loadData() {
     setLoading(true);
     
+// Fetch settings alongside your existing data
+  const { data: settings } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
+  if (settings) setFirmSettings(settings);
+
     const { data: invData, error: invError } = await supabase
       .from("invoices")
       .select("*, clients!client_id(name, email, phone)")
@@ -95,7 +102,7 @@ export default function InvoicesPage() {
     setItems(updated);
   }
 
-  function openModal(inv?: any) {
+async function openModal(inv?: any) {
     if (inv) {
       setEditingInvoice(inv);
       setSelectedClientId(inv.client_id || "");
@@ -108,9 +115,31 @@ export default function InvoicesPage() {
       setNotes(inv.notes || "");
       setAmountPaid(Number(inv.amount_paid) || 0);
       setItems(inv.items?.length ? inv.items : [{ description: "", qty: 1, rate: 0 }]);
+      
+      // If you have an invoice number state, set it here for editing:
+      // setInvoiceNumber(inv.invoice_number || "");
     } else {
       setEditingInvoice(null);
       resetForm();
+
+      // --- INJECT FIRM SETTINGS DEFAULTS ---
+      
+      // 1. Calculate and set the next Invoice Number
+      const { count } = await supabase.from("invoices").select("*", { count: "exact", head: true });
+      const nextNumber = (count || 0) + 1;
+      const formattedNumber = String(nextNumber).padStart(4, '0');
+      const prefix = firmSettings?.invoice_prefix || "INV-2026-";
+      
+      // If you are storing the invoice number in state, uncomment this:
+      // setInvoiceNumber(`${prefix}${formattedNumber}`);
+
+      // 2. Apply Default GST Rate
+      setGstRate(firmSettings?.default_gst_rate ?? 18);
+
+      // 3. Auto-populate Payment Terms & Bank Details into Notes
+      const defaultNotes = `Payment Terms: ${firmSettings?.payment_terms || 'Due on Receipt'}\n\nBank Details:\nBank: ${firmSettings?.bank_name || 'N/A'}\nA/C: ${firmSettings?.bank_account_no || 'N/A'}\nIFSC: ${firmSettings?.bank_ifsc || 'N/A'}\nUPI: ${firmSettings?.upi_id || 'N/A'}`;
+      
+      setNotes(defaultNotes);
     }
     setIsModalOpen(true);
   }

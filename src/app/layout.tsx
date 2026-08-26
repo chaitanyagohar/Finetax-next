@@ -6,8 +6,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
-  title: "Practice Manager",
-  description: "CA Firm Practice Management System",
+  title: "Finetax Manager",
+  description: "CA Firm Finetax Management System",
 };
 
 // Define the shape of the user prop

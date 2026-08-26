@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Draft Professional HTML Email Template
-    const emailSubject = `Invoice ${invNum} from Practice Management`;
+    const emailSubject = `Invoice ${invNum} from Finetax Management`;
     
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
         <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">
           Best regards,<br/>
-          <strong>Practice Management Team</strong>
+          <strong>Finetax Management Team</strong>
         </p>
       </div>
     `;

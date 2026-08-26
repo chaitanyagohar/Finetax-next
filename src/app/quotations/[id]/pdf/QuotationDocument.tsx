@@ -76,7 +76,7 @@ export default function QuotationDocument({ quotation, client }: { quotation: an
         <Page size="A4" style={styles.page}>
           {/* Header Band */}
           <View style={styles.header}>
-            <View><Text style={styles.brand}>My CA Practice</Text></View>
+            <View><Text style={styles.brand}>Finetax</Text></View>
             <View style={styles.titleGroup}>
               <Text style={styles.title}>QUOTATION</Text>
               <Text style={styles.subTitle}>Quote No: {quotation.quote_number || quotation.quotation_number}</Text>

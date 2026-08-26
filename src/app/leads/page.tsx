@@ -159,7 +159,7 @@ export default function LeadsPage() {
       formData.append("subject", `New Lead Assigned: ${leadName}`);
       formData.append(
         "body",
-        `Hello ${assignee.name},\n\nYou have been assigned a new lead/enquiry in the Practice Manager portal:\n\nClient/Prospect Name: ${leadName}\nService Requested: ${service}\nPhone: ${phone || "N/A"}\nEmail: ${email || "N/A"}\nFollow-Up Date: ${followUpDate || "N/A"}\n\nPlease check your portal to initiate contact.`
+        `Hello ${assignee.name},\n\nYou have been assigned a new lead/enquiry in the Finetax Manager portal:\n\nClient/Prospect Name: ${leadName}\nService Requested: ${service}\nPhone: ${phone || "N/A"}\nEmail: ${email || "N/A"}\nFollow-Up Date: ${followUpDate || "N/A"}\n\nPlease check your portal to initiate contact.`
       );
 
       await fetch("/api/send-email", { method: "POST", body: formData });

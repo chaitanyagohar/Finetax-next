@@ -16,7 +16,7 @@ const MODULE_OPTIONS = [
   { id: "documents", label: "Document Vault", desc: "Client document uploads and file organization" },
   { id: "team", label: "Team Management", desc: "Manage staff accounts and operational roles" },
   { id: "packages", label: "Service Package Workflows", desc: "Retainer onboarding and recurring sub-tasks" },
-  { id: "settings", label: "Firm Settings & Roles", desc: "Practice configuration and system role controls" },
+  { id: "settings", label: "Firm Settings & Roles", desc: "Finetax configuration and system role controls" },
 ];
 
 const ROLE_PRESETS = [
@@ -189,7 +189,7 @@ async function handleSubmit(e: React.FormEvent) {
             <UserCheck className="h-5 w-5 text-navy" /> Firm Team & Permission Console
           </h2>
           <p className="text-xs text-text-muted mt-1">
-            Manage practice staff, toggle reviewer gatekeeper access, and configure module-level security.
+            Manage Finetax staff, toggle reviewer gatekeeper access, and configure module-level security.
           </p>
         </div>
         <button

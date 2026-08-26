@@ -92,7 +92,7 @@ export default function Sidebar() {
     <aside className="w-64 bg-navy text-white flex flex-col h-screen shrink-0 border-r border-navy/20">
       {/* Brand Header */}
       <div className="p-4 border-b border-white/10">
-        <h1 className="text-xl font-bold tracking-tight text-white">Practice Manager</h1>
+        <h1 className="text-xl font-bold tracking-tight text-white">Finetax Manager</h1>
         <p className="text-xs text-muted font-medium">Local Office Edition</p>
       </div>
 
