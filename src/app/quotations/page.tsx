@@ -255,7 +255,6 @@ async function loadData() {
 async function sendQuotationEmail(q: any, e: React.MouseEvent) {
     e.stopPropagation();
 
-    // Fallback order: Joined client email -> Joined lead email -> Direct recipient email field
     const recipientEmail = q.clients?.email || q.leads?.email || q.recipient_email;
 
     if (!recipientEmail) {
@@ -276,6 +275,14 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
           recipientEmail,
         }),
       });
+
+      // Safely check if response is HTML before parsing JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const rawText = await res.text();
+        console.error("Non-JSON Response from Server:", rawText);
+        throw new Error(`Server returned status ${res.status} (${res.statusText}). Check Vercel server logs.`);
+      }
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send email");
