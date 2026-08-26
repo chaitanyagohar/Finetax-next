@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
         { error: "Supabase environment variables are missing." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (!quotationId || !recipientEmail) {
       return NextResponse.json(
         { error: "Quotation ID and recipient email are required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     if (qErr || !quotation) {
       return NextResponse.json(
         { error: "Quotation not found: " + (qErr?.message || "Invalid ID") },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -46,8 +46,11 @@ export async function POST(request: Request) {
       quotation.recipient_name ||
       "Valued Client";
 
-    const quoteNum = quotation.quote_number || quotation.quotation_number || "QUO-001";
-    const totalAmount = Number(quotation.total || quotation.total_amount || 0).toLocaleString("en-IN", {
+    const quoteNum =
+      quotation.quote_number || quotation.quotation_number || "QUO-001";
+    const totalAmount = Number(
+      quotation.total || quotation.total_amount || 0,
+    ).toLocaleString("en-IN", {
       minimumFractionDigits: 2,
     });
     const validUntilDate = quotation.valid_until
@@ -55,8 +58,14 @@ export async function POST(request: Request) {
       : "N/A";
 
     // 2. Safely extract Origin & fetch PDF Buffer internally
-    const { origin } = new URL(request.url);
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+    const host =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (process.env.VERCEL_URL
+        ? `${protocol}://${process.env.VERCEL_URL}`
+        : new URL(request.url).origin);
+
+    const baseUrl = host.replace(/\/$/, ""); // Ensure no trailing slash
     const pdfResponse = await fetch(`${baseUrl}/quotations/${quotationId}/pdf`);
 
     let pdfBlob: Blob | null = null;
@@ -66,7 +75,7 @@ export async function POST(request: Request) {
 
     // 3. Draft Professional HTML Email Template
     const emailSubject = `Quotation ${quoteNum} for Professional Services`;
-    
+
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
         <h2 style="color: #1e3a8a; margin-top: 0;">Quotation for Professional Services</h2>
@@ -110,7 +119,7 @@ export async function POST(request: Request) {
         "files",
         new File([pdfBlob], `${quoteNum.replace(/\//g, "-")}.pdf`, {
           type: "application/pdf",
-        })
+        }),
       );
     }
 
@@ -129,10 +138,10 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await supabase
       .from("quotations")
-      .update({ 
-        status: "Sent", 
+      .update({
+        status: "Sent",
         email_sent_at: now,
-        updated_at: now 
+        updated_at: now,
       })
       .eq("id", quotationId);
 
@@ -144,7 +153,7 @@ export async function POST(request: Request) {
     console.error("Quotation Email Error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to send quotation email" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
