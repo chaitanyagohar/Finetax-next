@@ -25,30 +25,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Fetch Quotation Details & Related Client/Lead Info
+    // 1. Fetch Quotation Details & Related Client/Lead Info (Safe dual join)
     const { data: quotation, error: qErr } = await supabase
       .from("quotations")
-      .select("*, clients!client_id(name, email)")
+      .select("*, clients(name, email), leads(name, email)")
       .eq("id", quotationId)
       .single();
 
     if (qErr || !quotation) {
       return NextResponse.json(
-        { error: "Quotation not found." },
+        { error: "Quotation not found: " + (qErr?.message || "Invalid ID") },
         { status: 404 }
       );
     }
 
-    // Resolve Recipient Name & Quote Number safely
-    const clientName = quotation.clients?.name || quotation.recipient_name || "Valued Client";
+    // Resolve Recipient Name safely across Clients, Leads, or Manual Inputs
+    const clientName =
+      quotation.clients?.name ||
+      quotation.leads?.name ||
+      quotation.recipient_name ||
+      "Valued Client";
+
     const quoteNum = quotation.quote_number || quotation.quotation_number || "QUO-001";
     const totalAmount = Number(quotation.total || quotation.total_amount || 0).toLocaleString("en-IN", {
       minimumFractionDigits: 2,
     });
-    const validUntilDate = quotation.valid_until ? new Date(quotation.valid_until).toLocaleDateString("en-IN") : "N/A";
+    const validUntilDate = quotation.valid_until
+      ? new Date(quotation.valid_until).toLocaleDateString("en-IN")
+      : "N/A";
 
-    // 2. Fetch/Render PDF Buffer internally from your PDF API
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    // 2. Safely extract Origin & fetch PDF Buffer internally
+    const { origin } = new URL(request.url);
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
     const pdfResponse = await fetch(`${baseUrl}/quotations/${quotationId}/pdf`);
 
     let pdfBlob: Blob | null = null;
@@ -117,10 +125,15 @@ export async function POST(request: Request) {
       throw new Error(sendData.error || "Failed to dispatch email");
     }
 
-    // 5. Update Status to 'Sent' in Supabase
+    // 5. Update Status and Timestamp in Supabase (Triggers frontend '✓ Email Sent' badge)
+    const now = new Date().toISOString();
     await supabase
       .from("quotations")
-      .update({ status: "Sent", updated_at: new Date().toISOString() })
+      .update({ 
+        status: "Sent", 
+        email_sent_at: now,
+        updated_at: now 
+      })
       .eq("id", quotationId);
 
     return NextResponse.json({

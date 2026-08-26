@@ -60,13 +60,13 @@ export default function QuotationsPage() {
     loadData();
   }, []);
 
-  async function loadData() {
+async function loadData() {
     setLoading(true);
     const [{ data: qData }, { data: cData }, { data: lData }] =
       await Promise.all([
         supabase
           .from("quotations")
-          .select("*, clients!client_id(name, email)")
+          .select("*, clients(name, email), leads(name, email)")
           .order("created_at", { ascending: false }),
         supabase.from("clients").select("*").order("name", { ascending: true }),
         supabase
@@ -253,49 +253,49 @@ export default function QuotationsPage() {
 
   // Handle Send Email Action
 async function sendQuotationEmail(q: any, e: React.MouseEvent) {
-  e.stopPropagation();
+    e.stopPropagation();
 
-  const recipientEmail = q.clients?.email || q.recipient_email;
+    // Fallback order: Joined client email -> Joined lead email -> Direct recipient email field
+    const recipientEmail = q.clients?.email || q.leads?.email || q.recipient_email;
 
-  if (!recipientEmail) {
-    alert("No email address associated with this client/lead.");
-    return;
+    if (!recipientEmail) {
+      alert("No email address associated with this client or lead.");
+      return;
+    }
+
+    if (!confirm(`Send Quotation ${q.quote_number || q.id} to ${recipientEmail}?`)) return;
+
+    setSendingId(q.id);
+
+    try {
+      const res = await fetch("/api/quotations/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quotationId: q.id,
+          recipientEmail,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send email");
+
+      setQuotations((prev) =>
+        prev.map((item) =>
+          item.id === q.id
+            ? { ...item, status: "Sent", email_sent_at: new Date().toISOString() }
+            : item
+        )
+      );
+
+      alert("Quotation email dispatched successfully!");
+    } catch (err: any) {
+      console.error("Send Email Error:", err);
+      alert("Failed to send quotation email: " + (err.message || "Unknown error"));
+    } finally {
+      setSendingId(null);
+    }
   }
-
-  if (!confirm(`Send Quotation ${q.quote_number || q.id} to ${recipientEmail}?`)) return;
-
-  setSendingId(q.id);
-
-  try {
-    const res = await fetch("/api/quotations/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        quotationId: q.id,
-        recipientEmail,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    // Optimistically update local state so UI updates instantly
-    setQuotations((prev) =>
-      prev.map((item) =>
-        item.id === q.id
-          ? { ...item, status: "Sent", email_sent_at: new Date().toISOString() }
-          : item
-      )
-    );
-
-    alert("Quotation email dispatched successfully!");
-  } catch (err: any) {
-    console.error("Send Email Error:", err);
-    alert("Failed to send quotation email: " + (err.message || "Unknown error"));
-  } finally {
-    setSendingId(null);
-  }
-}
 
   const filteredQuotations = quotations.filter((q: any) => {
     const nameStr = q.clients?.name || q.recipient_name || q.organisation || "";
