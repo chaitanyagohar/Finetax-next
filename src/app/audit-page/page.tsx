@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Activity, Clock, User, Filter } from "lucide-react";
+import { Search, Activity, Filter, RefreshCw, Server, Info } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AuditLogsPage() {
@@ -9,6 +9,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterEntity, setFilterEntity] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const supabase = createClient();
 
@@ -17,7 +18,7 @@ export default function AuditLogsPage() {
   }, []);
 
   async function loadLogs() {
-    setLoading(true);
+    setIsRefreshing(true);
     // Fetch top 500 latest logs to keep performance high
     const { data, error } = await supabase
       .from("audit_logs")
@@ -27,7 +28,9 @@ export default function AuditLogsPage() {
 
     if (data) setLogs(data);
     else console.error(error);
+    
     setLoading(false);
+    setIsRefreshing(false);
   }
 
   function formatMetadata(metadata: any) {
@@ -40,15 +43,24 @@ export default function AuditLogsPage() {
         const readableKey = key.replace(/_/g, " ");
         return `${readableKey}: ${value}`;
       })
-      .join(" | ");
+      .join("  •  ");
   }
+
+  // Generate 1-2 letter initials for the user avatar
+  function getInitials(name: string) {
+    if (!name || name === "System API") return "SY";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+  }
+  
   const EMAIL_ACTIONS = ["SEND_QUOTATION_EMAIL", "SEND_INVOICE_EMAIL", "SEND_STAFF_ASSIGNMENT_EMAIL"];
 
   // Extract unique entities for the filter dropdown
   const uniqueEntities = Array.from(new Set(logs.map(log => log.entity)));
 
   const filteredLogs = logs.filter((log) => {
-    const actor = (log.metadata?.actor_name || "System").toLowerCase();
+    const actor = (log.metadata?.actor_name || "System API").toLowerCase();
     const action = log.action.toLowerCase();
     const matchesSearch = actor.includes(search.toLowerCase()) || action.includes(search.toLowerCase());
     const matchesEntity = filterEntity ? log.entity === filterEntity : true;
@@ -57,31 +69,42 @@ export default function AuditLogsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-navy font-bold text-lg border-b border-border pb-4">
-        <Activity className="h-6 w-6" /> System Audit Logs
+    <div className="max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500">
+      
+      {/* Page Header */}
+      <div className="flex flex-col gap-1 border-b border-slate-200 pb-5">
+        <div className="flex items-center gap-2 text-slate-900 font-bold text-2xl tracking-tight">
+          <Activity className="h-6 w-6 text-blue-600" />
+          System Audit Logs
+        </div>
+        <p className="text-sm text-slate-500">
+          Monitor system activity, secure actions, and outbound communications.
+        </p>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-surface p-4 rounded-lg border border-border shadow-sm">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative w-full sm:w-60">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          
+          {/* Search Input */}
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search user or action..." 
+              placeholder="Search users or actions..." 
               value={search} 
               onChange={(e) => setSearch(e.target.value)} 
-              className="w-full pl-9 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" 
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
             />
           </div>
 
-          <div className="relative">
-            <Filter className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
+          {/* Entity Filter */}
+          <div className="relative w-full sm:w-48">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <select 
               value={filterEntity} 
               onChange={(e) => setFilterEntity(e.target.value)} 
-              className="pl-9 pr-8 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface"
+              className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all appearance-none cursor-pointer"
             >
               <option value="">All Areas</option>
               {uniqueEntities.map((entity) => (
@@ -91,63 +114,128 @@ export default function AuditLogsPage() {
           </div>
         </div>
         
+        {/* Refresh Button */}
         <button 
           onClick={loadLogs} 
-          className="px-4 py-2 border border-border rounded text-xs hover:bg-background transition"
+          disabled={isRefreshing}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all active:scale-[0.98] disabled:opacity-70"
         >
-          Refresh Logs
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-blue-600" : "text-slate-500"}`} />
+          {isRefreshing ? "Syncing..." : "Refresh"}
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+      {/* Main Table Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-text-muted text-xs">Fetching system activity...</div>
+          // Skeleton Loader State
+          <div className="divide-y divide-slate-100">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-5 animate-pulse">
+                <div className="w-24 h-4 bg-slate-200 rounded-md"></div>
+                <div className="h-9 w-9 rounded-full bg-slate-200 ml-4"></div>
+                <div className="w-32 h-4 bg-slate-200 rounded-md"></div>
+                <div className="w-24 h-6 bg-slate-200 rounded-full ml-auto"></div>
+                <div className="w-48 h-4 bg-slate-200 rounded-md ml-auto"></div>
+              </div>
+            ))}
+          </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="p-8 text-center text-text-muted text-xs">No logs found matching your criteria.</div>
+          // Empty State
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <Server className="h-6 w-6 text-slate-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-slate-900">No logs found</h3>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm">
+              We couldn't find any system activity matching your current filters or search query.
+            </p>
+          </div>
         ) : (
+          // Data Table
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+            <table className="w-full text-sm text-left whitespace-nowrap">
               <thead>
-                <tr className="border-b border-border bg-background/50 text-text-muted uppercase tracking-wider">
-                  <th className="p-4 font-semibold">Timestamp</th>
-                  <th className="p-4 font-semibold">User</th>
-                  <th className="p-4 font-semibold">Action</th>
-                  <th className="p-4 font-semibold">Area</th>
-                  <th className="p-4 font-semibold">Details</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">
+                  <th className="px-6 py-4 rounded-tl-xl">Timestamp</th>
+                  <th className="px-6 py-4">User / Actor</th>
+                  <th className="px-6 py-4">Action</th>
+                  <th className="px-6 py-4">Area</th>
+                  <th className="px-6 py-4 rounded-tr-xl">Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-slate-100">
                 {filteredLogs.map((log: any) => {
                   const dt = new Date(log.timestamp);
                   const isDelete = log.action.includes("DELETE");
                   const isCreate = log.action.includes("CREATE");
+                  const isEmail = EMAIL_ACTIONS.includes(log.action) || log.action.includes("EMAIL");
+                  const actorName = log.metadata?.actor_name || "System API";
+                  const isSystem = actorName === "System API";
 
                   return (
-                    <tr key={log.id} className="hover:bg-background/50 transition">
-                      <td className="p-4 whitespace-nowrap text-text-muted flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5" />
-                        {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors group">
+                      
+                      {/* Timestamp Stacked */}
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-900">
+                            {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                          <span className="text-xs text-slate-500 mt-0.5">
+                            {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
                       </td>
-                      <td className="p-4 font-semibold text-navy flex items-center gap-2">
-                        <User className="h-3.5 w-3.5" />
-                        {log.metadata?.actor_name || "System"}
+
+                      {/* User Avatar & Name */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border ${
+                            isSystem 
+                              ? "bg-slate-100 text-slate-500 border-slate-200" 
+                              : "bg-blue-50 text-blue-700 border-blue-100"
+                          }`}>
+                            {getInitials(actorName)}
+                          </div>
+                          <span className={`font-medium ${isSystem ? "text-slate-500" : "text-slate-900"}`}>
+                            {actorName}
+                          </span>
+                        </div>
                       </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded font-semibold text-[10px] tracking-wide ${
-                          isDelete ? 'bg-rose-100 text-rose-700' : 
-                          isCreate ? 'bg-emerald-100 text-emerald-700' : 
-                          'bg-blue-100 text-blue-700'
+
+                      {/* Action Pill Badge */}
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          isDelete ? 'bg-rose-50 text-rose-700 border-rose-200' : 
+                          isCreate ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                          isEmail ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                          'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
                           {log.action.replace(/_/g, " ")}
                         </span>
                       </td>
-                      <td className="p-4 font-semibold text-text-main">
-                        {log.entity}
+
+                      {/* Area/Entity */}
+                      <td className="px-6 py-4">
+                        <span className="text-slate-600 font-medium">
+                          {log.entity}
+                        </span>
                       </td>
-                      <td className="p-4 text-text-muted max-w-xs truncate" title={formatMetadata(log.metadata)}>
-                        {formatMetadata(log.metadata)}
+
+                      {/* Metadata Details */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 max-w-sm">
+                          <Info className="h-4 w-4 text-slate-400 flex-shrink-0 group-hover:text-blue-500 transition-colors" />
+                          <span 
+                            className="text-slate-500 truncate text-xs cursor-help" 
+                            title={formatMetadata(log.metadata)}
+                          >
+                            {formatMetadata(log.metadata)}
+                          </span>
+                        </div>
                       </td>
+
                     </tr>
                   )
                 })}
