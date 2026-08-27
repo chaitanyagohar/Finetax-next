@@ -40,13 +40,13 @@ export async function POST(request: Request) {
     const clientName = invoice.clients?.name || invoice.organisation || "Valued Client";
     const invNum = invoice.invoice_number || "INV-000";
 
-    // 2. Generate Pure PDF Binary Stream on Server
+// 2. Generate Pure PDF Binary Stream on Server
     const pdfStream = await renderToStream(
       React.createElement(InvoiceTemplate, {
         invoice,
         client: invoice.clients,
         firm,
-      })
+      }) as any
     );
 
     // Convert Stream to Blob for FormData attachment

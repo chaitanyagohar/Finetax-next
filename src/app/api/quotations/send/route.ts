@@ -49,13 +49,13 @@ export async function POST(request: Request) {
       
     const quoteNum = quotation.quote_number || quotation.quotation_number || "QTN-000";
 
-    // 2. Generate Pure PDF Binary Stream on Server
+// 2. Generate Pure PDF Binary Stream on Server
     const pdfStream = await renderToStream(
       React.createElement(QuotationTemplate, {
         quotation,
         client: clientData,
         firm,
-      })
+      }) as any
     );
 
     // Convert Stream to Blob for FormData attachment
