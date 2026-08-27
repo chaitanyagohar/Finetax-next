@@ -346,7 +346,7 @@ export default function TeamPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">PHONE NUMBER</label>
+                  <label className="block font-semibold text-text-muted mb-1">MOBILE NUMBER</label>
                   <input
                     type="text"
                     value={phone}

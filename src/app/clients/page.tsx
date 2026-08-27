@@ -15,6 +15,7 @@ export default function ClientsPage() {
 
   // Form State matching legacy schema
   const [name, setName] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [type, setType] = useState("Individual");
   const [pan, setPan] = useState("");
   const [gstin, setGstin] = useState("");
@@ -42,6 +43,7 @@ export default function ClientsPage() {
     if (client) {
       setEditingClient(client);
       setName(client.name || "");
+      setOrganizationName((client as any).organization_name || "");
       setType((client as any).type || "Individual");
       setPan((client as any).pan || "");
       setGstin((client as any).gstin || "");
@@ -66,6 +68,7 @@ export default function ClientsPage() {
 
   function resetForm() {
     setName("");
+    setOrganizationName("");
     setType("Individual");
     setPan("");
     setGstin("");
@@ -82,6 +85,7 @@ export default function ClientsPage() {
 
     const payload = {
       name: name.trim(),
+      organization_name: organizationName.trim(),
       type,
       pan: pan.trim().toUpperCase(),
       gstin: gstin.trim().toUpperCase(),
@@ -128,7 +132,7 @@ export default function ClientsPage() {
   }
 
   const filteredClients = clients.filter((c) =>
-    [c.name, (c as any).pan, (c as any).gstin, c.email, c.phone]
+    [c.name, (c as any).organization_name, (c as any).pan, (c as any).gstin, c.email, c.phone]
       .filter(Boolean)
       .some((f) => f.toLowerCase().includes(search.toLowerCase()))
   );
@@ -141,7 +145,7 @@ export default function ClientsPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
           <input
             type="text"
-            placeholder="Search by name, PAN, GSTIN, email, phone..."
+            placeholder="Search by name, org, PAN, GSTIN, email, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-navy"
@@ -171,7 +175,7 @@ export default function ClientsPage() {
                   <th>Type</th>
                   <th>PAN</th>
                   <th>GSTIN</th>
-                  <th>Phone</th>
+                  <th>Mobile</th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
@@ -234,6 +238,17 @@ export default function ClientsPage() {
                 </div>
 
                 <div>
+                  <label className="block font-semibold text-text-muted mb-1">ORGANIZATION NAME</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Moonvita Foods Pvt Ltd"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-sm focus:outline-none focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+
+                <div>
                   <label className="block font-semibold text-text-muted mb-1">TYPE</label>
                   <select
                     value={type}
@@ -282,7 +297,7 @@ export default function ClientsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">PHONE</label>
+                  <label className="block font-semibold text-text-muted mb-1">Mobile</label>
                   <input
                     type="text"
                     value={phone}

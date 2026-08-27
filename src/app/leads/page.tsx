@@ -21,7 +21,7 @@ export default function LeadsPage() {
 
   // Form state
   const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [serviceRequested, setServiceRequested] = useState("Tax Consultancy");
@@ -54,7 +54,7 @@ export default function LeadsPage() {
     if (lead) {
       setEditingLead(lead);
       setName(lead.name || "");
-      setCompany((lead as any).company || "");
+      setOrganizationName((lead as any).organization_name || (lead as any).company || "");
       setPhone(lead.phone || "");
       setEmail(lead.email || "");
       setServiceRequested((lead as any).serviceRequested || (lead as any).service_requested || "Tax Consultancy");
@@ -79,7 +79,7 @@ export default function LeadsPage() {
 
   function resetForm() {
     setName("");
-    setCompany("");
+    setOrganizationName("");
     setPhone("");
     setEmail("");
     setServiceRequested("Tax Consultancy");
@@ -98,6 +98,7 @@ export default function LeadsPage() {
 
     const payload: Record<string, any> = {
       name: name.trim(),
+      organization_name: organizationName.trim(),
       phone: phone.trim(),
       email: email.trim(),
       serviceRequested: serviceRequested.trim(),
@@ -191,7 +192,8 @@ export default function LeadsPage() {
     if (!confirm(`Convert lead "${editingLead.name}" into an active Client record?`)) return;
 
     const clientPayload = {
-      name: company || name,
+      name: name,
+      organization_name: organizationName || "",
       type: "Individual",
       pan: "",
       gstin: "",
@@ -237,7 +239,7 @@ export default function LeadsPage() {
   }
 
   const filteredLeads = leads.filter((l: any) => {
-    const matchesSearch = [l.name, l.company, l.email, l.phone, l.notes]
+    const matchesSearch = [l.name, l.organization_name, l.company, l.email, l.phone, l.notes]
       .filter(Boolean)
       .some((f) => f.toLowerCase().includes(search.toLowerCase()));
 
@@ -317,6 +319,7 @@ export default function LeadsPage() {
               <thead>
                 <tr className="border-b border-border text-left text-text-muted bg-background/50">
                   <th className="p-3">Name</th>
+                  <th className="p-3">Organization</th>
                   <th className="p-3">Service Requested</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Assigned To</th>
@@ -333,6 +336,7 @@ export default function LeadsPage() {
                     <td className="p-3 font-semibold text-text-main flex items-center gap-2">
                       <UserPlus className="h-3.5 w-3.5 text-navy shrink-0" /> {l.name}
                     </td>
+                    <td className="p-3">{l.organization_name || l.company || "-"}</td>
                     <td className="p-3">{l.serviceRequested || l.service_requested || "Consultancy"}</td>
                     <td className="p-3">
                       <span
@@ -392,7 +396,18 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-text-muted mb-1">PHONE</label>
+                  <label className="block font-semibold text-text-muted mb-1">ORGANIZATION NAME</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Moonvita Foods Pvt Ltd"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">MOBILE</label>
                   <input
                     type="text"
                     placeholder="10-digit phone"
@@ -452,7 +467,7 @@ export default function LeadsPage() {
                   </select>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block font-semibold text-text-muted mb-1">FOLLOW-UP DATE</label>
                   <input
                     type="date"
