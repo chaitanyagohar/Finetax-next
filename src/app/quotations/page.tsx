@@ -60,7 +60,7 @@ export default function QuotationsPage() {
     loadData();
   }, []);
 
-async function loadData() {
+  async function loadData() {
     setLoading(true);
     const [{ data: qData }, { data: cData }, { data: lData }] =
       await Promise.all([
@@ -219,6 +219,7 @@ async function loadData() {
           .select("*", { count: "exact", head: true });
         const seqStr = String((count || 0) + 1).padStart(3, "0");
         payload.quote_number = `QUO/${year}/${seqStr}`;
+        payload.created_at = new Date().toISOString();
 
         const { data, error } = await supabase
           .from("quotations")
@@ -252,7 +253,7 @@ async function loadData() {
   }
 
   // Handle Send Email Action
-async function sendQuotationEmail(q: any, e: React.MouseEvent) {
+  async function sendQuotationEmail(q: any, e: React.MouseEvent) {
     e.stopPropagation();
 
     const recipientEmail = q.clients?.email || q.leads?.email || q.recipient_email;
@@ -276,7 +277,6 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
         }),
       });
 
-      // Safely check if response is HTML before parsing JSON
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const rawText = await res.text();
@@ -305,14 +305,14 @@ async function sendQuotationEmail(q: any, e: React.MouseEvent) {
   }
 
   const filteredQuotations = quotations.filter((q: any) => {
-    const nameStr = q.clients?.name || q.recipient_name || q.organisation || "";
+    const nameStr = q.clients?.name || q.leads?.name || q.recipient_name || q.organisation || "";
     const matchesSearch = [q.quote_number, nameStr, q.notes]
       .filter(Boolean)
       .some((f) => f.toLowerCase().includes(search.toLowerCase()));
     return matchesSearch;
   });
 
-async function convertToInvoice(quotation: any, e: React.MouseEvent) {
+  async function convertToInvoice(quotation: any, e: React.MouseEvent) {
     e.stopPropagation();
 
     if (!quotation.client_id) {
@@ -330,7 +330,6 @@ async function convertToInvoice(quotation: any, e: React.MouseEvent) {
       return;
 
     try {
-      // Setup payload without an invoice number (API will handle the prefix logic)
       const payload = {
         client_id: quotation.client_id,
         date: new Date().toISOString().slice(0, 10),
@@ -345,11 +344,10 @@ async function convertToInvoice(quotation: any, e: React.MouseEvent) {
         total: quotation.total || 0,
         notes: quotation.notes || "",
         organisation: quotation.organisation || "",
-        status: "Draft", // Always start as Draft to allow final review
+        status: "Draft",
       };
 
-      // 1. Send to the API route to apply Firm Settings & Auto-numbering
-      const res = await fetch("/api/invoice", {
+      const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -363,7 +361,6 @@ async function convertToInvoice(quotation: any, e: React.MouseEvent) {
 
       const newInvoice = data;
 
-      // 2. Mark Quotation as Converted
       await supabase
         .from("quotations")
         .update({ status: "Converted" })
@@ -374,7 +371,6 @@ async function convertToInvoice(quotation: any, e: React.MouseEvent) {
       alert(`Invoice ${newInvoice.invoice_number} created successfully!`);
       loadData();
 
-      // 3. Open the newly created invoice PDF in the same tab using the API generated URL
       window.open(newInvoice.pdf_url || `/invoices/${newInvoice.id}/pdf`, "_self");
     } catch (err: any) {
       console.error("Conversion Error:", err);
@@ -419,92 +415,107 @@ async function convertToInvoice(quotation: any, e: React.MouseEvent) {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr>
-                  <th>Quote #</th>
-                  <th>Date</th>
-                  <th>Client / Recipient</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
+                <tr className="border-b border-border text-left text-text-muted bg-background/50">
+                  <th className="p-3">Quote #</th>
+                  <th className="p-3">Created At</th>
+                  <th className="p-3">Quotation Date</th>
+                  <th className="p-3">Client / Recipient</th>
+                  <th className="p-3">Amount</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-  {filteredQuotations.map((q: any) => (
-    <tr
-      key={q.id}
-      className="hover:bg-background/50 transition cursor-pointer"
-      onClick={() => openModal(q)}
-    >
-      <td className="font-bold text-navy whitespace-nowrap">
-        {q.quote_number || q.quotation_number || "-"}
-      </td>
-      <td>{q.date}</td>
-      <td className="font-medium text-text-main">
-        {q.clients?.name || q.recipient_name || q.organisation || "-"}
-      </td>
-      <td className="font-semibold text-text-main">
-        ₹{Number(q.total || 0).toLocaleString("en-IN")}
-      </td>
-      <td>
-        <div className="flex flex-col gap-1 items-start">
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(
-              q.status,
-            )}`}
-          >
-            {q.status || "Draft"}
-          </span>
+                {filteredQuotations.map((q: any) => (
+                  <tr
+                    key={q.id}
+                    className="hover:bg-background/50 transition cursor-pointer"
+                    onClick={() => openModal(q)}
+                  >
+                    <td className="p-3 font-bold text-navy whitespace-nowrap">
+                      {q.quote_number || q.quotation_number || "-"}
+                    </td>
+                    <td className="p-3 text-text-muted whitespace-nowrap">
+                      {q.created_at
+                        ? new Date(q.created_at).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "-"}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">{q.date}</td>
+                    <td className="p-3 font-medium text-text-main">
+                      {q.clients?.name || q.leads?.name || q.recipient_name || q.organisation || "-"}
+                    </td>
+                    <td className="p-3 font-semibold text-text-main">
+                      ₹{Number(q.total || 0).toLocaleString("en-IN")}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-col gap-1 items-start">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(
+                            q.status,
+                          )}`}
+                        >
+                          {q.status || "Draft"}
+                        </span>
 
-          {/* Real-time Email Delivery Status */}
-          {q.email_sent_at ? (
-            <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-              ✓ Email Sent
-            </span>
-          ) : (
-            <span className="text-[10px] text-text-muted">Not emailed</span>
-          )}
-        </div>
-      </td>
-      <td className="text-right whitespace-nowrap space-x-2">
-        <button
-          onClick={(e) => sendQuotationEmail(q, e)}
-          disabled={sendingId === q.id}
-          className={`px-2.5 py-1 border rounded font-semibold inline-flex items-center gap-1 text-[11px] transition ${
-            q.email_sent_at 
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" 
-              : "border-border hover:bg-background"
-          }`}
-          title={q.email_sent_at ? `Resend Quotation Email (Last sent ${new Date(q.email_sent_at).toLocaleDateString()})` : "Send Quotation via Email"}
-        >
-          {sendingId === q.id ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Mail className="h-3 w-3" />
-          )}
-          {q.email_sent_at ? "Resend Email" : "Email"}
-        </button>
+                        {q.email_sent_at ? (
+                          <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                            ✓ Email Sent
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-text-muted">Not emailed</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3 text-right whitespace-nowrap space-x-2">
+                      <button
+                        onClick={(e) => sendQuotationEmail(q, e)}
+                        disabled={sendingId === q.id}
+                        className={`px-2.5 py-1 border rounded font-semibold inline-flex items-center gap-1 text-[11px] transition ${
+                          q.email_sent_at
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            : "border-border hover:bg-background"
+                        }`}
+                        title={
+                          q.email_sent_at
+                            ? `Resend Quotation Email (Last sent ${new Date(
+                                q.email_sent_at,
+                              ).toLocaleDateString()})`
+                            : "Send Quotation via Email"
+                        }
+                      >
+                        {sendingId === q.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Mail className="h-3 w-3" />
+                        )}
+                        {q.email_sent_at ? "Resend Email" : "Email"}
+                      </button>
 
-        {q.status !== "Converted" && q.client_id && (
-          <button
-            onClick={(e) => convertToInvoice(q, e)}
-            className="px-2.5 py-1 bg-navy text-white rounded text-[11px] font-semibold hover:bg-navy/90 transition"
-          >
-            + Invoice
-          </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            window.open(`/quotations/${q.id}/pdf`, "_self");
-          }}
-          className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold text-[11px]"
-        >
-          PDF
-        </button>
-      </td>
-    </tr>
-  ))}
-</tbody>
+                      {q.status !== "Converted" && q.client_id && (
+                        <button
+                          onClick={(e) => convertToInvoice(q, e)}
+                          className="px-2.5 py-1 bg-navy text-white rounded text-[11px] font-semibold hover:bg-navy/90 transition"
+                        >
+                          + Invoice
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/quotations/${q.id}/pdf`, "_self");
+                        }}
+                        className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold text-[11px]"
+                      >
+                        PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         )}

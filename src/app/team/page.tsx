@@ -117,7 +117,7 @@ export default function TeamPage() {
     setModuleAccess(["leads", "tasks", "time_tracking"]);
   }
 
-async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const payload = {
@@ -338,10 +338,9 @@ async function handleSubmit(e: React.FormEvent) {
                   <input
                     type="email"
                     required
-                    disabled={!!editingMember}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background"
+                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
                     placeholder="rahul@firm.com"
                   />
                 </div>

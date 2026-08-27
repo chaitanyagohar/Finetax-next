@@ -2,6 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logAuditEvent } from "@/lib/audit";
+import React from "react";
+import { renderToStream } from "@react-pdf/renderer";
+import QuotationTemplate from "./QuotationTemplate";
+import { Buffer } from "buffer";
 
 export async function POST(request: Request) {
   try {
@@ -9,151 +14,101 @@ export async function POST(request: Request) {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: "Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) are missing on Vercel." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Supabase environment variables missing." }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { quotationId, recipientEmail } = await request.json();
 
     if (!quotationId || !recipientEmail) {
-      return NextResponse.json(
-        { error: "Quotation ID and recipient email are required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Quotation ID and recipient email are required." }, { status: 400 });
     }
 
-    // 1. Fetch Quotation Details
-    const { data: quotation, error: qErr } = await supabase
+    // 1. Fetch Quotation & Firm Data
+    const { data: quotation, error: quoteErr } = await supabase
       .from("quotations")
-      .select("*, clients(name, email), leads(name, email)")
+      .select("*, clients!client_id(name, email, address, gstin, pan)")
       .eq("id", quotationId)
       .single();
 
-    if (qErr || !quotation) {
-      return NextResponse.json(
-        { error: "Quotation not found: " + (qErr?.message || "Invalid ID") },
-        { status: 404 }
-      );
+    if (quoteErr || !quotation) {
+      return NextResponse.json({ error: "Quotation not found." }, { status: 404 });
     }
 
-    const clientName =
-      quotation.clients?.name ||
-      quotation.leads?.name ||
-      quotation.recipient_name ||
-      "Valued Client";
+    const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
 
-    const quoteNum = quotation.quote_number || quotation.quotation_number || "QUO-001";
-    const totalAmount = Number(quotation.total || quotation.total_amount || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-    });
-    const validUntilDate = quotation.valid_until
-      ? new Date(quotation.valid_until).toLocaleDateString("en-IN")
-      : "N/A";
+    // FIXED: Extract clientData safely from the joined Supabase query
+    const clientData = quotation.clients;
+    const clientName = clientData?.name 
+      ? String(clientData.name) 
+      : quotation?.recipient_name 
+      ? String(quotation.recipient_name) 
+      : quotation?.organisation 
+      ? String(quotation.organisation) 
+      : "Valued Client";
+      
+    const quoteNum = quotation.quote_number || quotation.quotation_number || "QTN-000";
 
-    // 2. Resolve Vercel Production Base URL safely
+    // 2. Generate Pure PDF Binary Stream on Server
+    const pdfStream = await renderToStream(
+      React.createElement(QuotationTemplate, {
+        quotation,
+        client: clientData,
+        firm,
+      })
+    );
+
+    // Convert Stream to Blob for FormData attachment
+    const chunks: any[] = [];
+    for await (const chunk of pdfStream) {
+      chunks.push(chunk);
+    }
+    const pdfBuffer = Buffer.concat(chunks);
+    const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" });
+
+    // 3. Draft Email
     const host = request.headers.get("host");
     const protocol = host?.includes("localhost") ? "http" : "https";
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`;
-
-    // 3. Fetch PDF Buffer
-    const pdfResponse = await fetch(`${baseUrl}/quotations/${quotationId}/pdf`, {
-      headers: { cookie: request.headers.get("cookie") || "" }
-    });
-
-    let pdfBlob: Blob | null = null;
-    if (pdfResponse.ok) {
-      pdfBlob = await pdfResponse.blob();
-    }
-
-    // 4. Draft Email HTML
-    const emailSubject = `Quotation ${quoteNum} for Professional Services`;
+    
+    const emailSubject = `Quotation ${quoteNum} from ${firm?.firm_name || "Finetax"}`;
     const htmlBody = `
-      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-        <h2 style="color: #1e3a8a; margin-top: 0;">Quotation for Professional Services</h2>
+      <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 24px;">
         <p>Dear <strong>${clientName}</strong>,</p>
-        <p>Thank you for giving us the opportunity to submit our proposal. Please find attached our detailed quotation <strong>${quoteNum}</strong> for your review.</p>
-        
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #f8fafc; border-radius: 6px;">
-          <tr>
-            <td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Quotation Number:</td>
-            <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${quoteNum}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Total Amount:</td>
-            <td style="padding: 10px 14px; font-weight: bold; color: #1e3a8a; border-bottom: 1px solid #e2e8f0;">₹${totalAmount}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 14px; font-weight: bold;">Valid Until:</td>
-            <td style="padding: 10px 14px;">${validUntilDate}</td>
-          </tr>
-        </table>
-
-        <p>You can review the attached PDF document for a line-item breakdown, terms, and tax schedules.</p>
-        <p>If you have any questions or require any adjustments, please feel free to reply directly to this email.</p>
-        
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-        <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">
-          Best regards,<br/>
-          <strong>Finetax Team</strong>
-        </p>
+        <p>Please find attached your formal quotation <strong>${quoteNum}</strong> for proposed services.</p>
+        <p>You can securely view, download, or print the full document from the PDF attachment below.</p>
+        <br/>
+        <p>Best regards,<br/><strong>${firm?.firm_name || "Finetax"}</strong></p>
       </div>
     `;
 
-    // 5. Dispatch Email to `/api/send-email`
+    // 4. Attach and Dispatch
     const formData = new FormData();
     formData.append("to", recipientEmail);
     formData.append("subject", emailSubject);
     formData.append("body", htmlBody);
-
-    if (pdfBlob) {
-      formData.append(
-        "files",
-        new File([pdfBlob], `${quoteNum.replace(/\//g, "-")}.pdf`, {
-          type: "application/pdf",
-        })
-      );
-    }
+    
+    // Attach the true PDF binary file!
+    formData.append("files", pdfBlob, `${quoteNum.replace(/\//g, "-")}.pdf`);
 
     const sendRes = await fetch(`${baseUrl}/api/send-email`, {
       method: "POST",
       body: formData,
-      headers: { cookie: request.headers.get("cookie") || "" }
     });
-
-    const contentType = sendRes.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      const errHtml = await sendRes.text();
-      console.error("`/api/send-email` failed with HTML output:", errHtml);
-      return NextResponse.json(
-        { error: "Email dispatch service (/api/send-email) failed. Verify SMTP keys on Vercel." },
-        { status: 500 }
-      );
-    }
 
     const sendData = await sendRes.json();
-    if (!sendRes.ok) {
-      return NextResponse.json({ error: sendData.error || "Failed to dispatch email" }, { status: 500 });
-    }
+    if (!sendRes.ok) throw new Error(sendData.error || "Failed to send email");
 
-    // 6. Update Status
     const now = new Date().toISOString();
-    await supabase
-      .from("quotations")
-      .update({ status: "Sent", email_sent_at: now, updated_at: now })
-      .eq("id", quotationId);
+    await supabase.from("quotations").update({ status: "Sent", email_sent_at: now, updated_at: now }).eq("id", quotationId);
 
-    return NextResponse.json({
-      success: true,
-      message: "Quotation sent successfully with PDF attachment!",
-    });
+    try {
+      await logAuditEvent("SEND_QUOTATION_EMAIL", "QUOTATIONS", quotationId, { recipientEmail, quotationNumber: quoteNum });
+    } catch (e) {}
+
+    return NextResponse.json({ success: true, message: "Quotation email sent successfully with PDF attachment!" });
   } catch (error: any) {
-    console.error("Quotation Email Route Crash:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to send quotation email" },
-      { status: 500 }
-    );
+    console.error("Quotation Send Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to send quotation email" }, { status: 500 });
   }
 }

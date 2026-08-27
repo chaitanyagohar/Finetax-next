@@ -23,8 +23,8 @@ export default function InvoicesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
 
-  // 1. Add state for settings
-const [firmSettings, setFirmSettings] = useState<any>(null);
+  // Firm Settings state
+  const [firmSettings, setFirmSettings] = useState<any>(null);
 
   // Form State
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -47,14 +47,15 @@ const [firmSettings, setFirmSettings] = useState<any>(null);
   async function loadData() {
     setLoading(true);
     
-// Fetch settings alongside your existing data
-  const { data: settings } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
-  if (settings) setFirmSettings(settings);
+    // Fetch global firm settings
+    const { data: settings } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
+    if (settings) setFirmSettings(settings);
 
+    // Fetch invoices sorted by creation timestamp
     const { data: invData, error: invError } = await supabase
       .from("invoices")
       .select("*, clients!client_id(name, email, phone)")
-      .order("id", { ascending: false });
+      .order("created_at", { ascending: false });
 
     if (invError) {
       console.error("Fetch Invoices Error:", invError);
@@ -102,7 +103,7 @@ const [firmSettings, setFirmSettings] = useState<any>(null);
     setItems(updated);
   }
 
-async function openModal(inv?: any) {
+  async function openModal(inv?: any) {
     if (inv) {
       setEditingInvoice(inv);
       setSelectedClientId(inv.client_id || "");
@@ -115,28 +116,13 @@ async function openModal(inv?: any) {
       setNotes(inv.notes || "");
       setAmountPaid(Number(inv.amount_paid) || 0);
       setItems(inv.items?.length ? inv.items : [{ description: "", qty: 1, rate: 0 }]);
-      
-      // If you have an invoice number state, set it here for editing:
-      // setInvoiceNumber(inv.invoice_number || "");
     } else {
       setEditingInvoice(null);
       resetForm();
 
       // --- INJECT FIRM SETTINGS DEFAULTS ---
-      
-      // 1. Calculate and set the next Invoice Number
-      const { count } = await supabase.from("invoices").select("*", { count: "exact", head: true });
-      const nextNumber = (count || 0) + 1;
-      const formattedNumber = String(nextNumber).padStart(4, '0');
-      const prefix = firmSettings?.invoice_prefix || "INV-2026-";
-      
-      // If you are storing the invoice number in state, uncomment this:
-      // setInvoiceNumber(`${prefix}${formattedNumber}`);
-
-      // 2. Apply Default GST Rate
       setGstRate(firmSettings?.default_gst_rate ?? 18);
 
-      // 3. Auto-populate Payment Terms & Bank Details into Notes
       const defaultNotes = `Payment Terms: ${firmSettings?.payment_terms || 'Due on Receipt'}\n\nBank Details:\nBank: ${firmSettings?.bank_name || 'N/A'}\nA/C: ${firmSettings?.bank_account_no || 'N/A'}\nIFSC: ${firmSettings?.bank_ifsc || 'N/A'}\nUPI: ${firmSettings?.upi_id || 'N/A'}`;
       
       setNotes(defaultNotes);
@@ -173,7 +159,7 @@ async function openModal(inv?: any) {
       client_id: selectedClientId,
       organisation: organisation.trim(),
       date: invoiceDate,
-      issue_date: invoiceDate, // Legacy support mapping
+      issue_date: invoiceDate,
       due_date: dueDate || null,
       is_inter_state: isInterState,
       gst_rate: gstRate,
@@ -226,11 +212,12 @@ async function openModal(inv?: any) {
     } else alert("Error deleting invoice: " + error.message);
   }
 
-  // Improved Email Dispatch Function
+  // Improved Email Dispatch Function with Permanent Reload Sync
   async function sendInvoiceEmail(inv: any, e?: React.MouseEvent) {
     if (e) e.stopPropagation();
 
-    const recipientEmail = inv.clients?.email;
+    const recipientEmail = inv.clients?.email || inv.email;
+
     if (!recipientEmail) {
       alert("No email address associated with this client.");
       return;
@@ -250,20 +237,20 @@ async function openModal(inv?: any) {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const rawText = await res.text();
+        console.error("Non-JSON Response from Server:", rawText);
+        throw new Error(`Server returned status ${res.status} (${res.statusText}). Check Vercel server logs.`);
+      }
 
-      // Optimistically update the UI without refetching the whole DB
-      setInvoices((prev) =>
-        prev.map((item) =>
-          item.id === inv.id
-            ? { ...item, status: item.status === "Draft" ? "Sent" : item.status, email_sent_at: new Date().toISOString() }
-            : item
-        )
-      );
-      
-      logAuditEvent("SEND_INVOICE_EMAIL", "INVOICES", inv.id);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send email");
+
       alert("Invoice email dispatched successfully!");
+
+      // Re-fetch data from Supabase to permanently persist status & email_sent_at
+      await loadData();
     } catch (err: any) {
       console.error("Send Email Error:", err);
       alert("Failed to send invoice email: " + (err.message || "Unknown error"));
@@ -315,25 +302,35 @@ async function openModal(inv?: any) {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Client</th>
-                  <th>Date</th>
-                  <th>Total</th>
-                  <th>Paid</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
+                <tr className="border-b border-border text-left text-text-muted bg-background/50">
+                  <th className="p-3">Invoice #</th>
+                  <th className="p-3">Created At</th>
+                  <th className="p-3">Client</th>
+                  <th className="p-3">Issue Date</th>
+                  <th className="p-3">Total</th>
+                  <th className="p-3">Paid</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredInvoices.map((i: any) => (
                   <tr key={i.id} className="hover:bg-background/50 transition cursor-pointer" onClick={() => openModal(i)}>
-                    <td className="font-mono font-bold text-navy flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5 text-navy shrink-0" /> {i.invoice_number}</td>
-                    <td className="font-medium text-text-main">{i.clients?.name || "-"}</td>
-                    <td>{i.date || i.issue_date}</td>
-                    <td className="font-bold text-navy">{formatMoney(i.total)}</td>
-                    <td className="text-success font-medium">{formatMoney(i.amount_paid)}</td>
-                    <td>
+                    <td className="p-3 font-mono font-bold text-navy flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5 text-navy shrink-0" /> {i.invoice_number}</td>
+                    <td className="p-3 text-text-muted whitespace-nowrap">
+                      {i.created_at
+                        ? new Date(i.created_at).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "-"}
+                    </td>
+                    <td className="p-3 font-medium text-text-main">{i.clients?.name || "-"}</td>
+                    <td className="p-3 whitespace-nowrap">{i.date || i.issue_date}</td>
+                    <td className="p-3 font-bold text-navy">{formatMoney(i.total)}</td>
+                    <td className="p-3 text-success font-medium">{formatMoney(i.amount_paid)}</td>
+                    <td className="p-3">
                       <div className="flex flex-col gap-1 items-start">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
                           i.status === "Paid" ? "bg-success/10 text-success" : i.status === "Partially Paid" ? "bg-accent/10 text-accent" : "bg-navy/10 text-navy"
@@ -347,7 +344,7 @@ async function openModal(inv?: any) {
                         )}
                       </div>
                     </td>
-                    <td className="text-right whitespace-nowrap space-x-2">
+                    <td className="p-3 text-right whitespace-nowrap space-x-2">
                       <button
                         onClick={(e) => sendInvoiceEmail(i, e)}
                         disabled={sendingId === i.id}
@@ -366,7 +363,7 @@ async function openModal(inv?: any) {
                           e.stopPropagation(); 
                           window.open(`/invoices/${i.id}/pdf`, '_self'); 
                         }} 
-                        className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold"
+                        className="px-2.5 py-1 border border-border rounded hover:bg-background font-semibold text-[11px]"
                       >
                         PDF
                       </button>
@@ -382,7 +379,7 @@ async function openModal(inv?: any) {
       {/* Form Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-2xl p-6 space-y-4 shadow-lg text-xs">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-2xl p-6 space-y-4 shadow-lg text-xs my-8">
             <div className="flex justify-between items-center border-b border-border pb-3">
               <h3 className="font-semibold text-base text-text-main">{editingInvoice ? `Invoice ${editingInvoice.invoice_number}` : "New Invoice"}</h3>
               <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>

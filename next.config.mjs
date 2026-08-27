@@ -3,7 +3,7 @@
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: [
-      "pdfkit",
+      '@react-pdf/renderer',
       "imapflow",
       "mailparser",
     ],

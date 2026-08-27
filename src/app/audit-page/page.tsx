@@ -42,6 +42,7 @@ export default function AuditLogsPage() {
       })
       .join(" | ");
   }
+  const EMAIL_ACTIONS = ["SEND_QUOTATION_EMAIL", "SEND_INVOICE_EMAIL", "SEND_STAFF_ASSIGNMENT_EMAIL"];
 
   // Extract unique entities for the filter dropdown
   const uniqueEntities = Array.from(new Set(logs.map(log => log.entity)));
