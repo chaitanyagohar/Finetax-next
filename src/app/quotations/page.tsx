@@ -622,7 +622,7 @@ export default function QuotationsPage() {
                     <option value="">-- Select Client --</option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} {c.organization_name ? `(${c.organization_name})` : ""}
+                        {c.name} {(c as any).organization_name ? `(${(c as any).organization_name})` : ""}
                       </option>
                     ))}
                   </select>
