@@ -33,9 +33,10 @@ export default function TasksPage() {
   // Form State
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState("");
+  const [organisation, setOrganisation] = useState("");
   const [category, setCategory] = useState<TaskCategory>("Other");
   const [dueDate, setDueDate] = useState("");
-  const [officialDueDate, setOfficialDueDate] = useState(""); // <-- ADDED OFFICIAL DEADLINE
+  const [officialDueDate, setOfficialDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [reviewerId, setReviewerId] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -66,7 +67,7 @@ export default function TasksPage() {
     if (cData) setClients(cData);
     if (pData) setTeam(pData);
 
-    let query = supabase.from("tasks").select("*, clients(id, name, email), profiles!tasks_assigned_to_fkey(id, name, email), reviewer:profiles!tasks_reviewer_id_fkey(id, name, email)");
+    let query = supabase.from("tasks").select("*, clients(id, name, email, organization_name), profiles!tasks_assigned_to_fkey(id, name, email), reviewer:profiles!tasks_reviewer_id_fkey(id, name, email)");
 
     const isAdmin = profile?.role === "admin";
     const isReviewer = profile?.is_reviewer || profile?.role === "reviewer";
@@ -123,15 +124,26 @@ export default function TasksPage() {
     }
   }
 
+  function handleClientChange(id: string) {
+    setClientId(id);
+    const c = clients.find((client) => String(client.id) === id);
+    if (c) {
+      setOrganisation((c as any).organization_name || "");
+    } else {
+      setOrganisation("");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const payload = {
       title: title.trim(),
       client_id: clientId || null,
+      organisation: organisation.trim(),
       category,
       due_date: dueDate,
-      official_due_date: officialDueDate || null, // <-- ADDED TO PAYLOAD
+      official_due_date: officialDueDate || null,
       assigned_to: assignedTo || null,
       reviewer_id: reviewerId || null,
       priority,
@@ -177,7 +189,6 @@ export default function TasksPage() {
 
     let emailsSent = 0;
 
-    // STEP 1: Task is created or reassigned -> Email Client AND Staff
     if (isNewTask || isReassigned) {
       if (selectedClient?.email) {
         const sent = await dispatchEmail(
@@ -197,10 +208,8 @@ export default function TasksPage() {
       }
     }
 
-    // STEP 2 & 3: Stage Transitions
     if (stageChangedTo) {
       if (stageChangedTo === "Submitted for Review" && reviewer?.email) {
-        // Staff finished, notify Reviewer
         const sent = await dispatchEmail(
           reviewer.email, 
           `Task Ready for Review: ${title}`, 
@@ -209,7 +218,6 @@ export default function TasksPage() {
         if (sent) emailsSent++;
       } 
       else if (stageChangedTo === "Changes Required" && assignee?.email) {
-        // Reviewer rejected, notify Staff
         const sent = await dispatchEmail(
           assignee.email, 
           `Task Needs Correction: ${title}`, 
@@ -218,7 +226,6 @@ export default function TasksPage() {
         if (sent) emailsSent++;
       } 
       else if (stageChangedTo === "Approved" && selectedClient?.email) {
-        // Reviewer approved, notify Client
         const sent = await dispatchEmail(
           selectedClient.email, 
           `Task Completed: ${title}`, 
@@ -241,9 +248,10 @@ export default function TasksPage() {
       setEditingTask(task);
       setTitle(task.title);
       setClientId(task.client_id || "");
+      setOrganisation(task.organisation || task.clients?.organization_name || "");
       setCategory(task.category);
       setDueDate(task.due_date || "");
-      setOfficialDueDate(task.official_due_date || ""); // <-- LOAD OFFICIAL DATE
+      setOfficialDueDate(task.official_due_date || "");
       setAssignedTo(task.assigned_to || "");
       setReviewerId(task.reviewer_id || "");
       setPriority(task.priority || "Medium");
@@ -272,9 +280,10 @@ export default function TasksPage() {
   function resetForm() {
     setTitle("");
     setClientId("");
+    setOrganisation("");
     setCategory("Other");
     setDueDate("");
-    setOfficialDueDate(""); // <-- RESET OFFICIAL DATE
+    setOfficialDueDate("");
     setAssignedTo("");
     setReviewerId("");
     setPriority("Medium");
@@ -298,7 +307,7 @@ export default function TasksPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const filteredTasks = tasks.filter((t: any) => {
-    const matchesSearch = [t.title, t.notes, t.category].filter(Boolean).some((f) => f.toLowerCase().includes(search.toLowerCase()));
+    const matchesSearch = [t.title, t.notes, t.category, t.organisation].filter(Boolean).some((f) => f.toLowerCase().includes(search.toLowerCase()));
     const matchesStage = filterStage ? t.stage === filterStage : true;
     const matchesCategory = filterCategory ? t.category === filterCategory : true;
     const matchesClient = filterClient ? t.client_id === filterClient : true;
@@ -312,19 +321,12 @@ export default function TasksPage() {
   const isTaskReviewer = currentUser?.id === reviewerId;
   const isTaskAssignee = currentUser?.id === assignedTo;
 
-  // Who can edit Core details (Title, Client, Dates, Reviewer Assignment)?
   const canEditCoreDetails = !editingTask || isAdmin || isTaskReviewer;
-
-  // Who can edit the Reviewer Comments?
   const canEditReviewerFeedback = isAdmin || isTaskReviewer || currentUser?.role === "reviewer";
 
-  // Strict Stage Dropdown Control based on Role
   let availableStages = STAGES;
   if (editingTask && !isAdmin && !isTaskReviewer && isTaskAssignee) {
-    // If they are strictly the execution staff, they CANNOT approve tasks or send them back to assigned
     availableStages = ['Assigned', 'In Progress', 'Submitted for Review'];
-
-    // If the task was rejected, they can keep it in 'Changes Required' while working, then submit it again
     if (editingTask.stage === 'Changes Required') {
       availableStages = ['Changes Required', 'In Progress', 'Submitted for Review'];
     }
@@ -380,7 +382,7 @@ export default function TasksPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border text-left text-text-muted bg-background/50">
-                  <th className="p-3">Deadlines (Int / Off)</th> {/* <-- UPDATED TABLE HEADER */}
+                  <th className="p-3">Deadlines (Int / Off)</th>
                   <th className="p-3">Task</th>
                   <th className="p-3">Category</th>
                   <th className="p-3">Client</th>
@@ -396,8 +398,6 @@ export default function TasksPage() {
 
                   return (
                     <tr key={t.id} className={`hover:bg-background/50 transition cursor-pointer ${needsAction ? 'bg-amber-50/30' : ''}`} onClick={() => openModal(t)}>
-                      
-                      {/* <-- UPDATED TABLE CELL FOR DUAL DEADLINES */}
                       <td className="p-3 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
@@ -414,7 +414,10 @@ export default function TasksPage() {
                         {needsAction && <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 inline-block animate-pulse" title="Action Required"></span>}
                       </td>
                       <td className="p-3">{t.category}</td>
-                      <td className="p-3">{t.clients?.name || "-"}</td>
+                      <td className="p-3">
+                        <div className="font-medium">{t.clients?.name || "-"}</div>
+                        {t.organisation && <div className="text-[10px] text-text-muted">{t.organisation}</div>}
+                      </td>
                       <td className="p-3">{t.profiles?.name || <span className="text-rose-500 font-semibold">Unassigned</span>}</td>
                       <td className="p-3">{t.reviewer?.name || "-"}</td>
                       <td className="p-3">
@@ -431,11 +434,13 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Task Modal (2-Column Layout for Timeline) */}
+      {/* Task Modal (Responsive & Scrollable Layout) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-5xl p-6 space-y-4 shadow-lg text-xs my-8">
-            <div className="flex justify-between items-center border-b border-border pb-3">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-5xl flex flex-col max-h-[95vh] shadow-lg text-xs">
+            
+            {/* Fixed Header */}
+            <div className="flex justify-between items-center border-b border-border p-4 shrink-0">
               <h3 className="font-semibold text-base text-text-main flex items-center gap-2">
                 {editingTask ? "Manage Task Lifecycle" : "Add Task"}
                 {!canEditCoreDetails && (
@@ -447,165 +452,179 @@ export default function TasksPage() {
               <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <div className={`grid grid-cols-1 ${editingTask ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-8`}>
 
-              {/* LEFT COLUMN: Form Execution */}
-              <div className="md:col-span-2 space-y-4">
-                <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">TASK TITLE *</label>
-                    <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* LEFT COLUMN: Form Execution */}
+                <div className={`${editingTask ? 'md:col-span-2' : 'md:col-span-1'} space-y-4`}>
+                  <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
-                      <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                        <option value="">(Internal / No Client)</option>
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                      <label className="block font-semibold text-text-muted mb-1">TASK TITLE *</label>
+                      <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
                     </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
-                      <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
+                        <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => handleClientChange(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          <option value="">(Internal / No Client)</option>
+                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
 
-                    {/* <-- UPDATED DUAL DEADLINE INPUTS */}
-                    <div>
-                      <label className="block font-semibold text-amber-600 mb-1">INTERNAL TEAM DEADLINE *</label>
-                      <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-amber-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">ORGANISATION</label>
+                        <input disabled={!canEditCoreDetails} type="text" placeholder="e.g. Acme Corp" value={organisation} onChange={(e) => setOrganisation(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-rose-600 mb-1">OFFICIAL STATUTORY DEADLINE</label>
-                      <input disabled={!canEditCoreDetails} type="date" value={officialDueDate} onChange={(e) => setOfficialDueDate(e.target.value)} className="w-full border border-rose-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
+                        <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1 text-navy">WORKFLOW STAGE *</label>
-                      <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className="w-full border border-navy/30 rounded p-2 text-xs bg-navy/5 font-semibold text-navy">
-                        {availableStages.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">RECURRENCE</label>
+                        <select disabled={!canEditCoreDetails} value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">ASSIGN EXECUTION TO</label>
-                      <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                        <option value="">-- Unassigned --</option>
-                        {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
-                      </select>
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-amber-600 mb-1">INTERNAL TEAM DEADLINE *</label>
+                        <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-amber-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">ASSIGN REVIEWER</label>
-                      <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                        <option value="">-- No Reviewer --</option>
-                        {team.filter(t => t.role === 'admin' || (t as any).is_reviewer || t.role === 'reviewer').map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-rose-600 mb-1">OFFICIAL STATUTORY DEADLINE</label>
+                        <input disabled={!canEditCoreDetails} type="date" value={officialDueDate} onChange={(e) => setOfficialDueDate(e.target.value)} className="w-full border border-rose-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">PRIORITY</label>
-                      <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                        <option>Low</option><option>Medium</option><option>High</option>
-                      </select>
-                    </div>
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1 text-navy">WORKFLOW STAGE *</label>
+                        <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className="w-full border border-navy/30 rounded p-2 text-xs bg-navy/5 font-semibold text-navy">
+                          {availableStages.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
 
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">TIME SPENT (MINUTES)</label>
-                      <div className="relative">
-                        <Clock className="absolute left-2.5 top-2 h-4 w-4 text-text-muted" />
-                        <input type="number" min="0" value={timeSpent} onChange={(e) => setTimeSpent(Number(e.target.value))} className="w-full pl-8 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">ASSIGN EXECUTION TO</label>
+                        <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          <option value="">-- Unassigned --</option>
+                          {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">ASSIGN REVIEWER</label>
+                        <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          <option value="">-- No Reviewer --</option>
+                          {team.filter(t => t.role === 'admin' || (t as any).is_reviewer || t.role === 'reviewer').map(t => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">PRIORITY</label>
+                        <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
+                          <option>Low</option><option>Medium</option><option>High</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-text-muted mb-1">TIME SPENT (MINUTES)</label>
+                        <div className="relative">
+                          <Clock className="absolute left-2.5 top-2 h-4 w-4 text-text-muted" />
+                          <input type="number" min="0" value={timeSpent} onChange={(e) => setTimeSpent(Number(e.target.value))} className="w-full pl-8 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {recurrence !== 'None' && (
-                    <div className="bg-navy/5 border border-navy/20 text-navy p-2 rounded flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4" /> 
-                      When this task is approved, the next occurrence will auto-generate.
+                    {recurrence !== 'None' && (
+                      <div className="bg-navy/5 border border-navy/20 text-navy p-2 rounded flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4" /> 
+                        When this task is approved, the next occurrence will auto-generate.
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block font-semibold text-text-muted mb-1">EXECUTION NOTES</label>
+                      <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
                     </div>
-                  )}
 
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">EXECUTION NOTES</label>
-                    <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-                  </div>
-
-                  <div className="bg-background p-3 rounded-lg border border-border">
-                    <label className="block font-semibold text-navy mb-1">REVIEWER FEEDBACK / REQUIRED CHANGES</label>
-                    <textarea
-                      rows={2}
-                      value={reviewComments}
-                      onChange={(e) => setReviewComments(e.target.value)}
-                      disabled={!canEditReviewerFeedback}
-                      className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-surface disabled:opacity-60"
-                      placeholder="Reviewers: Specify required changes here before returning task to 'Changes Required'..."
-                    />
-                  </div>
-                </form>
-              </div>
-
-              {/* RIGHT COLUMN: The Audit Timeline Feed */}
-              {editingTask && (
-                <div className="md:col-span-1 border-l border-border pl-6 max-h-[60vh] overflow-y-auto">
-                  <div className="flex items-center gap-2 text-navy font-bold mb-4 border-b border-border pb-2 sticky top-0 bg-surface">
-                    <Activity className="h-4 w-4" /> Task Timeline Feed
-                  </div>
-
-                  {loadingTimeline ? (
-                    <div className="text-text-muted italic">Loading task history...</div>
-                  ) : taskTimeline.length === 0 ? (
-                    <div className="text-text-muted italic">No historical data recorded yet.</div>
-                  ) : (
-                    <div className="space-y-4">
-                      {taskTimeline.map((log: any) => {
-                        const dt = new Date(log.timestamp);
-                        const isCreate = log.action === "CREATE_TASK";
-
-                        return (
-                          <div key={log.id} className="relative pl-4 border-l-2 border-border pb-4 last:border-0 last:pb-0">
-                            <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? 'bg-emerald-500' : 'bg-navy'}`}></div>
-
-                            <div className="flex justify-between items-start mb-1">
-                              <span className="font-semibold text-text-main">
-                                {isCreate ? "Task Created" : log.action.replace("_", " ")}
-                              </span>
-                              <span className="text-[10px] text-text-muted whitespace-nowrap pl-2">
-                                {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-
-                            <div className="text-text-muted">
-                              by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
-                            </div>
-
-                            {log.metadata?.stage_changed_to && (
-                              <div className="mt-1 bg-navy/5 text-navy px-2 py-1 rounded inline-block text-[10px] font-medium border border-navy/10">
-                                Moved to <span className="font-bold">{log.metadata.stage_changed_to}</span>
-                              </div>
-                            )}
-                            {log.metadata?.time_logged && (
-                              <div className="mt-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded inline-block text-[10px] font-medium border border-emerald-200">
-                                Logged <span className="font-bold">{log.metadata.time_logged}</span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                    <div className="bg-background p-3 rounded-lg border border-border">
+                      <label className="block font-semibold text-navy mb-1">REVIEWER FEEDBACK / REQUIRED CHANGES</label>
+                      <textarea
+                        rows={2}
+                        value={reviewComments}
+                        onChange={(e) => setReviewComments(e.target.value)}
+                        disabled={!canEditReviewerFeedback}
+                        className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-surface disabled:opacity-60"
+                        placeholder="Reviewers: Specify required changes here before returning task to 'Changes Required'..."
+                      />
                     </div>
-                  )}
+                  </form>
                 </div>
-              )}
+
+                {/* RIGHT COLUMN: The Audit Timeline Feed */}
+                {editingTask && (
+                  <div className="md:col-span-1 border-t md:border-t-0 md:border-l border-border pt-6 md:pt-0 md:pl-6 max-h-full md:max-h-[60vh] overflow-y-auto">
+                    <div className="flex items-center gap-2 text-navy font-bold mb-4 border-b border-border pb-2 sticky top-0 bg-surface">
+                      <Activity className="h-4 w-4" /> Task Timeline Feed
+                    </div>
+
+                    {loadingTimeline ? (
+                      <div className="text-text-muted italic">Loading task history...</div>
+                    ) : taskTimeline.length === 0 ? (
+                      <div className="text-text-muted italic">No historical data recorded yet.</div>
+                    ) : (
+                      <div className="space-y-4">
+                        {taskTimeline.map((log: any) => {
+                          const dt = new Date(log.timestamp);
+                          const isCreate = log.action === "CREATE_TASK";
+
+                          return (
+                            <div key={log.id} className="relative pl-4 border-l-2 border-border pb-4 last:border-0 last:pb-0">
+                              <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? 'bg-emerald-500' : 'bg-navy'}`}></div>
+
+                              <div className="flex justify-between items-start mb-1">
+                                <span className="font-semibold text-text-main">
+                                  {isCreate ? "Task Created" : log.action.replace("_", " ")}
+                                </span>
+                                <span className="text-[10px] text-text-muted whitespace-nowrap pl-2">
+                                  {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+
+                              <div className="text-text-muted">
+                                by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
+                              </div>
+
+                              {log.metadata?.stage_changed_to && (
+                                <div className="mt-1 bg-navy/5 text-navy px-2 py-1 rounded inline-block text-[10px] font-medium border border-navy/10">
+                                  Moved to <span className="font-bold">{log.metadata.stage_changed_to}</span>
+                                </div>
+                              )}
+                              {log.metadata?.time_logged && (
+                                <div className="mt-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded inline-block text-[10px] font-medium border border-emerald-200">
+                                  Logged <span className="font-bold">{log.metadata.time_logged}</span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Footer Buttons */}
-            <div className="flex justify-between items-center pt-3 border-t border-border mt-4">
+            {/* Fixed Footer Buttons */}
+            <div className="flex justify-between items-center p-4 border-t border-border mt-auto bg-surface rounded-b-lg">
               {editingTask && canEditCoreDetails ? (
                 <button type="button" onClick={handleDelete} className="px-3 py-1.5 bg-rose-600 text-white rounded font-semibold flex items-center gap-1 hover:bg-rose-700">
                   <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -617,6 +636,7 @@ export default function TasksPage() {
                 <button type="submit" form="task-form" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</button>
               </div>
             </div>
+            
           </div>
         </div>
       )}

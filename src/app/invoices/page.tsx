@@ -51,10 +51,10 @@ export default function InvoicesPage() {
     const { data: settings } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
     if (settings) setFirmSettings(settings);
 
-    // Fetch invoices sorted by creation timestamp
+    // Fetch invoices sorted by creation timestamp (added organization_name to clients fetch)
     const { data: invData, error: invError } = await supabase
       .from("invoices")
-      .select("*, clients!client_id(name, email, phone)")
+      .select("*, clients!client_id(name, email, phone, organization_name)")
       .order("created_at", { ascending: false });
 
     if (invError) {
@@ -73,6 +73,11 @@ export default function InvoicesPage() {
     
     setLoading(false);
   }
+
+  // Extract unique organization names for our smart dropdown
+  const uniqueOrganizations = Array.from(
+    new Set(clients.map((c: any) => c.organization_name).filter(Boolean))
+  );
 
   // Real-time Math
   const subtotal = items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.rate) || 0), 0);
@@ -103,11 +108,22 @@ export default function InvoicesPage() {
     setItems(updated);
   }
 
+  // Auto-fill Client Organisation
+  function handleClientChange(id: string) {
+    setSelectedClientId(id);
+    const c = clients.find((client) => String(client.id) === id);
+    if (c) {
+      setOrganisation((c as any).organization_name || "");
+    } else {
+      setOrganisation("");
+    }
+  }
+
   async function openModal(inv?: any) {
     if (inv) {
       setEditingInvoice(inv);
       setSelectedClientId(inv.client_id || "");
-      setOrganisation(inv.organisation || "");
+      setOrganisation(inv.organisation || inv.clients?.organization_name || "");
       setInvoiceDate(inv.issue_date || inv.date || new Date().toISOString().slice(0, 10));
       setDueDate(inv.due_date || "");
       setIsInterState(Boolean(inv.is_inter_state));
@@ -326,7 +342,10 @@ export default function InvoicesPage() {
                           })
                         : "-"}
                     </td>
-                    <td className="p-3 font-medium text-text-main">{i.clients?.name || "-"}</td>
+                    <td className="p-3 font-medium text-text-main">
+                      {i.clients?.name || "-"}
+                      {i.organisation && <div className="text-text-muted text-[10px]">{i.organisation}</div>}
+                    </td>
                     <td className="p-3 whitespace-nowrap">{i.date || i.issue_date}</td>
                     <td className="p-3 font-bold text-navy">{formatMoney(i.total)}</td>
                     <td className="p-3 text-success font-medium">{formatMoney(i.amount_paid)}</td>
@@ -389,30 +408,46 @@ export default function InvoicesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">CLIENT *</label>
-                  <select required value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
+                  <select required value={selectedClientId} onChange={(e) => handleClientChange(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy">
                     <option value="">-- Select Client --</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {(c as any).organization_name ? `(${(c as any).organization_name})` : ""}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">ORGANISATION</label>
-                  <input type="text" placeholder="e.g. Client Pvt Ltd" value={organisation} onChange={(e) => setOrganisation(e.target.value)} className="w-full border border-border rounded p-2 text-xs" />
+                  <input 
+                    type="text" 
+                    list="organizations-list-inv"
+                    placeholder="e.g. Client Pvt Ltd" 
+                    value={organisation} 
+                    onChange={(e) => setOrganisation(e.target.value)} 
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" 
+                  />
+                  <datalist id="organizations-list-inv">
+                    {uniqueOrganizations.map((org: any) => (
+                      <option key={org} value={org} />
+                    ))}
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">INVOICE DATE</label>
-                  <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs" />
+                  <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" />
                 </div>
 
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">DUE DATE</label>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs" />
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" />
                 </div>
 
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">GST TYPE</label>
-                  <select value={String(isInterState)} onChange={(e) => setIsInterState(e.target.value === "true")} className="w-full border border-border rounded p-2 text-xs bg-surface">
+                  <select value={String(isInterState)} onChange={(e) => setIsInterState(e.target.value === "true")} className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy">
                     <option value="false">Intra-state (CGST+SGST)</option>
                     <option value="true">Inter-state (IGST)</option>
                   </select>
@@ -420,7 +455,7 @@ export default function InvoicesPage() {
 
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">GST RATE %</label>
-                  <input type="number" step="0.01" value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))} className="w-full border border-border rounded p-2 text-xs" />
+                  <input type="number" step="0.01" value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))} className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" />
                 </div>
               </div>
 
@@ -429,9 +464,9 @@ export default function InvoicesPage() {
                 <label className="block font-semibold text-text-muted">LINE ITEMS</label>
                 {items.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <input type="text" placeholder="Service description" value={item.description} onChange={(e) => handleItemChange(idx, "description", e.target.value)} className="flex-1 border border-border rounded p-2 text-xs" required />
-                    <input type="number" min="1" placeholder="Qty" value={item.qty} onChange={(e) => handleItemChange(idx, "qty", Number(e.target.value))} className="w-16 border border-border rounded p-2 text-xs text-center" required />
-                    <input type="number" step="0.01" placeholder="Rate" value={item.rate} onChange={(e) => handleItemChange(idx, "rate", Number(e.target.value))} className="w-24 border border-border rounded p-2 text-xs" required />
+                    <input type="text" placeholder="Service description" value={item.description} onChange={(e) => handleItemChange(idx, "description", e.target.value)} className="flex-1 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" required />
+                    <input type="number" min="1" placeholder="Qty" value={item.qty} onChange={(e) => handleItemChange(idx, "qty", Number(e.target.value))} className="w-16 border border-border rounded p-2 text-xs text-center focus:ring-1 focus:ring-navy" required />
+                    <input type="number" step="0.01" placeholder="Rate" value={item.rate} onChange={(e) => handleItemChange(idx, "rate", Number(e.target.value))} className="w-24 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" required />
                     <span className="w-24 text-right font-semibold text-navy">{formatMoney(item.qty * item.rate)}</span>
                     {items.length > 1 && <button type="button" onClick={() => handleRemoveItem(idx)} className="text-danger p-1"><X className="h-4 w-4" /></button>}
                   </div>
@@ -463,7 +498,7 @@ export default function InvoicesPage() {
                 </div>
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">STATUS OVERRIDE</label>
-                  <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface">
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy">
                     <option>Draft</option><option>Sent</option><option>Partially Paid</option><option>Paid</option>
                   </select>
                 </div>
@@ -471,7 +506,7 @@ export default function InvoicesPage() {
 
               <div>
                 <label className="block font-semibold text-text-muted mb-1">NOTES</label>
-                <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs" />
+                <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy" />
               </div>
 
               {/* Toolbar */}

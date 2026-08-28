@@ -66,7 +66,7 @@ export default function QuotationsPage() {
       await Promise.all([
         supabase
           .from("quotations")
-          .select("*, clients(name, email), leads(name, email)")
+          .select("*, clients(name, email, phone, organization_name), leads(name, email, phone, organization_name, company)")
           .order("created_at", { ascending: false }),
         supabase.from("clients").select("*").order("name", { ascending: true }),
         supabase
@@ -87,10 +87,10 @@ export default function QuotationsPage() {
       setTargetType(q.lead_id ? "lead" : "client");
       setClientId(q.client_id || "");
       setLeadId(q.lead_id || "");
-      setRecipientName(q.recipient_name || "");
-      setRecipientEmail(q.recipient_email || "");
-      setRecipientPhone(q.recipient_phone || "");
-      setOrganisation(q.organisation || "");
+      setRecipientName(q.recipient_name || q.clients?.name || q.leads?.name || "");
+      setRecipientEmail(q.recipient_email || q.clients?.email || q.leads?.email || "");
+      setRecipientPhone(q.recipient_phone || q.clients?.phone || q.leads?.phone || "");
+      setOrganisation(q.organisation || q.clients?.organization_name || q.leads?.organization_name || q.leads?.company || "");
       setQuotationDate(q.date || new Date().toISOString().slice(0, 10));
       setValidUntil(q.valid_until || "");
       setIsInterState(Boolean(q.is_inter_state));
@@ -132,6 +132,50 @@ export default function QuotationsPage() {
     setItems([{ description: "", qty: 1, rate: 0 }]);
   }
 
+  // --- AUTO-FILL HANDLERS ---
+  function handleTargetTypeChange(type: "client" | "lead") {
+    setTargetType(type);
+    setClientId("");
+    setLeadId("");
+    setRecipientName("");
+    setRecipientEmail("");
+    setRecipientPhone("");
+    setOrganisation("");
+  }
+
+  function handleClientChange(id: string) {
+    setClientId(id);
+    const c = clients.find((client) => String(client.id) === id);
+    if (c) {
+      setRecipientName(c.name || "");
+      setRecipientEmail(c.email || "");
+      setRecipientPhone(c.phone || "");
+      setOrganisation((c as any).organization_name || "");
+    } else {
+      setRecipientName("");
+      setRecipientEmail("");
+      setRecipientPhone("");
+      setOrganisation("");
+    }
+  }
+
+  function handleLeadChange(id: string) {
+    setLeadId(id);
+    const l = leads.find((lead) => String(lead.id) === id);
+    if (l) {
+      setRecipientName(l.name || "");
+      setRecipientEmail(l.email || "");
+      setRecipientPhone(l.phone || "");
+      setOrganisation(l.organization_name || l.company || "");
+    } else {
+      setRecipientName("");
+      setRecipientEmail("");
+      setRecipientPhone("");
+      setOrganisation("");
+    }
+  }
+  // --------------------------
+
   function addItem() {
     setItems([...items, { description: "", qty: 1, rate: 0 }]);
   }
@@ -171,10 +215,9 @@ export default function QuotationsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (targetType === "client" && !clientId)
-      return alert("Please select a client.");
-    if (items.some((i) => !i.description.trim()))
-      return alert("All line items require a description.");
+    if (targetType === "client" && !clientId) return alert("Please select a client.");
+    if (targetType === "lead" && !leadId) return alert("Please select a lead/enquiry.");
+    if (items.some((i) => !i.description.trim())) return alert("All line items require a description.");
 
     const payload: any = {
       date: quotationDate || new Date().toISOString().slice(0, 10),
@@ -190,13 +233,13 @@ export default function QuotationsPage() {
       notes: notes || "",
       organisation: organisation || "",
       status: status || "Draft",
+      recipient_name: recipientName || "",
+      recipient_email: recipientEmail || "",
+      recipient_phone: recipientPhone || "",
     };
 
     if (targetType === "lead") {
-      payload.lead_id = leadId || null;
-      payload.recipient_name = recipientName;
-      payload.recipient_email = recipientEmail;
-      payload.recipient_phone = recipientPhone;
+      payload.lead_id = leadId;
       payload.client_id = null;
     } else {
       payload.client_id = clientId;
@@ -256,10 +299,10 @@ export default function QuotationsPage() {
   async function sendQuotationEmail(q: any, e: React.MouseEvent) {
     e.stopPropagation();
 
-    const recipientEmail = q.clients?.email || q.leads?.email || q.recipient_email;
+    const recipientEmail = q.recipient_email || q.clients?.email || q.leads?.email;
 
     if (!recipientEmail) {
-      alert("No email address associated with this client or lead.");
+      alert("No email address associated with this quotation.");
       return;
     }
 
@@ -305,7 +348,7 @@ export default function QuotationsPage() {
   }
 
   const filteredQuotations = quotations.filter((q: any) => {
-    const nameStr = q.clients?.name || q.leads?.name || q.recipient_name || q.organisation || "";
+    const nameStr = q.recipient_name || q.clients?.name || q.leads?.name || q.organisation || "";
     const matchesSearch = [q.quote_number, nameStr, q.notes]
       .filter(Boolean)
       .some((f) => f.toLowerCase().includes(search.toLowerCase()));
@@ -446,7 +489,7 @@ export default function QuotationsPage() {
                     </td>
                     <td className="p-3 whitespace-nowrap">{q.date}</td>
                     <td className="p-3 font-medium text-text-main">
-                      {q.clients?.name || q.leads?.name || q.recipient_name || q.organisation || "-"}
+                      {q.recipient_name || q.clients?.name || q.leads?.name || q.organisation || "-"}
                     </td>
                     <td className="p-3 font-semibold text-text-main">
                       ₹{Number(q.total || 0).toLocaleString("en-IN")}
@@ -549,7 +592,7 @@ export default function QuotationsPage() {
                       type="radio"
                       name="targetType"
                       checked={targetType === "client"}
-                      onChange={() => setTargetType("client")}
+                      onChange={() => handleTargetTypeChange("client")}
                     />
                     <span>Existing Client</span>
                   </label>
@@ -558,7 +601,7 @@ export default function QuotationsPage() {
                       type="radio"
                       name="targetType"
                       checked={targetType === "lead"}
-                      onChange={() => setTargetType("lead")}
+                      onChange={() => handleTargetTypeChange("lead")}
                     />
                     <span>Enquiry / Lead</span>
                   </label>
@@ -566,70 +609,100 @@ export default function QuotationsPage() {
               </div>
 
               {targetType === "client" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">
-                      CLIENT *
-                    </label>
-                    <select
-                      required
-                      value={clientId}
-                      onChange={(e) => setClientId(e.target.value)}
-                      className="w-full border border-border rounded p-2 text-xs bg-surface"
-                    >
-                      <option value="">-- Select Client --</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">
-                      ORGANISATION
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Client Pvt Ltd"
-                      value={organisation}
-                      onChange={(e) => setOrganisation(e.target.value)}
-                      className="w-full border border-border rounded p-2 text-xs"
-                    />
-                  </div>
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    SELECT CLIENT *
+                  </label>
+                  <select
+                    required
+                    value={clientId}
+                    onChange={(e) => handleClientChange(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy"
+                  >
+                    <option value="">-- Select Client --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.organization_name ? `(${c.organization_name})` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">
-                      RECIPIENT NAME *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Contact Name"
-                      value={recipientName}
-                      onChange={(e) => setRecipientName(e.target.value)}
-                      className="w-full border border-border rounded p-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-text-muted mb-1">
-                      EMAIL
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="email@domain.com"
-                      value={recipientEmail}
-                      onChange={(e) => setRecipientEmail(e.target.value)}
-                      className="w-full border border-border rounded p-2 text-xs"
-                    />
-                  </div>
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    SELECT ENQUIRY / LEAD *
+                  </label>
+                  <select
+                    required
+                    value={leadId}
+                    onChange={(e) => handleLeadChange(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy"
+                  >
+                    <option value="">-- Select Lead --</option>
+                    {leads.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} {l.organization_name || l.company ? `(${l.organization_name || l.company})` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
+              {/* Editable Recipient Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    RECIPIENT NAME *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contact Name"
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    ORGANISATION
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Acme Corp"
+                    value={organisation}
+                    onChange={(e) => setOrganisation(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    EMAIL
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="email@domain.com"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1">
+                    PHONE
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Phone number"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                  />
+                </div>
+              </div>
+
               {/* Dates & Tax Setup */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">
                     DATE
@@ -639,7 +712,7 @@ export default function QuotationsPage() {
                     required
                     value={quotationDate}
                     onChange={(e) => setQuotationDate(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs"
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                   />
                 </div>
                 <div>
@@ -650,7 +723,7 @@ export default function QuotationsPage() {
                     type="date"
                     value={validUntil}
                     onChange={(e) => setValidUntil(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs"
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                   />
                 </div>
               </div>
@@ -665,7 +738,7 @@ export default function QuotationsPage() {
                     onChange={(e) =>
                       setIsInterState(e.target.value === "inter")
                     }
-                    className="w-full border border-border rounded p-2 text-xs bg-surface"
+                    className="w-full border border-border rounded p-2 text-xs bg-surface focus:ring-1 focus:ring-navy"
                   >
                     <option value="intra">Intra-state (CGST + SGST)</option>
                     <option value="inter">Inter-state (IGST)</option>
@@ -679,7 +752,7 @@ export default function QuotationsPage() {
                     type="number"
                     value={gstRate}
                     onChange={(e) => setGstRate(Number(e.target.value))}
-                    className="w-full border border-border rounded p-2 text-xs"
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                   />
                 </div>
               </div>
@@ -698,7 +771,7 @@ export default function QuotationsPage() {
                       onChange={(e) =>
                         updateItem(idx, "description", e.target.value)
                       }
-                      className="flex-1 border border-border rounded p-2 text-xs"
+                      className="flex-1 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                     />
                     <input
                       type="number"
@@ -707,7 +780,7 @@ export default function QuotationsPage() {
                       onChange={(e) =>
                         updateItem(idx, "qty", Number(e.target.value))
                       }
-                      className="w-16 border border-border rounded p-2 text-xs"
+                      className="w-16 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                     />
                     <input
                       type="number"
@@ -716,7 +789,7 @@ export default function QuotationsPage() {
                       onChange={(e) =>
                         updateItem(idx, "rate", Number(e.target.value))
                       }
-                      className="w-24 border border-border rounded p-2 text-xs"
+                      className="w-24 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                     />
                     {items.length > 1 && (
                       <button
@@ -732,7 +805,7 @@ export default function QuotationsPage() {
                 <button
                   type="button"
                   onClick={addItem}
-                  className="text-navy font-semibold text-xs flex items-center gap-1 pt-1"
+                  className="text-navy font-semibold text-xs flex items-center gap-1 pt-1 hover:underline"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Row
                 </button>
@@ -775,7 +848,7 @@ export default function QuotationsPage() {
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full border border-border rounded p-2 text-xs"
+                  className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                 />
               </div>
 
