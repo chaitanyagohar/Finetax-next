@@ -93,7 +93,7 @@ export default function TeamPage() {
       setEmail(member.email || "");
       setPhone(member.phone || "");
       setDesignation(member.designation || "");
-      setPassword("");
+      setPassword(""); // Clear password so it's blank by default for edits
       setRole(member.role || "staff");
       setIsReviewer(member.is_reviewer || false);
       setIsActive(member.is_active ?? true);
@@ -138,6 +138,20 @@ export default function TeamPage() {
         .eq("id", editingMember.id);
 
       if (error) return alert("Error updating member: " + error.message);
+
+      // If password was provided during edit, hit the admin API to update auth user password
+      if (password && password.length >= 6) {
+        try {
+          await fetch("/api/admin/update-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: editingMember.id, password }),
+          });
+        } catch (err) {
+          console.error("Failed to update password:", err);
+          alert("Profile updated, but password change failed. Check your admin API route.");
+        }
+      }
 
       logAuditEvent("UPDATE_TEAM_MEMBER", "PROFILES", editingMember.id, payload);
       alert("Team member updated successfully!");
@@ -287,8 +301,8 @@ export default function TeamPage() {
       {/* Upgraded Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-xl p-6 -space-y-[0.5] shadow-2xl text-xs my-8">
-            <div className="flex justify-between items-center border-b border-border pb-3">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-xl p-6 shadow-2xl text-xs my-8">
+            <div className="flex justify-between items-center border-b border-border pb-3 mb-4">
               <div>
                 <h3 className="font-bold text-base text-text-main">
                   {editingMember ? "Modify Team Member & Permissions" : "Add New Team Member"}
@@ -301,7 +315,7 @@ export default function TeamPage() {
             </div>
 
             {/* Role Preset Selector Bar */}
-            <div className="bg-background p-2.5 rounded-lg border border-border space-y-1.5">
+            <div className="bg-background p-2.5 rounded-lg border border-border space-y-1.5 mb-4">
               <span className="text-[10px] font-bold text-navy uppercase tracking-wider flex items-center gap-1">
                 <Zap className="h-3 w-3 text-amber-500" /> Quick Permission Presets
               </span>
@@ -368,19 +382,20 @@ export default function TeamPage() {
                 </div>
               </div>
 
-              {!editingMember && (
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">INITIAL PASSWORD *</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
-                    placeholder="Minimum 6 characters"
-                  />
-                </div>
-              )}
+              {/* Password Field: Shown for both new and editing, but optional for editing */}
+              <div>
+                <label className="block font-semibold text-text-muted mb-1">
+                  {editingMember ? "RESET PASSWORD (Leave blank to keep current)" : "INITIAL PASSWORD *"}
+                </label>
+                <input
+                  type="password"
+                  required={!editingMember}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy"
+                  placeholder={editingMember ? "Type new password to override..." : "Minimum 6 characters"}
+                />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
