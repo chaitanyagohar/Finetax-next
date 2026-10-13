@@ -548,7 +548,7 @@ if (clientsData) setClientsList(clientsData as any[]);
                             <label className="block font-semibold text-amber-600 mb-1">SELECT EXISTING CLIENT</label>
                             <select value={referredByClient} onChange={(e) => setReferredByClient(e.target.value)} required className="w-full border border-amber-300 rounded p-2 text-xs bg-amber-50">
                               <option value="">-- Choose Client --</option>
-                              {clientsList.map(c => <option key={c.id} value={c.id}>{c.name} {c.organization_name ? `(${c.organization_name})` : ''}</option>)}
+                              {clientsList.map(c => <option key={c.id} value={c.id}>{c.name} {(c as any).organization_name ? `(${(c as any).organization_name})` : ''}</option>)}
                             </select>
                           </div>
                         )}
