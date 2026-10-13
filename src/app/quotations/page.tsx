@@ -179,7 +179,7 @@ export default function QuotationsPage() {
       setRecipientEmail(c.email || "");
       setRecipientPhone(c.phone || "");
       setOrganisation((c as any).organization_name || "");
-      setAddress(c.address || "");
+      setAddress((c as any).address || "");
     } else {
       setRecipientName("");
       setRecipientEmail("");
