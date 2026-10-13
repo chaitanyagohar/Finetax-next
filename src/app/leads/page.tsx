@@ -77,16 +77,15 @@ export default function LeadsPage() {
       const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       setCurrentUser(profile);
     }
+const [{ data: leadsData }, { data: profilesData }, { data: clientsData }] = await Promise.all([
+  supabase.from("leads").select("*").order("id", { ascending: false }),
+  supabase.from("profiles").select("*").order("name", { ascending: true }),
+  supabase.from("clients").select("*").order("name", { ascending: true }),
+]);
 
-    const [{ data: leadsData }, { data: profilesData }, { data: clientsData }] = await Promise.all([
-      supabase.from("leads").select("*").order("id", { ascending: false }),
-      supabase.from("profiles").select("*").order("name", { ascending: true }),
-      supabase.from("clients").select("id, name, organization_name").order("name", { ascending: true }),
-    ]);
-
-    if (leadsData) setLeads(leadsData);
-    if (profilesData) setTeam(profilesData);
-    if (clientsData) setClientsList(clientsData);
+if (leadsData) setLeads(leadsData);
+if (profilesData) setTeam(profilesData);
+if (clientsData) setClientsList(clientsData as any[]);
     
     setLoading(false);
   }
