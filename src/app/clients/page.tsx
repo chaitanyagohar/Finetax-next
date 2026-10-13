@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, Building2, ShieldAlert } from "lucide-react";
+import { Search, Plus, Trash2, X, Building2, ShieldAlert, Upload, Download, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
@@ -10,7 +10,10 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   // Form State matching legacy schema
@@ -26,6 +29,11 @@ export default function ClientsPage() {
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
 
+  // CSV Import State
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importCount, setImportCount] = useState<number | null>(null);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -37,6 +45,77 @@ export default function ClientsPage() {
     const { data } = await supabase.from("clients").select("*").order("name", { ascending: true });
     if (data) setClients(data);
     setLoading(false);
+  }
+
+  // --- CSV TEMPLATE GENERATOR ---
+  function downloadCSVTemplate() {
+    const headers = ["Name", "Organization Name", "Type", "PAN", "GSTIN", "Email", "Phone", "State", "Address", "Status", "Notes"];
+    const sampleRow = ["Rahul Sharma", "Sharma Logistics Pvt Ltd", "Company", "ABCDE1234F", "07ABCDE1234F1Z5", "rahul@sharmalogistics.com", "9876543210", "Delhi", "Connaught Place New Delhi", "Active", "Imported from legacy system"];
+    
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), sampleRow.join(",")].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "finetax_client_import_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // --- BULK CSV PROCESSOR ---
+  async function handleCSVImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!csvFile) return alert("Please select a valid CSV file.");
+
+    setImporting(true);
+    const reader = new FileReader();
+
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+        
+        if (lines.length < 2) throw new Error("CSV file is empty or missing headers.");
+
+        const recordsToInsert: any[] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          // Parse basic comma-separated line (removes surrounding quotes)
+          const values = lines[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ''));
+          if (!values[0]) continue; // Skip if Name is missing
+
+          recordsToInsert.push({
+            name: values[0] || "",
+            organization_name: values[1] || "",
+            type: values[2] || "Individual",
+            pan: (values[3] || "").toUpperCase(),
+            gstin: (values[4] || "").toUpperCase(),
+            email: values[5] || "",
+            phone: values[6] || "",
+            state: values[7] || "",
+            address: values[8] || "",
+            status: values[9] || "Active",
+            notes: values[10] || "",
+            created_at: new Date().toISOString()
+          });
+        }
+
+        if (recordsToInsert.length === 0) throw new Error("No valid client rows found to import.");
+
+        const { error } = await supabase.from("clients").insert(recordsToInsert);
+        if (error) throw error;
+
+        logAuditEvent("BULK_IMPORT_CLIENTS", "CLIENTS", "BATCH", { count: recordsToInsert.length });
+        setImportCount(recordsToInsert.length);
+        fetchClients();
+      } catch (err: any) {
+        alert("Import failed: " + err.message);
+      } finally {
+        setImporting(false);
+      }
+    };
+
+    reader.readAsText(csvFile);
   }
 
   function openModal(client?: Client) {
@@ -139,7 +218,7 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Search Toolbar */}
+      {/* Search & Actions Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-4 rounded-lg border border-border shadow-sm">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
@@ -152,12 +231,21 @@ export default function ClientsPage() {
           />
         </div>
 
-        <button
-          onClick={() => openModal()}
-          className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-navy/90 transition"
-        >
-          <Plus className="h-4 w-4" /> Add Client
-        </button>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => { setImportCount(null); setCsvFile(null); setIsImportModalOpen(true); }}
+            className="flex items-center gap-1.5 border border-border hover:bg-background text-text-main px-3 py-2 rounded-md font-medium text-sm transition"
+          >
+            <Upload className="h-4 w-4 text-navy" /> Bulk Import (CSV)
+          </button>
+          
+          <button
+            onClick={() => openModal()}
+            className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-navy/90 transition"
+          >
+            <Plus className="h-4 w-4" /> Add Client
+          </button>
+        </div>
       </div>
 
       {/* Clients Data Table */}
@@ -165,7 +253,7 @@ export default function ClientsPage() {
         {loading ? (
           <div className="p-8 text-center text-text-muted text-sm">Loading client directory...</div>
         ) : filteredClients.length === 0 ? (
-          <div className="p-8 text-center text-text-muted text-sm">No clients found. Click "+ Add Client" to create one.</div>
+          <div className="p-8 text-center text-text-muted text-sm">No clients found. Click "+ Add Client" or "Bulk Import" to get started.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -214,6 +302,63 @@ export default function ClientsPage() {
           </div>
         )}
       </div>
+
+      {/* CSV Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-md p-6 space-y-4 shadow-xl text-sm">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <h3 className="font-bold text-base text-text-main flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-navy" /> Client Database Import
+              </h3>
+              <button onClick={() => setIsImportModalOpen(false)}><X className="h-5 w-5 text-text-muted hover:text-text-main" /></button>
+            </div>
+
+            {importCount !== null ? (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded text-center space-y-2">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto" />
+                <p className="font-bold text-emerald-800 text-base">Import Successful!</p>
+                <p className="text-emerald-700">{importCount} clients have been added to your master database.</p>
+                <button onClick={() => setIsImportModalOpen(false)} className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded font-bold w-full hover:bg-emerald-700">Continue</button>
+              </div>
+            ) : (
+              <form onSubmit={handleCSVImport} className="space-y-5">
+                <div className="text-text-muted text-xs space-y-2">
+                  <p>1. Download the exact CSV template format.</p>
+                  <p>2. Fill in your existing client data (Do not change column headers).</p>
+                  <p>3. Upload the saved `.csv` file here to instantly populate your database.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={downloadCSVTemplate}
+                  className="w-full py-2 bg-background border border-border rounded font-bold text-navy flex items-center justify-center gap-1.5 hover:bg-surface transition"
+                >
+                  <Download className="h-4 w-4" /> Download Sample CSV Template
+                </button>
+
+                <div>
+                  <label className="block font-semibold text-text-muted mb-1 text-xs">SELECT FILLED CSV FILE</label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    required
+                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                    className="w-full border border-border rounded p-2 text-sm bg-background"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                  <button type="button" onClick={() => setIsImportModalOpen(false)} className="px-4 py-2 border border-border rounded font-semibold text-text-main hover:bg-background">Cancel</button>
+                  <button type="submit" disabled={importing} className="px-4 py-2 bg-navy text-white rounded font-bold hover:bg-navy/90 flex items-center gap-2">
+                    {importing ? "Importing..." : "Upload & Transfer Data"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Client Modal */}
       {isModalOpen && (

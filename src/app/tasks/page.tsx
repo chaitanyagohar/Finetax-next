@@ -10,6 +10,17 @@ const CATEGORIES: TaskCategory[] = ['GST', 'Income Tax', 'Audit', 'ROC', 'Other'
 const STAGES: TaskStage[] = ['Assigned', 'In Progress', 'Submitted for Review', 'Changes Required', 'Approved'];
 const RECURRENCE_OPTIONS = ['None', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
 
+// Format ISO/YYYY-MM-DD to DD/MM/YYYY
+function formatToDDMMYYYY(dateStr: string | null | undefined) {
+  if (!dateStr) return "-";
+  const dateObj = new Date(dateStr);
+  if (isNaN(dateObj.getTime())) return dateStr;
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -23,6 +34,7 @@ export default function TasksPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterClient, setFilterClient] = useState("");
   const [filterRecurring, setFilterRecurring] = useState("");
+  const [filterStaff, setFilterStaff] = useState(""); // New Staff Filter
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -312,8 +324,9 @@ export default function TasksPage() {
     const matchesCategory = filterCategory ? t.category === filterCategory : true;
     const matchesClient = filterClient ? t.client_id === filterClient : true;
     const matchesRecurring = filterRecurring === "recurring" ? t.recurrence && t.recurrence !== "None" : filterRecurring === "onetime" ? !t.recurrence || t.recurrence === "None" : true;
+    const matchesStaff = filterStaff ? String(t.assigned_to) === filterStaff : true;
 
-    return matchesSearch && matchesStage && matchesCategory && matchesClient && matchesRecurring;
+    return matchesSearch && matchesStage && matchesCategory && matchesClient && matchesRecurring && matchesStaff;
   });
 
   // --- ROLE BASED ACCESS CONTROL ---
@@ -362,6 +375,13 @@ export default function TasksPage() {
             <option value="recurring">Recurring Only</option>
             <option value="onetime">One-time Only</option>
           </select>
+          
+          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface font-semibold text-navy">
+            <option value="">All Execution Staff</option>
+            {team.map((staff) => (
+              <option key={staff.id} value={staff.id}>{staff.name}</option>
+            ))}
+          </select>
         </div>
 
         {isAdmin && (
@@ -401,10 +421,10 @@ export default function TasksPage() {
                       <td className="p-3 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
-                            {isOverdue && <AlertCircle className="h-3 w-3" />} Int: {t.due_date || "-"}
+                            {isOverdue && <AlertCircle className="h-3 w-3" />} Int: {formatToDDMMYYYY(t.due_date)}
                           </span>
                           <span className="text-[10px] text-text-muted mt-0.5">
-                            Off: {t.official_due_date || "-"}
+                            Off: {formatToDDMMYYYY(t.official_due_date)}
                           </span>
                         </div>
                       </td>
@@ -488,7 +508,7 @@ export default function TasksPage() {
                       <div>
                         <label className="block font-semibold text-text-muted mb-1">RECURRENCE</label>
                         <select disabled={!canEditCoreDetails} value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r}>{r === 'None' ? 'None (One-time Task)' : r}</option>)}
                         </select>
                       </div>
 

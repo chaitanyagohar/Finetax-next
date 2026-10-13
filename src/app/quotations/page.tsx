@@ -1,10 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, FileText, Download, Mail, Loader2 } from "lucide-react";
+import { Search, Plus, Trash2, X, FileText, Download, Mail, Loader2, Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
+
+// ADMIN MASTER SERVICE LIST
+const MASTER_SERVICES = [
+  { description: "Income Tax Return Filing (Individual)", defaultRate: 1500 },
+  { description: "Income Tax Return Filing (Business)", defaultRate: 5000 },
+  { description: "GST Registration", defaultRate: 2500 },
+  { description: "GST Monthly Return Filing (Per Month)", defaultRate: 1000 },
+  { description: "Company Incorporation (Pvt Ltd)", defaultRate: 15000 },
+  { description: "LLP Registration", defaultRate: 8000 },
+  { description: "Statutory Audit Fee", defaultRate: 10000 },
+  { description: "Tax Audit (Section 44AB)", defaultRate: 12000 },
+  { description: "Trademark Registration", defaultRate: 6500 },
+  { description: "General Tax Consultancy (Per Hour)", defaultRate: 2000 },
+  { description: "Custom Service / Miscellaneous", defaultRate: 0 },
+];
 
 export default function QuotationsPage() {
   function getStatusBadgeClass(status: string) {
@@ -25,6 +40,7 @@ export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<any[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [firmSettings, setFirmSettings] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -40,6 +56,7 @@ export default function QuotationsPage() {
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [organisation, setOrganisation] = useState("");
+  const [address, setAddress] = useState("");
   const [quotationDate, setQuotationDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -62,22 +79,28 @@ export default function QuotationsPage() {
 
   async function loadData() {
     setLoading(true);
-    const [{ data: qData }, { data: cData }, { data: lData }] =
-      await Promise.all([
-        supabase
-          .from("quotations")
-          .select("*, clients(name, email, phone, organization_name), leads(name, email, phone, organization_name, company)")
-          .order("created_at", { ascending: false }),
-        supabase.from("clients").select("*").order("name", { ascending: true }),
-        supabase
-          .from("leads")
-          .select("*")
-          .order("created_at", { ascending: false }),
-      ]);
+    const [
+      { data: qData }, 
+      { data: cData }, 
+      { data: lData },
+      { data: settingsData }
+    ] = await Promise.all([
+      supabase
+        .from("quotations")
+        .select("*, clients(name, email, phone, organization_name, address), leads(name, email, phone, organization_name, company)")
+        .order("created_at", { ascending: false }),
+      supabase.from("clients").select("*").order("name", { ascending: true }),
+      supabase
+        .from("leads")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase.from("firm_settings").select("*").eq("id", 1).single()
+    ]);
 
     if (qData) setQuotations(qData);
     if (cData) setClients(cData);
     if (lData) setLeads(lData);
+    if (settingsData) setFirmSettings(settingsData);
     setLoading(false);
   }
 
@@ -91,6 +114,7 @@ export default function QuotationsPage() {
       setRecipientEmail(q.recipient_email || q.clients?.email || q.leads?.email || "");
       setRecipientPhone(q.recipient_phone || q.clients?.phone || q.leads?.phone || "");
       setOrganisation(q.organisation || q.clients?.organization_name || q.leads?.organization_name || q.leads?.company || "");
+      setAddress(q.address || q.clients?.address || "");
       setQuotationDate(q.date || new Date().toISOString().slice(0, 10));
       setValidUntil(q.valid_until || "");
       setIsInterState(Boolean(q.is_inter_state));
@@ -123,13 +147,16 @@ export default function QuotationsPage() {
     setRecipientEmail("");
     setRecipientPhone("");
     setOrganisation("");
+    setAddress("");
     setQuotationDate(new Date().toISOString().slice(0, 10));
     setValidUntil("");
     setIsInterState(false);
-    setGstRate(18);
-    setNotes("");
+    setGstRate(firmSettings?.default_gst_rate ?? 18);
     setStatus("Draft");
     setItems([{ description: "", qty: 1, rate: 0 }]);
+
+    const defaultNotes = `Advance Payment Required for Mobilization of Work.\n\nBank Details:\nBank: ${firmSettings?.bank_name || 'N/A'}\nA/C: ${firmSettings?.bank_account_no || 'N/A'}\nIFSC: ${firmSettings?.bank_ifsc || 'N/A'}\nUPI: ${firmSettings?.upi_id || 'N/A'}`;
+    setNotes(defaultNotes);
   }
 
   // --- AUTO-FILL HANDLERS ---
@@ -141,6 +168,7 @@ export default function QuotationsPage() {
     setRecipientEmail("");
     setRecipientPhone("");
     setOrganisation("");
+    setAddress("");
   }
 
   function handleClientChange(id: string) {
@@ -151,11 +179,13 @@ export default function QuotationsPage() {
       setRecipientEmail(c.email || "");
       setRecipientPhone(c.phone || "");
       setOrganisation((c as any).organization_name || "");
+      setAddress(c.address || "");
     } else {
       setRecipientName("");
       setRecipientEmail("");
       setRecipientPhone("");
       setOrganisation("");
+      setAddress("");
     }
   }
 
@@ -167,14 +197,15 @@ export default function QuotationsPage() {
       setRecipientEmail(l.email || "");
       setRecipientPhone(l.phone || "");
       setOrganisation(l.organization_name || l.company || "");
+      setAddress("");
     } else {
       setRecipientName("");
       setRecipientEmail("");
       setRecipientPhone("");
       setOrganisation("");
+      setAddress("");
     }
   }
-  // --------------------------
 
   function addItem() {
     setItems([...items, { description: "", qty: 1, rate: 0 }]);
@@ -183,6 +214,17 @@ export default function QuotationsPage() {
   function removeItem(index: number) {
     if (items.length === 1) return;
     setItems(items.filter((_, i) => i !== index));
+  }
+
+  function handleServiceSelect(index: number, description: string) {
+    const service = MASTER_SERVICES.find(s => s.description === description);
+    const updated = [...items];
+    updated[index] = { 
+      description: description, 
+      qty: updated[index].qty || 1, 
+      rate: service ? service.defaultRate : updated[index].rate 
+    };
+    setItems(updated);
   }
 
   function updateItem(index: number, field: string, value: any) {
@@ -212,6 +254,26 @@ export default function QuotationsPage() {
 
   const total = Number((subtotal + cgst + sgst + igst).toFixed(2));
 
+  async function generateNextQuoteNumber() {
+    const year = new Date().getFullYear();
+    const { data } = await supabase
+      .from("quotations")
+      .select("quote_number")
+      .ilike("quote_number", `QUO/${year}/%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (data && data.quote_number) {
+      const parts = data.quote_number.split("/");
+      const lastNum = parseInt(parts[2], 10);
+      if (!isNaN(lastNum)) {
+        return `QUO/${year}/${String(lastNum + 1).padStart(3, "0")}`;
+      }
+    }
+    return `QUO/${year}/001`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -232,6 +294,7 @@ export default function QuotationsPage() {
       total,
       notes: notes || "",
       organisation: organisation || "",
+      address: address || "",
       status: status || "Draft",
       recipient_name: recipientName || "",
       recipient_email: recipientEmail || "",
@@ -256,12 +319,7 @@ export default function QuotationsPage() {
         if (error) throw error;
         logAuditEvent("UPDATE_QUOTATION", "QUOTATIONS", editingQuotation.id);
       } else {
-        const year = new Date().getFullYear();
-        const { count } = await supabase
-          .from("quotations")
-          .select("*", { count: "exact", head: true });
-        const seqStr = String((count || 0) + 1).padStart(3, "0");
-        payload.quote_number = `QUO/${year}/${seqStr}`;
+        payload.quote_number = await generateNextQuoteNumber();
         payload.created_at = new Date().toISOString();
 
         const { data, error } = await supabase
@@ -295,7 +353,6 @@ export default function QuotationsPage() {
     } else alert("Error deleting quotation: " + error.message);
   }
 
-  // Handle Send Email Action
   async function sendQuotationEmail(q: any, e: React.MouseEvent) {
     e.stopPropagation();
 
@@ -360,7 +417,7 @@ export default function QuotationsPage() {
 
     if (!quotation.client_id) {
       alert(
-        "Quotations created for Enquiries/Leads must first be converted to an active Client before generating an invoice.",
+        "Quotations created for Enquiries/Leads must first be converted to an active Client in the Leads tab before generating an invoice.",
       );
       return;
     }
@@ -490,6 +547,7 @@ export default function QuotationsPage() {
                     <td className="p-3 whitespace-nowrap">{q.date}</td>
                     <td className="p-3 font-medium text-text-main">
                       {q.recipient_name || q.clients?.name || q.leads?.name || q.organisation || "-"}
+                      {q.organisation && <div className="text-[10px] text-text-muted">{q.organisation}</div>}
                     </td>
                     <td className="p-3 font-semibold text-text-main">
                       ₹{Number(q.total || 0).toLocaleString("en-IN")}
@@ -567,7 +625,7 @@ export default function QuotationsPage() {
       {/* Form Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-2xl p-6 space-y-4 shadow-lg text-xs my-8">
+          <div className="bg-surface rounded-lg border border-border w-full max-w-4xl p-6 space-y-4 shadow-lg text-xs my-8">
             <div className="flex justify-between items-center border-b border-border pb-3">
               <h3 className="font-semibold text-base text-text-main">
                 {editingQuotation ? "Edit Quotation" : "New Quotation"}
@@ -582,26 +640,28 @@ export default function QuotationsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Recipient Selection */}
-              <div className="space-y-2">
-                <label className="block font-semibold text-text-muted">
+              <div className="space-y-2 bg-navy/5 p-3 rounded border border-navy/20">
+                <label className="block font-bold text-navy">
                   PREPARE QUOTATION FOR
                 </label>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-medium">
                     <input
                       type="radio"
                       name="targetType"
                       checked={targetType === "client"}
                       onChange={() => handleTargetTypeChange("client")}
+                      className="accent-navy"
                     />
                     <span>Existing Client</span>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-medium">
                     <input
                       type="radio"
                       name="targetType"
                       checked={targetType === "lead"}
                       onChange={() => handleTargetTypeChange("lead")}
+                      className="accent-navy"
                     />
                     <span>Enquiry / Lead</span>
                   </label>
@@ -675,6 +735,18 @@ export default function QuotationsPage() {
                     className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                   />
                 </div>
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-text-muted mb-1">
+                    BILLING ADDRESS
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                    placeholder="Full address for quotation..."
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">
                     EMAIL
@@ -702,7 +774,7 @@ export default function QuotationsPage() {
               </div>
 
               {/* Dates & Tax Setup */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">
                     DATE
@@ -726,9 +798,6 @@ export default function QuotationsPage() {
                     className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-text-muted mb-1">
                     GST TYPE
@@ -757,16 +826,24 @@ export default function QuotationsPage() {
                 </div>
               </div>
 
-              {/* Dynamic Line Items */}
+              {/* Dynamic Line Items with Master Services Dropdown */}
               <div className="space-y-2 pt-2 border-t border-border">
                 <label className="block font-semibold text-text-muted">
-                  LINE ITEMS
+                  QUOTATION LINE ITEMS
                 </label>
                 {items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
+                  <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-background p-2 rounded border border-border">
+                    <select 
+                      value={item.description} 
+                      onChange={(e) => handleServiceSelect(idx, e.target.value)}
+                      className="w-full sm:w-1/3 border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy bg-surface"
+                    >
+                      <option value="">-- Select Master Service --</option>
+                      {MASTER_SERVICES.map(s => <option key={s.description} value={s.description}>{s.description}</option>)}
+                    </select>
                     <input
                       type="text"
-                      placeholder="Item description"
+                      placeholder="Or type custom description..."
                       value={item.description}
                       onChange={(e) =>
                         updateItem(idx, "description", e.target.value)
@@ -807,49 +884,52 @@ export default function QuotationsPage() {
                   onClick={addItem}
                   className="text-navy font-semibold text-xs flex items-center gap-1 pt-1 hover:underline"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add Row
+                  <Plus className="h-3.5 w-3.5" /> Add Item
                 </button>
               </div>
 
-              {/* Totals Breakdown */}
-              <div className="bg-background p-3 rounded border border-border space-y-1 text-right">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+              <div className="flex flex-col md:flex-row gap-6 pt-4 border-t border-border">
+                {/* Notes and Bank Details */}
+                <div className="flex-1">
+                  <label className="block font-semibold text-text-muted mb-1 flex items-center gap-1">
+                    <Landmark className="h-3.5 w-3.5" /> TERMS, NOTES & BANK DETAILS
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
+                  />
                 </div>
-                {isInterState ? (
-                  <div className="flex justify-between text-text-muted">
-                    <span>IGST ({taxRate}%):</span>
-                    <span>₹{igst.toFixed(2)}</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-text-muted">
-                      <span>CGST ({taxRate / 2}%):</span>
-                      <span>₹{cgst.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-text-muted">
-                      <span>SGST ({taxRate / 2}%):</span>
-                      <span>₹{sgst.toFixed(2)}</span>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between font-bold text-sm text-navy pt-1 border-t border-border">
-                  <span>Total:</span>
-                  <span>₹{total.toFixed(2)}</span>
-                </div>
-              </div>
 
-              <div>
-                <label className="block font-semibold text-text-muted mb-1">
-                  NOTES
-                </label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full border border-border rounded p-2 text-xs focus:ring-1 focus:ring-navy"
-                />
+                {/* Totals Breakdown */}
+                <div className="w-full md:w-64 bg-background p-4 rounded border border-border space-y-2 text-right">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  {isInterState ? (
+                    <div className="flex justify-between text-text-muted">
+                      <span>IGST ({taxRate}%):</span>
+                      <span>₹{igst.toFixed(2)}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-text-muted">
+                        <span>CGST ({taxRate / 2}%):</span>
+                        <span>₹{cgst.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>SGST ({taxRate / 2}%):</span>
+                        <span>₹{sgst.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between font-bold text-sm text-navy pt-2 border-t border-border mt-2">
+                    <span>Total:</span>
+                    <span>₹{total.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-border">
