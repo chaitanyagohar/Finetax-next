@@ -9,24 +9,52 @@ export type TaskStage =
 
 export type TaskCategory = 'GST' | 'Income Tax' | 'Audit' | 'ROC' | 'Other';
 
+/** Current pipeline statuses plus legacy values still present in older rows */
+export type LeadStatus =
+  | 'New'
+  | 'Contacted'
+  | 'Qualified'
+  | 'Quotation Sent'
+  | 'Won'
+  | 'Lost'
+  | 'Follow Up'
+  | 'Converted';
+
 export interface Profile {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  permissions: Record<string, boolean>;
+  permissions?: Record<string, boolean>;
+  phone?: string;
+  designation?: string;
+  is_reviewer?: boolean;
+  is_active?: boolean;
+  module_access?: string[];
+  status?: string;
   created_at?: string;
 }
 
 export interface Client {
   id: string;
   name: string;
+  organization_name?: string;
+  type?: string;
   contact_person?: string;
+  pan?: string;
+  gstin?: string;
   phone?: string;
   email?: string;
-  status: 'Active' | 'Inactive';
-  total_revenue: number;
-  risk_level: 'Low' | 'Medium' | 'High Workload' | 'At-Risk';
+  address?: string;
+  state?: string;
+  status?: string;
+  assigned_to?: string;
+  notes?: string;
+  service_requested?: string;
+  lead_source?: string;
+  total_revenue?: number;
+  pending_revenue?: number;
+  risk_level?: 'Low' | 'Medium' | 'High Workload' | 'At-Risk';
   created_at?: string;
 }
 
@@ -35,9 +63,20 @@ export interface Lead {
   name: string;
   phone?: string;
   email?: string;
-  service: string;
-  status: 'New' | 'Follow Up' | 'Converted' | 'Lost';
+  service?: string;
+  service_requested?: string;
+  organization_name?: string;
+  company?: string;
+  source?: string;
+  referred_by?: string;
+  referring_client_id?: string;
+  status: LeadStatus;
+  assigned_to?: string;
+  follow_up_date?: string;
+  estimated_value?: number;
   notes?: string;
+  converted_client_id?: string;
+  conversion_date?: string;
   created_at?: string;
 }
 

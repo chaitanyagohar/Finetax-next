@@ -5,6 +5,7 @@ import { simpleParser } from "mailparser";
 import { ImapFlow } from "imapflow";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
+import { getAccountPassword, imapSettingsFor } from "@/lib/email/mailer";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_MESSAGES_PER_SYNC = 100;
@@ -44,28 +45,24 @@ export async function POST(request: NextRequest) {
     try {
       const supabase = getAdminClient();
 
-      // 1. Fetch account credentials (server-side only)
-      const { data: account, error: accErr } = await supabase
-        .from("email_accounts")
-        .select("*")
-        .eq("id", accountId)
-        .single();
+      // 1. Fetch account settings and decrypt its password (server-side only)
+      const { data: account, error: accErr } = await supabase.from("email_accounts").select("*").eq("id", accountId).single();
 
       if (accErr || !account) {
-        throw new ApiError(400, "Account not found or inactive");
+        throw new ApiError(400, "Account not found.");
       }
       if (account.is_active === false) {
         throw new ApiError(400, "This email account is disabled.");
       }
 
+      const password = await getAccountPassword(supabase, account);
+      const imap = imapSettingsFor(account);
+
       const client = new ImapFlow({
-        host: account.imap_host || "imap.gmail.com",
-        port: Number(account.imap_port) || 993,
+        host: imap.host,
+        port: imap.port,
         secure: true,
-        auth: {
-          user: account.imap_user || account.email_address,
-          pass: account.imap_pass || account.smtp_pass,
-        },
+        auth: { user: imap.user, pass: password },
         logger: false,
         connectionTimeout: 15000,
         greetingTimeout: 15000,
@@ -79,7 +76,7 @@ export async function POST(request: NextRequest) {
           await client.connect();
         } catch (connErr: any) {
           console.error("[sync-emails] IMAP connect error:", connErr?.message || connErr);
-          throw new ApiError(502, "Could not connect to the mailbox. Please check its IMAP settings.");
+          throw new ApiError(502, `Could not connect to ${imap.host}. Check the password and IMAP settings with "Test connection".`);
         }
 
         const lock = await client.getMailboxLock("INBOX");
@@ -125,10 +122,7 @@ export async function POST(request: NextRequest) {
 
       // 3. Prevent duplicate processing (one query instead of one per message)
       const messageIds = rows.map((r) => r.message_id);
-      const { data: existing } = await supabase
-        .from("email_messages")
-        .select("message_id")
-        .in("message_id", messageIds);
+      const { data: existing } = await supabase.from("email_messages").select("message_id").in("message_id", messageIds);
 
       const existingIds = new Set((existing || []).map((e: any) => e.message_id));
       const seenInBatch = new Set<string>();
@@ -138,7 +132,17 @@ export async function POST(request: NextRequest) {
         return true;
       });
 
-      // 4. Single bulk insert
+      // 4. Link senders to existing clients by email address
+      if (newRows.length > 0) {
+        const senders = Array.from(new Set(newRows.map((r) => r.from_address)));
+        const { data: matchedClients } = await supabase.from("clients").select("id, email").in("email", senders);
+        const clientByEmail = new Map((matchedClients || []).map((c: any) => [String(c.email).toLowerCase(), c.id]));
+        newRows.forEach((r) => {
+          r.client_id = clientByEmail.get(r.from_address) || null;
+        });
+      }
+
+      // 5. Single bulk insert
       if (newRows.length > 0) {
         const { error: insertErr } = await supabase.from("email_messages").insert(newRows);
         if (insertErr) {

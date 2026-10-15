@@ -1,246 +1,376 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Activity, Filter, RefreshCw, Server, Info } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Activity, Filter, RefreshCw, Server, Info, ShieldAlert, Download, Loader2, ChevronDown, ChevronRight, Lock, Trash2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { formatDate, getInitials, localISODate } from "@/lib/format";
+
+const PAGE_SIZE = 100;
+
+const SECURITY_ACTIONS = [
+  "user_password_reset",
+  "user_email_changed",
+  "user_deleted",
+  "user_created",
+  "UPDATE_SETTINGS",
+  "DELETE_EMAIL_ACCOUNT",
+  "UPDATE_EMAIL_PASSWORD",
+  "CONNECT_EMAIL_ACCOUNT",
+  "EXPORT_CLIENTS",
+  "CANCEL_INVOICE",
+  "DELETE_PAYMENT",
+  "DEACTIVATE_TEAM_MEMBER",
+];
+
+const COMMON_AREAS = ["TASKS", "LEADS", "LEAD_DISCUSSION", "CLIENTS", "QUOTATIONS", "INVOICES", "DISCUSSIONS", "TIME_LOGS", "PROFILES", "profiles", "SETTINGS", "EMAIL_ACCOUNTS", "email_messages", "COMPLIANCE_EVENTS"];
+
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return localISODate(new Date(y, m - 1, d + days));
+}
+function startOfDayISO(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0).toISOString();
+}
+function endOfDayISO(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+}
+function summarise(metadata: any): string {
+  if (!metadata || typeof metadata !== "object") return "—";
+  const parts = Object.entries(metadata)
+    .filter(([k]) => !["actor_name", "author_name"].includes(k))
+    .slice(0, 4)
+    .map(([k, v]) => {
+      const value = v === null || v === undefined ? "—" : typeof v === "object" ? (Array.isArray(v) ? v.join(", ") : "{…}") : String(v);
+      return `${k.replace(/_/g, " ")}: ${value.length > 60 ? value.slice(0, 60) + "…" : value}`;
+    });
+  return parts.length ? parts.join("  •  ") : "—";
+}
+function csvCell(value: unknown): string {
+  let s = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+}
 
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterEntity, setFilterEntity] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [supabase] = useState(() => createClient());
 
-  const supabase = createClient();
+  const [logs, setLogs] = useState<any[]>([]);
+  const [team, setTeam] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Filters
+  const today = localISODate();
+  const [fromDate, setFromDate] = useState(addDays(today, -7));
+  const [toDate, setToDate] = useState(today);
+  const [filterEntity, setFilterEntity] = useState("");
+  const [filterUser, setFilterUser] = useState("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [securityOnly, setSecurityOnly] = useState(false);
 
   useEffect(() => {
-    loadLogs();
+    supabase
+      .from("profiles")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .then(({ data }) => setTeam(data || []));
   }, []);
 
-  async function loadLogs() {
-    setIsRefreshing(true);
-    // Fetch top 500 latest logs to keep performance high
-    const { data, error } = await supabase
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim().replace(/[,()%*\\]/g, "").replace(/\s+/g, "_").slice(0, 60)), 400);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    loadLogs(true);
+  }, [fromDate, toDate, filterEntity, filterUser, debouncedSearch, securityOnly]);
+
+  function buildQuery() {
+    let q = supabase
       .from("audit_logs")
       .select("*")
-      .order("timestamp", { ascending: false })
-      .limit(500);
+      .gte("timestamp", startOfDayISO(fromDate))
+      .lte("timestamp", endOfDayISO(toDate));
+    if (filterEntity) q = q.eq("entity", filterEntity);
+    if (filterUser) q = q.eq("user_id", filterUser);
+    if (debouncedSearch) q = q.ilike("action", `%${debouncedSearch}%`);
+    if (securityOnly) q = q.in("action", SECURITY_ACTIONS);
+    return q;
+  }
 
-    if (data) setLogs(data);
-    else console.error(error);
-    
+  async function loadLogs(reset: boolean) {
+    if (reset) {
+      setIsRefreshing(true);
+    } else {
+      setLoadingMore(true);
+    }
+    const offset = reset ? 0 : logs.length;
+    const { data, error } = await buildQuery().order("timestamp", { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
+    if (error) console.error(error);
+    const rows = data || [];
+    setLogs(reset ? rows : [...logs, ...rows]);
+    setHasMore(rows.length === PAGE_SIZE);
     setLoading(false);
     setIsRefreshing(false);
+    setLoadingMore(false);
   }
 
-  function formatMetadata(metadata: any) {
-    if (!metadata || Object.keys(metadata).length === 0) return "-";
-    
-    // Create a clean readable string from the metadata JSON, ignoring the actor_name
-    return Object.entries(metadata)
-      .filter(([key]) => key !== "actor_name")
-      .map(([key, value]) => {
-        const readableKey = key.replace(/_/g, " ");
-        return `${readableKey}: ${value}`;
-      })
-      .join("  •  ");
+  const teamName = (id?: string) => team.find((t) => t.id === id)?.name || "";
+  const actorOf = (log: any) => log.metadata?.actor_name || log.metadata?.author_name || teamName(log.user_id) || "System";
+
+  const areas = useMemo(() => Array.from(new Set([...COMMON_AREAS, ...logs.map((l) => l.entity)].filter(Boolean))).sort(), [logs]);
+
+  const stats = useMemo(
+    () => ({
+      total: logs.length,
+      deletes: logs.filter((l) => String(l.action).toUpperCase().includes("DELETE")).length,
+      security: logs.filter((l) => SECURITY_ACTIONS.includes(l.action)).length,
+      emails: logs.filter((l) => String(l.action).toUpperCase().includes("EMAIL")).length,
+    }),
+    [logs]
+  );
+
+  function exportCSV() {
+    const headers = ["Date", "Time", "Actor", "Action", "Area", "Record ID", "Details"];
+    const lines = logs.map((l) => {
+      const d = new Date(l.timestamp);
+      return [formatDate(localISODate(d)), d.toLocaleTimeString("en-IN"), actorOf(l), l.action, l.entity, l.entity_id || "", JSON.stringify(l.metadata || {})]
+        .map(csvCell)
+        .join(",");
+    });
+    const blob = new Blob(["\uFEFF" + [headers.map(csvCell).join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `finetax_audit_log_${fromDate}_to_${toDate}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
-
-  // Generate 1-2 letter initials for the user avatar
-  function getInitials(name: string) {
-    if (!name || name === "System API") return "SY";
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return name.substring(0, 2).toUpperCase();
-  }
-  
-  const EMAIL_ACTIONS = ["SEND_QUOTATION_EMAIL", "SEND_INVOICE_EMAIL", "SEND_STAFF_ASSIGNMENT_EMAIL"];
-
-  // Extract unique entities for the filter dropdown
-  const uniqueEntities = Array.from(new Set(logs.map(log => log.entity)));
-
-  const filteredLogs = logs.filter((log) => {
-    const actor = (log.metadata?.actor_name || "System API").toLowerCase();
-    const action = log.action.toLowerCase();
-    const matchesSearch = actor.includes(search.toLowerCase()) || action.includes(search.toLowerCase());
-    const matchesEntity = filterEntity ? log.entity === filterEntity : true;
-    
-    return matchesSearch && matchesEntity;
-  });
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500">
-      
-      {/* Page Header */}
-      <div className="flex flex-col gap-1 border-b border-slate-200 pb-5">
-        <div className="flex items-center gap-2 text-slate-900 font-bold text-2xl tracking-tight">
-          <Activity className="h-6 w-6 text-blue-600" />
-          System Audit Logs
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+            <Activity className="h-5 w-5 text-navy" /> System Audit Logs
+          </h2>
+          <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
+            <Lock className="h-3 w-3" /> Tamper-proof record: entries cannot be edited or deleted, and times are set by the server.
+          </p>
         </div>
-        <p className="text-sm text-slate-500">
-          Monitor system activity, secure actions, and outbound communications.
-        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={exportCSV}
+            disabled={logs.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt disabled:opacity-50"
+          >
+            <Download className="h-4 w-4 text-navy" /> Export
+          </button>
+          <button
+            type="button"
+            onClick={() => loadLogs(true)}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 text-navy ${isRefreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-          
-          {/* Search Input */}
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search users or actions..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-            />
-          </div>
-
-          {/* Entity Filter */}
-          <div className="relative w-full sm:w-48">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <select 
-              value={filterEntity} 
-              onChange={(e) => setFilterEntity(e.target.value)} 
-              className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all appearance-none cursor-pointer"
-            >
-              <option value="">All Areas</option>
-              {uniqueEntities.map((entity) => (
-                <option key={entity as string} value={entity as string}>{entity as string}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        {/* Refresh Button */}
-        <button 
-          onClick={loadLogs} 
-          disabled={isRefreshing}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all active:scale-[0.98] disabled:opacity-70"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-blue-600" : "text-slate-500"}`} />
-          {isRefreshing ? "Syncing..." : "Refresh"}
-        </button>
-      </div>
-
-      {/* Main Table Card */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          // Skeleton Loader State
-          <div className="divide-y divide-slate-100">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4 p-5 animate-pulse">
-                <div className="w-24 h-4 bg-slate-200 rounded-md"></div>
-                <div className="h-9 w-9 rounded-full bg-slate-200 ml-4"></div>
-                <div className="w-32 h-4 bg-slate-200 rounded-md"></div>
-                <div className="w-24 h-6 bg-slate-200 rounded-full ml-auto"></div>
-                <div className="w-48 h-4 bg-slate-200 rounded-md ml-auto"></div>
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {[
+          { label: "Entries Shown", value: stats.total, icon: Activity, style: "bg-navy/10 text-navy", valueClass: "text-navy", sub: hasMore ? "More available below" : "All entries in range" },
+          { label: "Security Events", value: stats.security, icon: ShieldAlert, style: "bg-rose-50 text-rose-600", valueClass: "text-rose-600", sub: "Passwords, users, bank, mailboxes" },
+          { label: "Deletions", value: stats.deletes, icon: Trash2, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700", sub: "Records removed" },
+          { label: "Email Activity", value: stats.emails, icon: Mail, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700", sub: "Sent or changed" },
+        ].map((k) => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
+                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                </div>
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
               </div>
-            ))}
-          </div>
-        ) : filteredLogs.length === 0 ? (
-          // Empty State
-          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-              <Server className="h-6 w-6 text-slate-400" />
+              <p className="mt-2 text-[11px] text-text-muted">{k.sub}</p>
             </div>
-            <h3 className="text-sm font-semibold text-slate-900">No logs found</h3>
-            <p className="text-sm text-slate-500 mt-1 max-w-sm">
-              We couldn't find any system activity matching your current filters or search query.
-            </p>
+          );
+        })}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="flex items-center gap-2 text-xs">
+          <input type="date" value={fromDate} max={toDate} onChange={(e) => setFromDate(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 shadow-sm outline-none focus:border-navy" />
+          <span className="text-text-muted">to</span>
+          <input type="date" value={toDate} min={fromDate} max={today} onChange={(e) => setToDate(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 shadow-sm outline-none focus:border-navy" />
+        </div>
+        <div className="relative w-full lg:w-56">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search action, e.g. delete"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
+          />
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface px-2 py-2 text-xs">
+          <Filter className="h-3.5 w-3.5 text-text-muted" />
+          <select value={filterEntity} onChange={(e) => setFilterEntity(e.target.value)} className="bg-transparent focus:outline-none">
+            <option value="">All areas</option>
+            {areas.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+          <option value="">Everyone</option>
+          {team.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-rose-700">
+          <input type="checkbox" checked={securityOnly} onChange={(e) => setSecurityOnly(e.target.checked)} className="accent-rose-600" />
+          Security events only
+        </label>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading audit trail...
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface-alt">
+              <Server className="h-6 w-6 text-text-muted" />
+            </div>
+            <h3 className="text-sm font-semibold text-text-main">No activity found</h3>
+            <p className="mt-1 max-w-sm text-xs text-text-muted">Try widening the date range or clearing filters.</p>
           </div>
         ) : (
-          // Data Table
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">
-                  <th className="px-6 py-4 rounded-tl-xl">Timestamp</th>
-                  <th className="px-6 py-4">User / Actor</th>
-                  <th className="px-6 py-4">Action</th>
-                  <th className="px-6 py-4">Area</th>
-                  <th className="px-6 py-4 rounded-tr-xl">Details</th>
+                <tr>
+                  <th className="w-8" />
+                  <th>When</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Area</th>
+                  <th>Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredLogs.map((log: any) => {
+              <tbody>
+                {logs.map((log) => {
                   const dt = new Date(log.timestamp);
-                  const isDelete = log.action.includes("DELETE");
-                  const isCreate = log.action.includes("CREATE");
-                  const isEmail = EMAIL_ACTIONS.includes(log.action) || log.action.includes("EMAIL");
-                  const actorName = log.metadata?.actor_name || "System API";
-                  const isSystem = actorName === "System API";
-
+                  const action = String(log.action || "");
+                  const upper = action.toUpperCase();
+                  const isSecurity = SECURITY_ACTIONS.includes(action);
+                  const isDelete = upper.includes("DELETE") || upper.includes("CANCEL");
+                  const isCreate = upper.includes("CREATE") || upper.includes("CONNECT");
+                  const isEmail = upper.includes("EMAIL");
+                  const actor = actorOf(log);
+                  const isOpen = expanded === log.id;
                   return (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors group">
-                      
-                      {/* Timestamp Stacked */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-slate-900">
-                            {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <>
+                      <tr
+                        key={log.id}
+                        onClick={() => setExpanded(isOpen ? null : log.id)}
+                        className={`cursor-pointer transition hover:bg-surface-alt ${isSecurity ? "bg-rose-50/40" : ""}`}
+                      >
+                        <td className="text-text-muted">{isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</td>
+                        <td className="whitespace-nowrap">
+                          <p className="font-medium text-text-main">{formatDate(localISODate(dt))}</p>
+                          <p className="text-[10px] text-text-muted">{dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p>
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${
+                                actor === "System" ? "bg-surface-alt text-text-muted" : "bg-navy/10 text-navy"
+                              }`}
+                            >
+                              {actor === "System" ? "SY" : getInitials(actor)}
+                            </span>
+                            <span className={actor === "System" ? "text-text-muted" : "font-medium text-text-main"}>{actor}</span>
                           </span>
-                          <span className="text-xs text-slate-500 mt-0.5">
-                            {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* User Avatar & Name */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border ${
-                            isSystem 
-                              ? "bg-slate-100 text-slate-500 border-slate-200" 
-                              : "bg-blue-50 text-blue-700 border-blue-100"
-                          }`}>
-                            {getInitials(actorName)}
-                          </div>
-                          <span className={`font-medium ${isSystem ? "text-slate-500" : "text-slate-900"}`}>
-                            {actorName}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Action Pill Badge */}
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                          isDelete ? 'bg-rose-50 text-rose-700 border-rose-200' : 
-                          isCreate ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                          isEmail ? 'bg-purple-50 text-purple-700 border-purple-200' : 
-                          'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}>
-                          {log.action.replace(/_/g, " ")}
-                        </span>
-                      </td>
-
-                      {/* Area/Entity */}
-                      <td className="px-6 py-4">
-                        <span className="text-slate-600 font-medium">
-                          {log.entity}
-                        </span>
-                      </td>
-
-                      {/* Metadata Details */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 max-w-sm">
-                          <Info className="h-4 w-4 text-slate-400 flex-shrink-0 group-hover:text-blue-500 transition-colors" />
-                          <span 
-                            className="text-slate-500 truncate text-xs cursor-help" 
-                            title={formatMetadata(log.metadata)}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              isSecurity
+                                ? "border-rose-300 bg-rose-100 text-rose-700"
+                                : isDelete
+                                ? "border-rose-200 bg-rose-50 text-rose-700"
+                                : isCreate
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : isEmail
+                                ? "border-violet-200 bg-violet-50 text-violet-700"
+                                : "border-border bg-surface-alt text-text-main"
+                            }`}
                           >
-                            {formatMetadata(log.metadata)}
+                            {isSecurity && <ShieldAlert className="h-3 w-3" />}
+                            {action.replace(/_/g, " ")}
                           </span>
-                        </div>
-                      </td>
-
-                    </tr>
-                  )
+                        </td>
+                        <td className="whitespace-nowrap text-text-muted">{log.entity}</td>
+                        <td className="max-w-md">
+                          <span className="flex items-center gap-1.5">
+                            <Info className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                            <span className="truncate text-text-muted">{summarise(log.metadata)}</span>
+                          </span>
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr key={`${log.id}-detail`} className="bg-surface-alt">
+                          <td />
+                          <td colSpan={5}>
+                            <div className="space-y-2 py-1">
+                              <p className="text-[11px] text-text-muted">
+                                Record ID: <span className="font-mono">{log.entity_id || "—"}</span> · Log ID: <span className="font-mono">{log.id}</span>
+                              </p>
+                              <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-surface p-3 font-mono text-[11px] leading-relaxed text-text-main">
+                                {JSON.stringify(log.metadata || {}, null, 2)}
+                              </pre>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {hasMore && !loading && (
+          <div className="border-t border-border p-3 text-center">
+            <button
+              type="button"
+              onClick={() => loadLogs(false)}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-navy transition hover:bg-surface-alt disabled:opacity-60"
+            >
+              {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Load older entries
+            </button>
           </div>
         )}
       </div>

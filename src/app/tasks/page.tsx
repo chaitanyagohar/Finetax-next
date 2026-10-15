@@ -1,44 +1,117 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Plus, Trash2, X, AlertCircle, RefreshCw, Clock, Activity, Lock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  Plus,
+  Trash2,
+  X,
+  AlertCircle,
+  RefreshCw,
+  Clock,
+  Activity,
+  Lock,
+  CheckCircle2,
+  Loader2,
+  LayoutGrid,
+  List,
+  CalendarClock,
+  ShieldCheck,
+  Play,
+  Send,
+  RotateCcw,
+  Timer,
+  CheckSquare,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
+import { useCurrentUser } from "@/components/layout/UserContext";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { formatDate, getInitials, localISODate } from "@/lib/format";
 
-const CATEGORIES: TaskCategory[] = ['GST', 'Income Tax', 'Audit', 'ROC', 'Other'];
-const STAGES: TaskStage[] = ['Assigned', 'In Progress', 'Submitted for Review', 'Changes Required', 'Approved'];
-const RECURRENCE_OPTIONS = ['None', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+type TaskRow = Omit<Task, "category"> & Record<string, any>;
+type ClientRow = Client & Record<string, any>;
+type ProfileRow = Profile & Record<string, any>;
 
-// Format ISO/YYYY-MM-DD to DD/MM/YYYY
-function formatToDDMMYYYY(dateStr: string | null | undefined) {
-  if (!dateStr) return "-";
-  const dateObj = new Date(dateStr);
-  if (isNaN(dateObj.getTime())) return dateStr;
-  const day = String(dateObj.getDate()).padStart(2, "0");
-  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const year = dateObj.getFullYear();
-  return `${day}/${month}/${year}`;
+const BASE_CATEGORIES: TaskCategory[] = ["GST", "Income Tax", "Audit", "ROC", "Other"];
+const CATEGORIES: string[] = ["GST", "Income Tax", "TDS", "Audit", "ROC", "Accounting", "Payroll", ...BASE_CATEGORIES.filter((c) => c === "Other")];
+const STAGES: TaskStage[] = ["Assigned", "In Progress", "Submitted for Review", "Changes Required", "Approved"];
+const RECURRENCE_OPTIONS = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
+const PRIORITIES = ["Low", "Medium", "High"];
+
+const STAGE_STYLES: Record<string, string> = {
+  Assigned: "bg-slate-100 text-slate-700 border-slate-200",
+  "In Progress": "bg-blue-50 text-blue-700 border-blue-200",
+  "Submitted for Review": "bg-violet-50 text-violet-700 border-violet-200",
+  "Changes Required": "bg-amber-50 text-amber-700 border-amber-200",
+  Approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+const STAGE_DOTS: Record<string, string> = {
+  Assigned: "bg-slate-400",
+  "In Progress": "bg-blue-500",
+  "Submitted for Review": "bg-violet-500",
+  "Changes Required": "bg-amber-500",
+  Approved: "bg-emerald-500",
+};
+const PRIORITY_DOTS: Record<string, string> = { High: "bg-rose-500", Medium: "bg-amber-400", Low: "bg-slate-300" };
+
+const inputClass =
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15 disabled:bg-surface-alt disabled:text-text-muted";
+const labelClass = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted";
+
+/* ---------------- Helpers ---------------- */
+
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((Date.parse(toIso.slice(0, 10)) - Date.parse(fromIso.slice(0, 10))) / 86400000);
+}
+function formatMinutes(mins: number): string {
+  const m = Math.max(0, Math.round(mins || 0));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (!h) return `${r}m`;
+  return r ? `${h}h ${r}m` : `${h}h`;
+}
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${formatDate(localISODate(d))} ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+/* ---------------- Page ---------------- */
+
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [team, setTeam] = useState<Profile[]>([]);
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const currentUser = useCurrentUser();
+  const me = currentUser?.id || "";
+  const isAdmin = !!currentUser?.isAdmin;
+  const isReviewerUser = !!currentUser?.isReviewer;
+  const [supabase] = useState(() => createClient());
+
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [team, setTeam] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // View & Filters
+  const [view, setView] = useState<"list" | "board">("list");
+  const [scope, setScope] = useState<"mine" | "review" | "all">(isAdmin ? "all" : "mine");
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterClient, setFilterClient] = useState("");
   const [filterRecurring, setFilterRecurring] = useState("");
-  const [filterStaff, setFilterStaff] = useState(""); // New Staff Filter
+  const [filterStaff, setFilterStaff] = useState("");
+  const [filterDue, setFilterDue] = useState("");
+
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
   const [taskTimeline, setTaskTimeline] = useState<any[]>([]);
   const [loadingTimeline, setLoadingTimeline] = useState(false);
 
@@ -46,7 +119,7 @@ export default function TasksPage() {
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState("");
   const [organisation, setOrganisation] = useState("");
-  const [category, setCategory] = useState<TaskCategory>("Other");
+  const [category, setCategory] = useState<string>("Other");
   const [dueDate, setDueDate] = useState("");
   const [officialDueDate, setOfficialDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
@@ -56,236 +129,189 @@ export default function TasksPage() {
   const [recurrence, setRecurrence] = useState("None");
   const [notes, setNotes] = useState("");
   const [reviewComments, setReviewComments] = useState("");
-  const [timeSpent, setTimeSpent] = useState<number>(0);
+  const [notifyClient, setNotifyClient] = useState(true);
 
-  const supabase = createClient();
+  // Time logs
+  const [timeLogs, setTimeLogs] = useState<any[]>([]);
+  const [logHours, setLogHours] = useState("");
+  const [logMinutes, setLogMinutes] = useState("");
+  const [logDate, setLogDate] = useState(localISODate());
+  const [logDesc, setLogDesc] = useState("");
+  const [logBillable, setLogBillable] = useState(true);
+  const [logSaving, setLogSaving] = useState(false);
+
+  const today = localISODate();
 
   useEffect(() => {
     loadData();
   }, []);
 
-  async function loadData() {
-    setLoading(true);
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 4500);
+  }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user?.id || "").single();
-    setCurrentUser(profile || null);
+  async function loadData(showSpinner = true) {
+    if (!me) return;
+    if (showSpinner) setLoading(true);
 
-    const [{ data: cData }, { data: pData }] = await Promise.all([
-      supabase.from("clients").select("*").order("name", { ascending: true }),
-      supabase.from("profiles").select("*").order("name", { ascending: true })
-    ]);
-
-    if (cData) setClients(cData);
-    if (pData) setTeam(pData);
-
-    let query = supabase.from("tasks").select("*, clients(id, name, email, organization_name), profiles!tasks_assigned_to_fkey(id, name, email), reviewer:profiles!tasks_reviewer_id_fkey(id, name, email)");
-
-    const isAdmin = profile?.role === "admin";
-    const isReviewer = profile?.is_reviewer || profile?.role === "reviewer";
-
+    let query = supabase.from("tasks").select("*").order("due_date", { ascending: true });
     if (!isAdmin) {
-      if (isReviewer) {
-        query = query.or(`assigned_to.eq.${profile?.id},reviewer_id.eq.${profile?.id}`);
-      } else {
-        query = query.eq("assigned_to", profile?.id);
-      }
+      query = query.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`);
     }
 
-    const { data: tData } = await query.order("due_date", { ascending: true });
+    const [tRes, cRes, pRes] = await Promise.all([
+      query,
+      supabase.from("clients").select("id, name, email, organization_name, status").order("name", { ascending: true }),
+      supabase.from("profiles").select("id, name, email, role, is_active, is_reviewer").order("name", { ascending: true }),
+    ]);
 
-    if (tData) setTasks(tData);
+    if (tRes.error) showToast("error", "Could not load tasks. Please refresh the page.");
+    if (tRes.data) setTasks(tRes.data as TaskRow[]);
+    if (cRes.data) setClients(cRes.data as ClientRow[]);
+    if (pRes.data) setTeam(pRes.data as ProfileRow[]);
     setLoading(false);
   }
 
   async function loadTaskTimeline(taskId: string) {
     setLoadingTimeline(true);
-    const { data: logs } = await supabase
-      .from("audit_logs")
-      .select("*")
-      .eq("entity", "TASKS")
-      .eq("entity_id", taskId)
-      .order("timestamp", { ascending: false });
-
-    if (logs) setTaskTimeline(logs);
+    const [logsRes, timeRes] = await Promise.all([
+      supabase.from("audit_logs").select("*").eq("entity", "TASKS").eq("entity_id", taskId).order("timestamp", { ascending: false }),
+      supabase.from("time_logs").select("*").eq("task_id", taskId).order("log_date", { ascending: false }),
+    ]);
+    setTaskTimeline(logsRes.data || []);
+    setTimeLogs(timeRes.data || []);
     setLoadingTimeline(false);
   }
 
-  function calculateNextDueDate(currentDate: string, recOption: string) {
-    const d = new Date(currentDate + "T00:00:00");
-    if (recOption === 'Weekly') d.setDate(d.getDate() + 7);
-    else if (recOption === 'Monthly') d.setMonth(d.getMonth() + 1);
-    else if (recOption === 'Quarterly') d.setMonth(d.getMonth() + 3);
-    else if (recOption === 'Yearly') d.setFullYear(d.getFullYear() + 1);
-    else return null;
-    return d.toISOString().slice(0, 10);
+  const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [String(c.id), c])), [clients]);
+  const teamById = useMemo(() => Object.fromEntries(team.map((t) => [String(t.id), t])), [team]);
+  const nameOf = (id?: string) => (id ? teamById[String(id)]?.name || "" : "");
+  const activeTeam = team.filter((t) => t.is_active !== false);
+  const reviewers = team.filter((t) => t.is_active !== false && (t.role === "admin" || t.role === "reviewer" || t.is_reviewer));
+
+  function dueInfo(date?: string, done?: boolean): { label: string; cls: string } {
+    if (!date) return { label: "", cls: "text-text-muted" };
+    if (done) return { label: "", cls: "text-text-muted" };
+    const d = daysBetween(today, date);
+    if (d < 0) return { label: `${-d}d overdue`, cls: "text-rose-600" };
+    if (d === 0) return { label: "Due today", cls: "text-amber-600" };
+    if (d <= 3) return { label: `${d}d left`, cls: "text-amber-600" };
+    return { label: `${d}d left`, cls: "text-text-muted" };
   }
 
-  // Helper to send emails
-  async function dispatchEmail(to: string, subject: string, body: string) {
-    if (!to) return false;
-    const formData = new FormData();
-    formData.append("to", to);
-    formData.append("subject", subject);
-    formData.append("body", body);
-    try {
-      const res = await fetch("/api/send-email", { method: "POST", body: formData });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
+  /* ---------------- Analytics & filtering ---------------- */
 
-  function handleClientChange(id: string) {
-    setClientId(id);
-    const c = clients.find((client) => String(client.id) === id);
-    if (c) {
-      setOrganisation((c as any).organization_name || "");
-    } else {
-      setOrganisation("");
-    }
-  }
+  const scopedTasks = useMemo(() => {
+    if (scope === "mine") return tasks.filter((t) => t.assigned_to === me);
+    if (scope === "review") return tasks.filter((t) => t.reviewer_id === me || (isAdmin && t.stage === "Submitted for Review"));
+    return tasks;
+  }, [tasks, scope, me, isAdmin]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    const payload = {
-      title: title.trim(),
-      client_id: clientId || null,
-      organisation: organisation.trim(),
-      category,
-      due_date: dueDate,
-      official_due_date: officialDueDate || null,
-      assigned_to: assignedTo || null,
-      reviewer_id: reviewerId || null,
-      priority,
-      stage,
-      recurrence,
-      notes: notes.trim(),
-      review_comments: reviewComments.trim(),
-      time_spent_minutes: timeSpent
+  const stats = useMemo(() => {
+    const open = scopedTasks.filter((t) => t.stage !== "Approved");
+    const weekAhead = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 7);
+      return localISODate(d);
+    })();
+    return {
+      open: open.length,
+      overdue: open.filter((t) => t.due_date && t.due_date < today).length,
+      statutoryWeek: open.filter((t) => t.official_due_date && t.official_due_date >= today && t.official_due_date <= weekAhead).length,
+      statutoryBreached: open.filter((t) => t.official_due_date && t.official_due_date < today).length,
+      awaitingReview: tasks.filter((t) => t.stage === "Submitted for Review" && (isAdmin || t.reviewer_id === me)).length,
+      myActions: tasks.filter((t) => t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage)).length,
     };
+  }, [scopedTasks, tasks, today, me, isAdmin]);
 
-    const isNewTask = !editingTask;
-    const isReassigned = editingTask && assignedTo !== editingTask.assigned_to;
-    const stageChangedTo = editingTask && stage !== editingTask.stage ? stage : null;
-
-    if (editingTask) {
-      const { error } = await supabase.from("tasks").update(payload).eq("id", editingTask.id);
-      if (error) return alert("Error updating task: " + error.message);
-
-      const metadata: any = {};
-      if (stageChangedTo) metadata.stage_changed_to = stage;
-      if (isReassigned) metadata.reassigned = true;
-      if (timeSpent !== editingTask.time_spent_minutes) metadata.time_logged = `${timeSpent} mins`;
-
-      await logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, metadata);
-
-      if (stageChangedTo === "Approved" && recurrence !== "None") {
-        const nextDate = calculateNextDueDate(dueDate, recurrence);
-        if (nextDate) {
-          const nextTaskPayload = { ...payload, due_date: nextDate, stage: "Assigned" as TaskStage, review_comments: "", time_spent_minutes: 0 };
-          await supabase.from("tasks").insert([nextTaskPayload]);
-        }
+  const filteredTasks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return scopedTasks.filter((t) => {
+      if (q) {
+        const hay = [t.title, t.notes, t.category, t.organisation, clientById[t.client_id]?.name].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
       }
-    } else {
-      const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
-      if (error) return alert("Error creating task: " + error.message);
-      await logAuditEvent("CREATE_TASK", "TASKS", data.id, { title, stage });
-    }
+      if (filterStage && t.stage !== filterStage) return false;
+      if (filterCategory && t.category !== filterCategory) return false;
+      if (filterClient && t.client_id !== filterClient) return false;
+      if (filterStaff && String(t.assigned_to) !== filterStaff) return false;
+      if (filterRecurring === "recurring" && (!t.recurrence || t.recurrence === "None")) return false;
+      if (filterRecurring === "onetime" && t.recurrence && t.recurrence !== "None") return false;
+      if (filterDue === "overdue" && !(t.stage !== "Approved" && t.due_date && t.due_date < today)) return false;
+      if (filterDue === "statutory" && !(t.stage !== "Approved" && t.official_due_date && daysBetween(today, t.official_due_date) <= 7)) return false;
+      return true;
+    });
+  }, [scopedTasks, search, filterStage, filterCategory, filterClient, filterStaff, filterRecurring, filterDue, clientById, today]);
 
-    // --- EXACT WORKFLOW EMAIL ENGINE ---
-    const assignee = team.find((t) => String(t.id) === String(assignedTo));
-    const selectedClient = clients.find((c) => String(c.id) === String(clientId));
-    const reviewer = team.find((t) => String(t.id) === String(reviewerId));
+  const hasFilters = !!(search || filterStage || filterCategory || filterClient || filterStaff || filterRecurring || filterDue);
 
-    let emailsSent = 0;
-
-    if (isNewTask || isReassigned) {
-      if (selectedClient?.email) {
-        const sent = await dispatchEmail(
-          selectedClient.email, 
-          `New Service Request Initiated: ${title}`, 
-          `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${title}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
-        );
-        if (sent) emailsSent++;
-      }
-      if (assignee?.email) {
-        const sent = await dispatchEmail(
-          assignee.email, 
-          `New Task Assigned: ${title}`, 
-          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${title}".\n\nClient: ${selectedClient?.name || "N/A"}\nDue Date: ${dueDate}\n\nPlease log into the portal, mark as 'In Progress', and execute.`
-        );
-        if (sent) emailsSent++;
-      }
-    }
-
-    if (stageChangedTo) {
-      if (stageChangedTo === "Submitted for Review" && reviewer?.email) {
-        const sent = await dispatchEmail(
-          reviewer.email, 
-          `Task Ready for Review: ${title}`, 
-          `Hello ${reviewer.name},\n\nThe task "${title}" was submitted for review by ${assignee?.name || 'Staff'}.\n\nPlease review it in your queue.`
-        );
-        if (sent) emailsSent++;
-      } 
-      else if (stageChangedTo === "Changes Required" && assignee?.email) {
-        const sent = await dispatchEmail(
-          assignee.email, 
-          `Task Needs Correction: ${title}`, 
-          `Hello ${assignee.name},\n\nYour submitted task "${title}" requires corrections.\n\nReviewer Feedback: ${reviewComments}\n\nPlease revise and resubmit.`
-        );
-        if (sent) emailsSent++;
-      } 
-      else if (stageChangedTo === "Approved" && selectedClient?.email) {
-        const sent = await dispatchEmail(
-          selectedClient.email, 
-          `Task Completed: ${title}`, 
-          `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${title}" has been completed and verified.\n\nBest regards,\nFinetax Team`
-        );
-        if (sent) emailsSent++;
-      }
-    }
-
-    if (emailsSent > 0) {
-      alert(`Task saved! ${emailsSent} workflow notification emails dispatched.`);
-    }
-
-    closeModal();
-    loadData();
+  function clearFilters() {
+    setSearch("");
+    setFilterStage("");
+    setFilterCategory("");
+    setFilterClient("");
+    setFilterStaff("");
+    setFilterRecurring("");
+    setFilterDue("");
   }
 
-  function openModal(task?: any) {
+  /* ---------------- Permissions for the open task ---------------- */
+
+  const isTaskReviewer = !!editingTask && editingTask.reviewer_id === me;
+  const isTaskAssignee = !!editingTask && editingTask.assigned_to === me;
+  const canEditCoreDetails = editingTask ? isAdmin || isTaskReviewer : isAdmin;
+  const canReview = isAdmin || isTaskReviewer;
+
+  let availableStages: TaskStage[] = STAGES;
+  if (editingTask && !canEditCoreDetails) {
+    const current = editingTask.stage as TaskStage;
+    if (current === "Assigned" || current === "Changes Required") availableStages = [current, "In Progress", "Submitted for Review"];
+    else if (current === "In Progress") availableStages = ["In Progress", "Submitted for Review"];
+    else availableStages = [current];
+  }
+
+  /* ---------------- Modal ---------------- */
+
+  function openModal(task?: TaskRow) {
+    setFormError("");
+    setTaskTimeline([]);
+    setTimeLogs([]);
+    setLogHours("");
+    setLogMinutes("");
+    setLogDate(today);
+    setLogDesc("");
+    setLogBillable(true);
     if (task) {
       setEditingTask(task);
-      setTitle(task.title);
+      setTitle(task.title || "");
       setClientId(task.client_id || "");
-      setOrganisation(task.organisation || task.clients?.organization_name || "");
-      setCategory(task.category);
+      setOrganisation(task.organisation || clientById[task.client_id]?.organization_name || "");
+      setCategory(task.category || "Other");
       setDueDate(task.due_date || "");
       setOfficialDueDate(task.official_due_date || "");
       setAssignedTo(task.assigned_to || "");
       setReviewerId(task.reviewer_id || "");
       setPriority(task.priority || "Medium");
-      setStage(task.stage);
+      setStage((task.stage || "Assigned") as TaskStage);
       setRecurrence(task.recurrence || "None");
       setNotes(task.notes || "");
       setReviewComments(task.review_comments || "");
-      setTimeSpent(task.time_spent_minutes || 0);
-
+      setNotifyClient(true);
       loadTaskTimeline(task.id);
     } else {
       setEditingTask(null);
-      setTaskTimeline([]);
       resetForm();
     }
     setIsModalOpen(true);
   }
 
   function closeModal() {
+    if (saving) return;
     setIsModalOpen(false);
     setEditingTask(null);
     setTaskTimeline([]);
+    setTimeLogs([]);
     resetForm();
   }
 
@@ -303,150 +329,549 @@ export default function TasksPage() {
     setRecurrence("None");
     setNotes("");
     setReviewComments("");
-    setTimeSpent(0);
+    setNotifyClient(true);
   }
 
-  async function handleDelete() {
-    if (!editingTask || !confirm("Delete this task?")) return;
-    const { error } = await supabase.from("tasks").delete().eq("id", editingTask.id);
-    if (!error) {
-      logAuditEvent("DELETE_TASK", "TASKS", editingTask.id);
-      closeModal();
-      loadData();
-    } else alert("Error deleting task: " + error.message);
+  function handleClientChange(id: string) {
+    setClientId(id);
+    setOrganisation(clientById[id]?.organization_name || "");
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const filteredTasks = tasks.filter((t: any) => {
-    const matchesSearch = [t.title, t.notes, t.category, t.organisation].filter(Boolean).some((f) => f.toLowerCase().includes(search.toLowerCase()));
-    const matchesStage = filterStage ? t.stage === filterStage : true;
-    const matchesCategory = filterCategory ? t.category === filterCategory : true;
-    const matchesClient = filterClient ? t.client_id === filterClient : true;
-    const matchesRecurring = filterRecurring === "recurring" ? t.recurrence && t.recurrence !== "None" : filterRecurring === "onetime" ? !t.recurrence || t.recurrence === "None" : true;
-    const matchesStaff = filterStaff ? String(t.assigned_to) === filterStaff : true;
-
-    return matchesSearch && matchesStage && matchesCategory && matchesClient && matchesRecurring && matchesStaff;
-  });
-
-  // --- ROLE BASED ACCESS CONTROL ---
-  const isAdmin = currentUser?.role === "admin";
-  const isTaskReviewer = currentUser?.id === reviewerId;
-  const isTaskAssignee = currentUser?.id === assignedTo;
-
-  const canEditCoreDetails = !editingTask || isAdmin || isTaskReviewer;
-  const canEditReviewerFeedback = isAdmin || isTaskReviewer || currentUser?.role === "reviewer";
-
-  let availableStages = STAGES;
-  if (editingTask && !isAdmin && !isTaskReviewer && isTaskAssignee) {
-    availableStages = ['Assigned', 'In Progress', 'Submitted for Review'];
-    if (editingTask.stage === 'Changes Required') {
-      availableStages = ['Changes Required', 'In Progress', 'Submitted for Review'];
+  // Helper to send emails (runs in parallel, failures don't block the save)
+  async function dispatchEmail(to: string, subject: string, body: string): Promise<boolean> {
+    if (!to) return false;
+    const formData = new FormData();
+    formData.append("to", to);
+    formData.append("subject", subject);
+    formData.append("body", body);
+    try {
+      const res = await fetch("/api/send-email", { method: "POST", body: formData });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 
+  async function saveTask(stageOverride?: TaskStage) {
+    if (saving) return;
+    setFormError("");
+
+    const nextStage = stageOverride || stage;
+    const cleanTitle = title.trim();
+
+    if (!cleanTitle) return setFormError("Task title is required.");
+    if (!dueDate) return setFormError("Please set the internal team deadline.");
+    if (officialDueDate && dueDate > officialDueDate) return setFormError("The internal deadline must be on or before the statutory deadline.");
+    if (reviewerId && reviewerId === assignedTo) return setFormError("The reviewer must be a different person from the assignee.");
+    if (nextStage === "Changes Required" && !reviewComments.trim()) {
+      return setFormError("Please write reviewer feedback before sending the task back for changes.");
+    }
+
+    const fullPayload = {
+      title: cleanTitle,
+      client_id: clientId || null,
+      organisation: organisation.trim(),
+      category,
+      due_date: dueDate,
+      official_due_date: officialDueDate || null,
+      assigned_to: assignedTo || null,
+      reviewer_id: reviewerId || null,
+      priority,
+      stage: nextStage,
+      recurrence,
+      notes: notes.trim(),
+      review_comments: reviewComments.trim(),
+    };
+
+    // Execution staff may only change the stage and their notes
+    const payload = editingTask && !canEditCoreDetails ? { stage: nextStage, notes: notes.trim() } : fullPayload;
+
+    const isNewTask = !editingTask;
+    const isReassigned = !!editingTask && canEditCoreDetails && (assignedTo || null) !== (editingTask.assigned_to || null);
+    const stageChangedTo = editingTask && nextStage !== editingTask.stage ? nextStage : null;
+
+    setSaving(true);
+    try {
+      if (editingTask) {
+        const { error } = await supabase.from("tasks").update(payload).eq("id", editingTask.id);
+        if (error) throw error;
+
+        const metadata: Record<string, any> = {};
+        if (stageChangedTo) metadata.stage_changed_to = stageChangedTo;
+        if (isReassigned) metadata.reassigned_to = nameOf(assignedTo) || "Unassigned";
+        if (stageChangedTo === "Changes Required") metadata.feedback = reviewComments.trim().slice(0, 500);
+        await logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, metadata);
+      } else {
+        const { data, error } = await supabase.from("tasks").insert([fullPayload]).select().single();
+        if (error || !data) throw error || new Error("Could not create the task.");
+        await logAuditEvent("CREATE_TASK", "TASKS", data.id, { title: cleanTitle, stage: nextStage });
+      }
+
+      // --- WORKFLOW EMAIL ENGINE ---
+      const assignee = teamById[String(assignedTo)];
+      const reviewer = teamById[String(reviewerId)];
+      const selectedClient = clientById[String(clientId)];
+      const mails: Promise<boolean>[] = [];
+
+      if ((isNewTask || isReassigned) && assignee?.email && assignedTo !== me) {
+        mails.push(
+          dispatchEmail(
+            assignee.email,
+            `New Task Assigned: ${cleanTitle}`,
+            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${cleanTitle}".\n\nClient: ${selectedClient?.name || "Internal"}\nInternal deadline: ${formatDate(dueDate)}${officialDueDate ? `\nStatutory deadline: ${formatDate(officialDueDate)}` : ""}\nPriority: ${priority}\n\nPlease log into the portal, mark it as 'In Progress', and execute.`
+          )
+        );
+      }
+      if (isNewTask && notifyClient && selectedClient?.email) {
+        mails.push(
+          dispatchEmail(
+            selectedClient.email,
+            `Service Request Initiated: ${cleanTitle}`,
+            `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${cleanTitle}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
+          )
+        );
+      }
+      if (stageChangedTo === "Submitted for Review" && reviewer?.email) {
+        mails.push(
+          dispatchEmail(
+            reviewer.email,
+            `Task Ready for Review: ${cleanTitle}`,
+            `Hello ${reviewer.name},\n\nThe task "${cleanTitle}" was submitted for review by ${assignee?.name || "staff"}.\n\nPlease review it in your queue.`
+          )
+        );
+      } else if (stageChangedTo === "Changes Required" && assignee?.email) {
+        mails.push(
+          dispatchEmail(
+            assignee.email,
+            `Task Needs Correction: ${cleanTitle}`,
+            `Hello ${assignee.name},\n\nYour submitted task "${cleanTitle}" requires corrections.\n\nReviewer feedback: ${reviewComments.trim()}\n\nPlease revise and resubmit.`
+          )
+        );
+      } else if (stageChangedTo === "Approved" && notifyClient && selectedClient?.email) {
+        mails.push(
+          dispatchEmail(
+            selectedClient.email,
+            `Task Completed: ${cleanTitle}`,
+            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${cleanTitle}" has been completed and verified.\n\nBest regards,\nFinetax Team`
+          )
+        );
+      }
+
+      const sent = (await Promise.all(mails)).filter(Boolean).length;
+      const nextNote = stageChangedTo === "Approved" && recurrence !== "None" ? " The next occurrence has been scheduled." : "";
+      showToast(
+        "success",
+        `${isNewTask ? "Task created" : stageChangedTo ? `Task moved to ${stageChangedTo}` : "Task saved"}.${nextNote}${sent ? ` ${sent} notification${sent === 1 ? "" : "s"} sent.` : ""}`
+      );
+
+      setIsModalOpen(false);
+      setEditingTask(null);
+      resetForm();
+      loadData(false);
+    } catch (err: any) {
+      setFormError(err?.message || "Could not save the task.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await saveTask();
+  }
+
+  async function handleDelete() {
+    if (!editingTask) return;
+    setActionBusy(true);
+    const { error } = await supabase.from("tasks").delete().eq("id", editingTask.id);
+    setActionBusy(false);
+    setConfirmDelete(false);
+    if (error) return showToast("error", "Could not delete this task. Only administrators can delete tasks.");
+    logAuditEvent("DELETE_TASK", "TASKS", editingTask.id, { title: editingTask.title });
+    showToast("success", "Task deleted.");
+    setIsModalOpen(false);
+    setEditingTask(null);
+    loadData(false);
+  }
+
+  /* ---------------- Time logs ---------------- */
+
+  const loggedMinutes = timeLogs.reduce((s, l) => s + Number(l.hours || 0) * 60, 0);
+
+  async function addTimeLog(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingTask || logSaving) return;
+    const hours = Number(logHours || 0) + Number(logMinutes || 0) / 60;
+    if (!(hours > 0) || hours > 24) return showToast("error", "Enter between 1 minute and 24 hours.");
+    if (!logDesc.trim()) return showToast("error", "Please describe the work done.");
+    if (logDate > today) return showToast("error", "Time cannot be logged for a future date.");
+
+    setLogSaving(true);
+    const { error } = await supabase.from("time_logs").insert([
+      {
+        user_id: me,
+        task_id: editingTask.id,
+        client_id: editingTask.client_id || null,
+        description: logDesc.trim(),
+        hours: Math.round(hours * 100) / 100,
+        log_date: logDate,
+        is_billable: logBillable,
+      },
+    ]);
+    setLogSaving(false);
+    if (error) return showToast("error", error.message);
+
+    await logAuditEvent("UPDATE_TASK", "TASKS", editingTask.id, { time_logged: formatMinutes(hours * 60) });
+    setLogHours("");
+    setLogMinutes("");
+    setLogDesc("");
+    loadTaskTimeline(editingTask.id);
+    loadData(false);
+  }
+
+  async function deleteTimeLog(log: any) {
+    const { error } = await supabase.from("time_logs").delete().eq("id", log.id);
+    if (error) return showToast("error", "Could not remove this entry.");
+    if (editingTask) loadTaskTimeline(editingTask.id);
+    loadData(false);
+  }
+
+  /* ---------------- Render helpers ---------------- */
+
+  function TaskCard({ t }: { t: TaskRow }) {
+    const done = t.stage === "Approved";
+    const internal = dueInfo(t.due_date, done);
+    const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
+    return (
+      <button
+        type="button"
+        onClick={() => openModal(t)}
+        className={`w-full rounded-lg border bg-surface p-3 text-left shadow-sm transition hover:border-navy/30 hover:shadow-md ${
+          needsAction ? "border-amber-300" : "border-border"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold leading-snug text-navy">{t.title}</p>
+          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
+        </div>
+        <p className="mt-1 truncate text-[11px] text-text-muted">{clientById[t.client_id]?.name || "Internal"}</p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className={`text-[10px] font-semibold ${internal.cls}`}>
+            {t.due_date ? formatDate(t.due_date) : "—"}
+            {internal.label && ` · ${internal.label}`}
+          </span>
+          {t.assigned_to && (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy" title={nameOf(t.assigned_to)}>
+              {getInitials(nameOf(t.assigned_to))}
+            </span>
+          )}
+        </div>
+        {t.recurrence && t.recurrence !== "None" && (
+          <p className="mt-1 flex items-center gap-1 text-[10px] text-text-muted">
+            <RefreshCw className="h-3 w-3" /> {t.recurrence}
+          </p>
+        )}
+      </button>
+    );
+  }
+
+  /* ---------------- Render ---------------- */
+
   return (
     <div className="space-y-6">
-      {/* Filters Toolbar */}
-      <div className="flex flex-col md:flex-row flex-wrap justify-between items-start md:items-center gap-3 bg-surface p-4 rounded-lg border border-border shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative w-full sm:w-48">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
-            <input type="text" placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-          </div>
-
-          <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface">
-            <option value="">All Workflow Stages</option>
-            {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface">
-            <option value="">All Categories</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface">
-            <option value="">All Clients</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-
-          <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface">
-            <option value="">One-time & Recurring</option>
-            <option value="recurring">Recurring Only</option>
-            <option value="onetime">One-time Only</option>
-          </select>
-          
-          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="border border-border rounded-md p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy bg-surface font-semibold text-navy">
-            <option value="">All Execution Staff</option>
-            {team.map((staff) => (
-              <option key={staff.id} value={staff.id}>{staff.name}</option>
-            ))}
-          </select>
+      {/* Header */}
+      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+            <CheckSquare className="h-5 w-5 text-navy" /> Tasks & Compliance
+          </h2>
+          <p className="mt-1 text-xs text-text-muted">
+            Internal and statutory deadlines, maker-checker review and recurring compliance in one board.
+          </p>
         </div>
-
-        {isAdmin && (
-          <button onClick={() => openModal()} className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-xs hover:bg-navy/90 transition w-full md:w-auto justify-center">
-            <Plus className="h-4 w-4" /> Add Task
-          </button>
-        )}
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 transition ${view === "list" ? "bg-surface text-navy shadow-sm" : "text-text-muted"}`}
+            >
+              <List className="h-3.5 w-3.5" /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("board")}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 transition ${view === "board" ? "bg-surface text-navy shadow-sm" : "text-text-muted"}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Board
+            </button>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => openModal()}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
+            >
+              <Plus className="h-4 w-4" /> Add Task
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Task Table */}
-      <div className="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open Tasks</p>
+              <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.open}</p>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
+              <CheckSquare className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-text-muted">
+            {stats.myActions > 0 ? <span className="font-semibold text-amber-700">{stats.myActions} need your action</span> : "In the current view"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFilterDue(filterDue === "overdue" ? "" : "overdue")}
+          className={`rounded-xl border bg-surface p-4 text-left shadow-sm transition hover:shadow-md ${filterDue === "overdue" ? "border-rose-300" : "border-border"}`}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue (Internal)</p>
+              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+              <AlertCircle className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-text-muted">Click to filter</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterDue(filterDue === "statutory" ? "" : "statutory")}
+          className={`rounded-xl border bg-surface p-4 text-left shadow-sm transition hover:shadow-md ${filterDue === "statutory" ? "border-amber-300" : "border-border"}`}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Statutory · 7 Days</p>
+              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.statutoryWeek ? "text-amber-700" : "text-text-main"}`}>{stats.statutoryWeek}</p>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <CalendarClock className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-text-muted">
+            {stats.statutoryBreached ? <span className="font-semibold text-rose-600">{stats.statutoryBreached} statutory deadline(s) breached</span> : "No breaches"}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setScope("review")}
+          className="rounded-xl border border-border bg-surface p-4 text-left shadow-sm transition hover:border-navy/30 hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting Review</p>
+              <p className="mt-1.5 text-2xl font-bold tracking-tight text-violet-700">{stats.awaitingReview}</p>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-text-muted">{isAdmin || isReviewerUser ? "Click to open your review queue" : "Your submissions"}</p>
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="rounded-xl border border-border bg-surface shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+              {(
+                [
+                  { key: "mine", label: "My Work" },
+                  { key: "review", label: "Review Queue" },
+                  { key: "all", label: isAdmin ? "All Tasks" : "All Mine" },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setScope(s.key)}
+                  className={`rounded-md px-3 py-1.5 transition ${scope === s.key ? "bg-surface text-navy shadow-sm" : "text-text-muted hover:text-text-main"}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative w-full lg:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Search task, client, notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
+              />
+            </div>
+            <span className="text-[11px] text-text-muted lg:ml-auto">
+              Showing {filteredTasks.length} of {scopedTasks.length}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {view === "list" && (
+              <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">All stages</option>
+                {STAGES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            )}
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+              <option value="">All categories</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[180px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {isAdmin && (
+              <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">All staff</option>
+                {activeTeam.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+              <option value="">One-time & recurring</option>
+              <option value="recurring">Recurring only</option>
+              <option value="onetime">One-time only</option>
+            </select>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt hover:text-text-main"
+              >
+                <X className="h-3.5 w-3.5" /> Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+
         {loading ? (
-          <div className="p-8 text-center text-text-muted text-xs">Loading execution matrices...</div>
+          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks...
+          </div>
+        ) : view === "board" ? (
+          /* ---------- Board view ---------- */
+          <div className="overflow-x-auto p-4">
+            <div className="grid min-w-[1000px] grid-cols-5 gap-3">
+              {STAGES.map((s) => {
+                const col = filteredTasks.filter((t) => t.stage === s);
+                const shown = s === "Approved" ? [...col].sort((a, b) => String(b.due_date).localeCompare(String(a.due_date))).slice(0, 20) : col;
+                return (
+                  <div key={s} className="flex flex-col rounded-lg bg-surface-alt p-2">
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-text-main">
+                        <span className={`h-2 w-2 rounded-full ${STAGE_DOTS[s]}`} /> {s}
+                      </span>
+                      <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted">{col.length}</span>
+                    </div>
+                    <div className="max-h-[65vh] space-y-2 overflow-y-auto">
+                      {shown.length === 0 ? (
+                        <p className="px-1 py-4 text-center text-[11px] text-text-muted">No tasks</p>
+                      ) : (
+                        shown.map((t) => <TaskCard key={t.id} t={t} />)
+                      )}
+                      {s === "Approved" && col.length > 20 && <p className="px-1 text-center text-[10px] text-text-muted">Showing latest 20</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : filteredTasks.length === 0 ? (
-          <div className="p-8 text-center text-text-muted text-xs">No tasks match these filters.</div>
+          <div className="flex flex-col items-center gap-2 p-10 text-center">
+            <CheckSquare className="h-6 w-6 text-text-muted" />
+            <p className="text-xs text-text-muted">{hasFilters ? "No tasks match these filters." : "No tasks in this view."}</p>
+          </div>
         ) : (
+          /* ---------- List view ---------- */
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border text-left text-text-muted bg-background/50">
-                  <th className="p-3">Deadlines (Int / Off)</th>
-                  <th className="p-3">Task</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3">Client</th>
-                  <th className="p-3">Execution</th>
-                  <th className="p-3">Reviewer</th>
-                  <th className="p-3">Stage</th>
+                <tr>
+                  <th>Deadlines (Int / Statutory)</th>
+                  <th>Task</th>
+                  <th>Category</th>
+                  <th>Client</th>
+                  <th>Assignee</th>
+                  <th>Reviewer</th>
+                  <th className="text-right">Time</th>
+                  <th>Stage</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filteredTasks.map((t: any) => {
-                  const isOverdue = t.due_date < today && t.stage !== "Approved";
-                  const needsAction = t.assigned_to === currentUser?.id && (t.stage === 'Assigned' || t.stage === 'Changes Required');
-
+              <tbody>
+                {filteredTasks.map((t) => {
+                  const done = t.stage === "Approved";
+                  const internal = dueInfo(t.due_date, done);
+                  const statutory = dueInfo(t.official_due_date, done);
+                  const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
+                  const needsReview = t.reviewer_id === me && t.stage === "Submitted for Review";
                   return (
-                    <tr key={t.id} className={`hover:bg-background/50 transition cursor-pointer ${needsAction ? 'bg-amber-50/30' : ''}`} onClick={() => openModal(t)}>
-                      <td className="p-3 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className={`font-medium ${isOverdue ? 'text-rose-600 font-bold flex items-center gap-1' : 'text-text-main'}`}>
-                            {isOverdue && <AlertCircle className="h-3 w-3" />} Int: {formatToDDMMYYYY(t.due_date)}
-                          </span>
-                          <span className="text-[10px] text-text-muted mt-0.5">
-                            Off: {formatToDDMMYYYY(t.official_due_date)}
-                          </span>
+                    <tr
+                      key={t.id}
+                      className={`cursor-pointer transition hover:bg-surface-alt ${needsAction || needsReview ? "bg-amber-50/40" : ""} ${done ? "opacity-70" : ""}`}
+                      onClick={() => openModal(t)}
+                    >
+                      <td className="whitespace-nowrap">
+                        <p className={`font-medium ${internal.cls === "text-rose-600" ? "font-semibold text-rose-600" : "text-text-main"}`}>
+                          Int: {t.due_date ? formatDate(t.due_date) : "—"}
+                          {internal.label && <span className={`ml-1 text-[10px] ${internal.cls}`}>({internal.label})</span>}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-text-muted">
+                          Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
+                          {t.official_due_date && statutory.label && <span className={`ml-1 font-semibold ${statutory.cls}`}>({statutory.label})</span>}
+                        </p>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
+                          <span className="font-semibold text-navy">{t.title}</span>
+                          {t.recurrence && t.recurrence !== "None" && <RefreshCw className="h-3 w-3 shrink-0 text-text-muted" />}
+                          {(needsAction || needsReview) && (
+                            <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500" title={needsReview ? "Awaiting your review" : "Action required"} />
+                          )}
                         </div>
                       </td>
-
-                      <td className="p-3 font-semibold text-navy">
-                        {t.title}
-                        {needsAction && <span className="ml-2 h-2 w-2 rounded-full bg-amber-500 inline-block animate-pulse" title="Action Required"></span>}
+                      <td className="whitespace-nowrap">{t.category || "—"}</td>
+                      <td>
+                        <p className="font-medium">{clientById[t.client_id]?.name || "Internal"}</p>
+                        {t.organisation && <p className="text-[10px] text-text-muted">{t.organisation}</p>}
                       </td>
-                      <td className="p-3">{t.category}</td>
-                      <td className="p-3">
-                        <div className="font-medium">{t.clients?.name || "-"}</div>
-                        {t.organisation && <div className="text-[10px] text-text-muted">{t.organisation}</div>}
-                      </td>
-                      <td className="p-3">{t.profiles?.name || <span className="text-rose-500 font-semibold">Unassigned</span>}</td>
-                      <td className="p-3">{t.reviewer?.name || "-"}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded font-medium ${t.stage === 'Approved' ? 'bg-emerald-100 text-emerald-700' : t.stage === 'Changes Required' ? 'bg-rose-100 text-rose-700' : t.stage === 'Submitted for Review' ? 'bg-blue-100 text-blue-700' : 'bg-navy/10 text-navy'}`}>
+                      <td className="whitespace-nowrap">{nameOf(t.assigned_to) || <span className="font-semibold text-rose-500">Unassigned</span>}</td>
+                      <td className="whitespace-nowrap">{nameOf(t.reviewer_id) || <span className="text-text-muted">—</span>}</td>
+                      <td className="whitespace-nowrap text-right text-text-muted">{t.time_spent_minutes ? formatMinutes(t.time_spent_minutes) : "—"}</td>
+                      <td>
+                        <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[t.stage] || STAGE_STYLES.Assigned}`}>
                           {t.stage}
                         </span>
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -454,210 +879,388 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Task Modal (Responsive & Scrollable Layout) */}
+      {/* ================= Task Modal ================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-5xl flex flex-col max-h-[95vh] shadow-lg text-xs">
-            
-            {/* Fixed Header */}
-            <div className="flex justify-between items-center border-b border-border p-4 shrink-0">
-              <h3 className="font-semibold text-base text-text-main flex items-center gap-2">
-                {editingTask ? "Manage Task Lifecycle" : "Add Task"}
+        <Modal
+          title={editingTask ? editingTask.title : "Add Task"}
+          subtitle={
+            editingTask
+              ? `${clientById[editingTask.client_id]?.name || "Internal"} · ${editingTask.category || "Other"}`
+              : "Assign work with internal and statutory deadlines."
+          }
+          onClose={closeModal}
+          maxWidth="max-w-6xl"
+          headerExtra={
+            editingTask ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[editingTask.stage] || STAGE_STYLES.Assigned}`}>
+                  {editingTask.stage}
+                </span>
                 {!canEditCoreDetails && (
-                  <span title="Core details locked for execution staff">
-                    <Lock className="h-4 w-4 text-text-muted" />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-text-muted">
+                    <Lock className="h-3 w-3" /> Details are managed by the reviewer
                   </span>
                 )}
-              </h3>
-              <button onClick={closeModal} className="text-text-muted hover:text-text-main"><X className="h-5 w-5" /></button>
+              </div>
+            ) : null
+          }
+          footer={
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                {editingTask && isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                )}
+                {/* One-click workflow actions */}
+                {editingTask && isTaskAssignee && ["Assigned", "Changes Required"].includes(editingTask.stage) && (
+                  <button
+                    type="button"
+                    onClick={() => saveTask("In Progress")}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+                  >
+                    <Play className="h-3.5 w-3.5" /> Start Work
+                  </button>
+                )}
+                {editingTask && isTaskAssignee && ["Assigned", "In Progress", "Changes Required"].includes(editingTask.stage) && (
+                  <button
+                    type="button"
+                    onClick={() => saveTask("Submitted for Review")}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Submit for Review
+                  </button>
+                )}
+                {editingTask && canReview && editingTask.stage === "Submitted for Review" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => saveTask("Changes Required")}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Request Changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveTask("Approved")}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2 sm:ml-auto">
+                <button type="button" onClick={closeModal} className="flex-1 rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt sm:flex-none">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="task-form"
+                  disabled={saving}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                >
+                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {editingTask ? "Save" : "Create Task"}
+                </button>
+              </div>
             </div>
+          }
+        >
+          <div className={`grid grid-cols-1 gap-8 ${editingTask ? "lg:grid-cols-3" : ""}`}>
+            {/* LEFT COLUMN: Form */}
+            <div className={`space-y-4 ${editingTask ? "lg:col-span-2" : ""}`}>
+              {formError && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
-            {/* Scrollable Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-              <div className={`grid grid-cols-1 ${editingTask ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-8`}>
-
-                {/* LEFT COLUMN: Form Execution */}
-                <div className={`${editingTask ? 'md:col-span-2' : 'md:col-span-1'} space-y-4`}>
-                  <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">TASK TITLE *</label>
-                      <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
-                        <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => handleClientChange(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          <option value="">(Internal / No Client)</option>
-                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">ORGANISATION</label>
-                        <input disabled={!canEditCoreDetails} type="text" placeholder="e.g. Acme Corp" value={organisation} onChange={(e) => setOrganisation(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">CATEGORY</label>
-                        <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">RECURRENCE</label>
-                        <select disabled={!canEditCoreDetails} value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          {RECURRENCE_OPTIONS.map(r => <option key={r} value={r}>{r === 'None' ? 'None (One-time Task)' : r}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-amber-600 mb-1">INTERNAL TEAM DEADLINE *</label>
-                        <input disabled={!canEditCoreDetails} required type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-amber-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-rose-600 mb-1">OFFICIAL STATUTORY DEADLINE</label>
-                        <input disabled={!canEditCoreDetails} type="date" value={officialDueDate} onChange={(e) => setOfficialDueDate(e.target.value)} className="w-full border border-rose-300 rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background disabled:opacity-60" />
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1 text-navy">WORKFLOW STAGE *</label>
-                        <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className="w-full border border-navy/30 rounded p-2 text-xs bg-navy/5 font-semibold text-navy">
-                          {availableStages.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">ASSIGN EXECUTION TO</label>
-                        <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          <option value="">-- Unassigned --</option>
-                          {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">ASSIGN REVIEWER</label>
-                        <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          <option value="">-- No Reviewer --</option>
-                          {team.filter(t => t.role === 'admin' || (t as any).is_reviewer || t.role === 'reviewer').map(t => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">PRIORITY</label>
-                        <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full border border-border rounded p-2 text-xs bg-surface disabled:bg-background disabled:opacity-60">
-                          <option>Low</option><option>Medium</option><option>High</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-text-muted mb-1">TIME SPENT (MINUTES)</label>
-                        <div className="relative">
-                          <Clock className="absolute left-2.5 top-2 h-4 w-4 text-text-muted" />
-                          <input type="number" min="0" value={timeSpent} onChange={(e) => setTimeSpent(Number(e.target.value))} className="w-full pl-8 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {recurrence !== 'None' && (
-                      <div className="bg-navy/5 border border-navy/20 text-navy p-2 rounded flex items-center gap-2">
-                        <RefreshCw className="h-4 w-4" /> 
-                        When this task is approved, the next occurrence will auto-generate.
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block font-semibold text-text-muted mb-1">EXECUTION NOTES</label>
-                      <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-                    </div>
-
-                    <div className="bg-background p-3 rounded-lg border border-border">
-                      <label className="block font-semibold text-navy mb-1">REVIEWER FEEDBACK / REQUIRED CHANGES</label>
-                      <textarea
-                        rows={2}
-                        value={reviewComments}
-                        onChange={(e) => setReviewComments(e.target.value)}
-                        disabled={!canEditReviewerFeedback}
-                        className="w-full border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-surface disabled:opacity-60"
-                        placeholder="Reviewers: Specify required changes here before returning task to 'Changes Required'..."
-                      />
-                    </div>
-                  </form>
+              <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className={labelClass}>Task Title *</label>
+                  <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B filing for September" />
                 </div>
 
-                {/* RIGHT COLUMN: The Audit Timeline Feed */}
-                {editingTask && (
-                  <div className="md:col-span-1 border-t md:border-t-0 md:border-l border-border pt-6 md:pt-0 md:pl-6 max-h-full md:max-h-[60vh] overflow-y-auto">
-                    <div className="flex items-center gap-2 text-navy font-bold mb-4 border-b border-border pb-2 sticky top-0 bg-surface">
-                      <Activity className="h-4 w-4" /> Task Timeline Feed
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Client</label>
+                    <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => handleClientChange(e.target.value)} className={inputClass}>
+                      <option value="">(Internal / No Client)</option>
+                      {clients
+                        .filter((c) => c.status !== "Inactive" || String(c.id) === String(clientId))
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Organisation</label>
+                    <input disabled={!canEditCoreDetails} type="text" placeholder="e.g. Acme Corp" value={organisation} onChange={(e) => setOrganisation(e.target.value)} className={inputClass} />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Category</label>
+                    <select disabled={!canEditCoreDetails} value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
+                      {(CATEGORIES.includes(category) ? CATEGORIES : [category, ...CATEGORIES]).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Recurrence</label>
+                    <select disabled={!canEditCoreDetails} value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className={inputClass}>
+                      {RECURRENCE_OPTIONS.map((r) => (
+                        <option key={r} value={r}>{r === "None" ? "None (one-time task)" : r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={`${labelClass} text-amber-700`}>Internal Team Deadline *</label>
+                    <input
+                      disabled={!canEditCoreDetails}
+                      required
+                      type="date"
+                      value={dueDate}
+                      max={officialDueDate || undefined}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className={`${inputClass} border-amber-300`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`${labelClass} text-rose-700`}>Statutory Deadline</label>
+                    <input
+                      disabled={!canEditCoreDetails}
+                      type="date"
+                      value={officialDueDate}
+                      min={dueDate || undefined}
+                      onChange={(e) => setOfficialDueDate(e.target.value)}
+                      className={`${inputClass} border-rose-300`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`${labelClass} text-navy`}>Workflow Stage *</label>
+                    <select value={stage} onChange={(e) => setStage(e.target.value as TaskStage)} className={`${inputClass} border-navy/30 bg-navy/5 font-semibold text-navy`}>
+                      {availableStages.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Priority</label>
+                    <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClass}>
+                      {PRIORITIES.map((p) => (
+                        <option key={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Assign Execution To</label>
+                    <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
+                      <option value="">— Unassigned —</option>
+                      {team
+                        .filter((t) => t.is_active !== false || String(t.id) === String(assignedTo))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Assign Reviewer (Checker)</label>
+                    <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className={inputClass}>
+                      <option value="">— No Reviewer —</option>
+                      {reviewers
+                        .filter((t) => String(t.id) !== String(assignedTo) || String(t.id) === String(reviewerId))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                {recurrence !== "None" && (
+                  <div className="flex items-center gap-2 rounded-lg border border-navy/20 bg-navy/5 p-2.5 text-xs text-navy">
+                    <RefreshCw className="h-4 w-4 shrink-0" />
+                    When this task is approved, the next {recurrence.toLowerCase()} occurrence is created automatically with both deadlines moved forward.
+                  </div>
+                )}
+
+                <div>
+                  <label className={labelClass}>Execution Notes</label>
+                  <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="Work done, documents pending, ARN / acknowledgement numbers..." />
+                </div>
+
+                <div className="rounded-lg border border-border bg-surface-alt p-3">
+                  <label className={`${labelClass} text-navy`}>Reviewer Feedback / Required Changes</label>
+                  <textarea
+                    rows={2}
+                    value={reviewComments}
+                    onChange={(e) => setReviewComments(e.target.value)}
+                    disabled={!canReview}
+                    className={inputClass}
+                    placeholder={canReview ? "Required before sending the task back for changes..." : "Only the reviewer can write feedback."}
+                  />
+                </div>
+
+                {(!editingTask || canReview) && clientById[clientId]?.email && (
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-text-main">
+                    <input type="checkbox" checked={notifyClient} onChange={(e) => setNotifyClient(e.target.checked)} className="h-4 w-4 accent-navy" />
+                    Email the client {editingTask ? "when this task is approved" : "that work has started"} ({clientById[clientId]?.email})
+                  </label>
+                )}
+              </form>
+
+              {/* Time log */}
+              {editingTask && (
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+                      <Timer className="h-4 w-4 text-navy" /> Time Logged
+                    </h4>
+                    <span className="text-xs font-semibold text-navy">{formatMinutes(loggedMinutes)} total</span>
+                  </div>
+
+                  {(isTaskAssignee || canReview) && (
+                    <form onSubmit={addTimeLog} className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-surface-alt p-2.5 sm:grid-cols-12">
+                      <input type="number" min="0" max="24" placeholder="Hrs" value={logHours} onChange={(e) => setLogHours(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                      <input type="number" min="0" max="59" placeholder="Min" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                      <input type="date" max={today} value={logDate} onChange={(e) => setLogDate(e.target.value)} className={`${inputClass} col-span-2 sm:col-span-3`} />
+                      <input type="text" placeholder="What was done?" value={logDesc} onChange={(e) => setLogDesc(e.target.value)} maxLength={300} className={`${inputClass} col-span-2 sm:col-span-5`} />
+                      <label className="col-span-2 flex items-center gap-1.5 text-[11px] text-text-muted sm:col-span-6">
+                        <input type="checkbox" checked={logBillable} onChange={(e) => setLogBillable(e.target.checked)} className="accent-navy" /> Billable
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={logSaving}
+                        className="col-span-2 inline-flex items-center justify-center gap-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60 sm:col-span-6"
+                      >
+                        {logSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />} Log Time
+                      </button>
+                    </form>
+                  )}
+
+                  {timeLogs.length === 0 ? (
+                    <p className="text-[11px] italic text-text-muted">No time logged yet.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {timeLogs.map((l) => (
+                        <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-1.5 text-[11px]">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-text-main">{l.description}</p>
+                            <p className="text-text-muted">
+                              {nameOf(l.user_id) || "—"} · {formatDate(l.log_date)}
+                              {l.is_billable === false ? " · non-billable" : ""}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="font-semibold text-navy">{formatMinutes(Number(l.hours) * 60)}</span>
+                            {(isAdmin || l.user_id === me) && (
+                              <button type="button" onClick={() => deleteTimeLog(l)} className="rounded p-0.5 text-rose-600 hover:bg-rose-50" aria-label="Remove entry">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-                    {loadingTimeline ? (
-                      <div className="text-text-muted italic">Loading task history...</div>
-                    ) : taskTimeline.length === 0 ? (
-                      <div className="text-text-muted italic">No historical data recorded yet.</div>
-                    ) : (
-                      <div className="space-y-4">
-                        {taskTimeline.map((log: any) => {
-                          const dt = new Date(log.timestamp);
-                          const isCreate = log.action === "CREATE_TASK";
+            {/* RIGHT COLUMN: Timeline */}
+            {editingTask && (
+              <div className="border-t border-border pt-6 lg:max-h-[70vh] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                <div className="sticky top-0 mb-4 flex items-center gap-2 border-b border-border bg-surface pb-2 text-xs font-bold text-navy">
+                  <Activity className="h-4 w-4" /> Task Timeline
+                </div>
 
-                          return (
-                            <div key={log.id} className="relative pl-4 border-l-2 border-border pb-4 last:border-0 last:pb-0">
-                              <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? 'bg-emerald-500' : 'bg-navy'}`}></div>
-
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="font-semibold text-text-main">
-                                  {isCreate ? "Task Created" : log.action.replace("_", " ")}
-                                </span>
-                                <span className="text-[10px] text-text-muted whitespace-nowrap pl-2">
-                                  {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-
-                              <div className="text-text-muted">
-                                by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
-                              </div>
-
-                              {log.metadata?.stage_changed_to && (
-                                <div className="mt-1 bg-navy/5 text-navy px-2 py-1 rounded inline-block text-[10px] font-medium border border-navy/10">
-                                  Moved to <span className="font-bold">{log.metadata.stage_changed_to}</span>
-                                </div>
-                              )}
-                              {log.metadata?.time_logged && (
-                                <div className="mt-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded inline-block text-[10px] font-medium border border-emerald-200">
-                                  Logged <span className="font-bold">{log.metadata.time_logged}</span>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                {loadingTimeline ? (
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading task history...
+                  </div>
+                ) : taskTimeline.length === 0 ? (
+                  <div className="text-xs italic text-text-muted">No history recorded yet.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {taskTimeline.map((log: any) => {
+                      const isCreate = log.action === "CREATE_TASK";
+                      return (
+                        <div key={log.id} className="relative border-l-2 border-border pb-1 pl-4">
+                          <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? "bg-emerald-500" : "bg-navy"}`} />
+                          <div className="mb-0.5 flex items-start justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-text-main">
+                              {isCreate ? "Task created" : String(log.action || "").replace(/_/g, " ").toLowerCase()}
+                            </span>
+                            <span className="whitespace-nowrap text-[10px] text-text-muted">{formatDateTime(log.timestamp)}</span>
+                          </div>
+                          <p className="text-[11px] text-text-muted">
+                            by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
+                          </p>
+                          {log.metadata?.stage_changed_to && (
+                            <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[log.metadata.stage_changed_to] || ""}`}>
+                              → {log.metadata.stage_changed_to}
+                            </span>
+                          )}
+                          {log.metadata?.reassigned_to && (
+                            <p className="mt-1 text-[10px] text-text-muted">Reassigned to {log.metadata.reassigned_to}</p>
+                          )}
+                          {log.metadata?.feedback && (
+                            <p className="mt-1 rounded bg-amber-50 p-1.5 text-[10px] text-amber-800">{log.metadata.feedback}</p>
+                          )}
+                          {log.metadata?.time_logged && (
+                            <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              Logged {log.metadata.time_logged}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Fixed Footer Buttons */}
-            <div className="flex justify-between items-center p-4 border-t border-border mt-auto bg-surface rounded-b-lg">
-              {editingTask && canEditCoreDetails ? (
-                <button type="button" onClick={handleDelete} className="px-3 py-1.5 bg-rose-600 text-white rounded font-semibold flex items-center gap-1 hover:bg-rose-700">
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              ) : <div />}
-
-              <div className="flex gap-2 ml-auto">
-                <button type="button" onClick={closeModal} className="px-4 py-1.5 border border-border rounded text-text-main hover:bg-background">Cancel</button>
-                <button type="submit" form="task-form" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">Save Task</button>
-              </div>
-            </div>
-            
+            )}
           </div>
+        </Modal>
+      )}
+
+      {confirmDelete && editingTask && (
+        <ConfirmDialog
+          title="Delete this task?"
+          message={`"${editingTask.title}" will be permanently removed. Its history stays in the audit log.`}
+          confirmLabel="Delete task"
+          tone="danger"
+          loading={actionBusy}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-lg border px-4 py-3 text-xs font-semibold shadow-lg animate-scale-in ${
+            toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
+          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100" aria-label="Dismiss">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>

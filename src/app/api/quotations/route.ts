@@ -7,45 +7,13 @@ import {
   ApiError,
   assertSameOrigin,
   errorResponse,
-  getAdminClient,
   getSiteUrl,
   requireModule,
   writeAuditLog,
 } from "@/lib/api/guard";
-import { allocateDocumentNumber } from "@/lib/api/numbering";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-// Helper: Tax Calculation Engine
-function computeTotals(items: any[], isInterState: boolean, gstRate: number) {
-  const subtotal = items.reduce(
-    (sum, it) => sum + Number(it.qty || 1) * Number(it.rate || 0),
-    0
-  );
-  const taxRate = Number(gstRate || 0);
-  let cgst = 0,
-    sgst = 0,
-    igst = 0;
-
-  if (taxRate > 0) {
-    if (isInterState) {
-      igst = Number(((subtotal * taxRate) / 100).toFixed(2));
-    } else {
-      cgst = Number(((subtotal * taxRate) / 200).toFixed(2));
-      sgst = Number(((subtotal * taxRate) / 200).toFixed(2));
-    }
-  }
-
-  const total = Number((subtotal + cgst + sgst + igst).toFixed(2));
-  return {
-    subtotal: Number(subtotal.toFixed(2)),
-    cgst,
-    sgst,
-    igst,
-    total,
-  };
-}
 
 // Validates line items: quantities must be positive, rates non-negative
 function normalizeItems(items: unknown): any[] {
@@ -85,8 +53,8 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("quotations")
-      .select("*, clients(name, email, phone), leads(name, company, email, phone)")
-      .order("date", { ascending: false });
+      .select("*, clients!client_id(name, email, phone), leads!lead_id(name, company, email, phone)")
+      .order("created_at", { ascending: false });
 
     if (clientId && UUID_RE.test(clientId)) query = query.eq("client_id", clientId);
     if (leadId && UUID_RE.test(leadId)) query = query.eq("lead_id", leadId);
@@ -114,7 +82,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Create New Quotation
+// POST: Create New Quotation (number + totals are assigned by the database)
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
@@ -164,16 +132,12 @@ export async function POST(request: NextRequest) {
     } else {
       const { data: lead } = await supabase.from("leads").select("*").eq("id", leadId).single();
       if (!lead) throw new ApiError(400, "Lead not found");
-      recipientName = lead.company || lead.name;
+      recipientName = lead.organization_name || lead.company || lead.name;
       recipientEmail = lead.email || "";
       recipientPhone = lead.phone || "";
     }
 
-    const totals = computeTotals(cleanItems, Boolean(isInterState), rate);
-    const year = new Date().getFullYear();
-    const prefix = `QUO/${year}/`;
-
-    const basePayload = {
+    const payload = {
       client_id: clientId || null,
       lead_id: leadId || null,
       recipient_name: recipientName,
@@ -185,42 +149,16 @@ export async function POST(request: NextRequest) {
       items: cleanItems,
       is_inter_state: Boolean(isInterState),
       gst_rate: rate,
-      subtotal: totals.subtotal,
-      tax: totals.cgst + totals.sgst + totals.igst,
-      total: totals.total,
       status: "Draft",
       notes: typeof notes === "string" ? notes.slice(0, 5000) : "",
-      created_at: new Date().toISOString(),
+      createdBy: caller.userId,
     };
 
-    // Allocate a sequential number + insert (retry on rare collision)
-    const admin = getAdminClient();
-    let quote: any = null;
-    let payload: any = null;
+    const { data: quote, error } = await supabase.from("quotations").insert([payload]).select().single();
 
-    for (let attempt = 0; attempt < 3 && !quote; attempt++) {
-      const quoteNumber = await allocateDocumentNumber(admin, {
-        table: "quotations",
-        column: "quote_number",
-        prefix,
-        pad: 3,
-      });
-      payload = { ...basePayload, quote_number: quoteNumber };
-
-      const { data, error } = await supabase.from("quotations").insert([payload]).select().single();
-
-      if (!error && data) {
-        quote = data;
-        break;
-      }
-      if (error?.code === "23505") continue;
-
+    if (error || !quote) {
       console.error("[quotations] Insert error:", error?.message);
-      throw new ApiError(500, "Failed to create quotation.");
-    }
-
-    if (!quote) {
-      throw new ApiError(500, "Could not allocate a unique quotation number. Please try again.");
+      throw new ApiError(400, error?.message || "Failed to create quotation.");
     }
 
     // Generate and save the dynamic PDF link
@@ -228,13 +166,12 @@ export async function POST(request: NextRequest) {
     await supabase.from("quotations").update({ pdf_url: dynamicPdfUrl }).eq("id", quote.id);
     quote.pdf_url = dynamicPdfUrl;
 
-    // Audit (server-side, records the acting user)
     await writeAuditLog({
       actor: caller,
       action: "CREATE_QUOTATION",
       entity: "QUOTATIONS",
       entity_id: quote.id,
-      metadata: payload,
+      metadata: { quoteNumber: quote.quote_number },
     });
 
     return NextResponse.json(quote);

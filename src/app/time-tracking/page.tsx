@@ -1,494 +1,1005 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Plus, Clock, Play, Square, Calendar, User, CheckCircle2, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  Plus,
+  Clock,
+  Play,
+  Square,
+  Calendar,
+  User,
+  CheckCircle2,
+  Trash2,
+  X,
+  Edit2,
+  Lock,
+  Loader2,
+  AlertCircle,
+  Download,
+  TrendingUp,
+  Users,
+  Timer,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
+import { useCurrentUser } from "@/components/layout/UserContext";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { formatDate, getInitials, localISODate } from "@/lib/format";
+
+const LOCK_DAYS = 7; // must match v_lock_days in the database rule
+
+type Period = "today" | "week" | "month" | "lastMonth" | "custom";
+
+const inputClass =
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15 disabled:bg-surface-alt disabled:text-text-muted";
+const labelClass = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted";
+
+/* ---------------- Helpers ---------------- */
+
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return localISODate(new Date(y, m - 1, d + days));
+}
+function mondayOf(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const day = (date.getDay() + 6) % 7; // Monday = 0
+  return localISODate(new Date(y, m - 1, d - day));
+}
+function periodRange(period: Period, today: string, customFrom: string, customTo: string): [string, string] {
+  const [y, m] = today.split("-").map(Number);
+  switch (period) {
+    case "today":
+      return [today, today];
+    case "week": {
+      const start = mondayOf(today);
+      return [start, addDays(start, 6)];
+    }
+    case "month":
+      return [localISODate(new Date(y, m - 1, 1)), localISODate(new Date(y, m, 0))];
+    case "lastMonth":
+      return [localISODate(new Date(y, m - 2, 1)), localISODate(new Date(y, m - 1, 0))];
+    default:
+      return [customFrom || today, customTo || today];
+  }
+}
+function formatHours(hours: number): string {
+  const mins = Math.round((Number(hours) || 0) * 60);
+  const h = Math.floor(mins / 60);
+  const r = mins % 60;
+  if (!h) return `${r}m`;
+  return r ? `${h}h ${r}m` : `${h}h`;
+}
+function formatTimerDisplay(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+function csvCell(value: unknown): string {
+  let s = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+/* ---------------- Page ---------------- */
 
 export default function TimeTrackingPage() {
+  const currentUser = useCurrentUser();
+  const me = currentUser?.id || "";
+  const isAdmin = !!currentUser?.isAdmin;
+  const [supabase] = useState(() => createClient());
+
   const [logs, setLogs] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState("");
   const [filterUser, setFilterUser] = useState("");
   const [filterClient, setFilterClient] = useState("");
-  const [filterDate, setFilterDate] = useState("all");
+  const [filterBillable, setFilterBillable] = useState("");
+  const [period, setPeriod] = useState<Period>("week");
+  const [customFrom, setCustomFrom] = useState(addDays(localISODate(), -30));
+  const [customTo, setCustomTo] = useState(localISODate());
 
-  // Timer State
-  const [timerActive, setTimerActive] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  // Timer State (server-side)
+  const [myTimer, setMyTimer] = useState<any | null>(null);
+  const [activeTimers, setActiveTimers] = useState<any[]>([]);
+  const [now, setNow] = useState(Date.now());
   const [timerDescription, setTimerDescription] = useState("");
   const [timerClientId, setTimerClientId] = useState("");
   const [timerTaskId, setTimerTaskId] = useState("");
+  const [timerBillable, setTimerBillable] = useState(true);
+  const [timerBusy, setTimerBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
   const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState("");
   const [taskId, setTaskId] = useState("");
   const [hours, setHours] = useState("");
-  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10));
+  const [minutes, setMinutes] = useState("");
+  const [logDate, setLogDate] = useState(localISODate());
   const [isBillable, setIsBillable] = useState(true);
 
-  const supabase = createClient();
+  const today = localISODate();
+  const lockDate = addDays(today, -LOCK_DAYS);
+  const [rangeFrom, rangeTo] = periodRange(period, today, customFrom, customTo);
 
   useEffect(() => {
-    loadData();
+    loadReferenceData();
+    loadTimers();
   }, []);
 
-  // Timer Effect
   useEffect(() => {
-    let interval: any = null;
-    if (timerActive) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [timerActive]);
+    loadLogs();
+  }, [rangeFrom, rangeTo]);
 
-  async function loadData() {
-    setLoading(true);
+  // Re-render the running clock every second (elapsed is computed from the server start time)
+  useEffect(() => {
+    if (!myTimer && activeTimers.length === 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [myTimer, activeTimers.length]);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user?.id || "").single();
-    setCurrentUser(profile || { role: "staff" });
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 4500);
+  }
 
-    const [{ data: cData }, { data: tData }, { data: pData }] = await Promise.all([
-      supabase.from("clients").select("*").order("name", { ascending: true }),
-      supabase.from("tasks").select("*").order("title", { ascending: true }),
-      supabase.from("profiles").select("*").order("name", { ascending: true })
+  async function loadReferenceData() {
+    const [cRes, tRes, pRes] = await Promise.all([
+      supabase.from("clients").select("id, name, organization_name, status").order("name", { ascending: true }),
+      supabase.from("tasks").select("id, title, client_id, stage, assigned_to, reviewer_id").order("title", { ascending: true }),
+      supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
+    if (cRes.data) setClients(cRes.data);
+    if (tRes.data) setTasks(tRes.data);
+    if (pRes.data) setTeam(pRes.data);
+  }
 
-    if (cData) setClients(cData);
-    if (tData) setTasks(tData);
-    if (pData) setTeam(pData);
+  async function loadLogs(showSpinner = true) {
+    if (showSpinner) setLoading(true);
+    let query = supabase
+      .from("time_logs")
+      .select("*")
+      .gte("log_date", rangeFrom)
+      .lte("log_date", rangeTo)
+      .order("log_date", { ascending: false })
+      .order("created_at", { ascending: false });
 
-    let query = supabase.from("time_logs").select("*, profiles!time_logs_user_id_fkey(name), clients(name), tasks(title)");
+    if (!isAdmin) query = query.eq("user_id", me);
 
-    if (profile?.role === "staff") {
-      query = query.eq("user_id", profile.id);
-    }
-
-    const { data: lData } = await query.order("log_date", { ascending: false });
-    if (lData) setLogs(lData);
-
+    const { data, error } = await query;
+    if (error) showToast("error", "Could not load time logs. Please refresh the page.");
+    setLogs(data || []);
     setLoading(false);
   }
-  function handleStartTimer() {
-  if (!timerDescription.trim()) {
-    alert("Please enter a description before starting the timer.");
-    return;
+
+  async function loadTimers() {
+    const { data } = await supabase.from("time_timers").select("*");
+    const rows = data || [];
+    setActiveTimers(rows);
+    const mine = rows.find((t: any) => t.user_id === me) || null;
+    setMyTimer(mine);
+    if (mine) {
+      setTimerDescription(mine.description || "");
+      setTimerClientId(mine.client_id || "");
+      setTimerTaskId(mine.task_id || "");
+    }
   }
 
-  if (!timerClientId) {
-    alert("Please select a client before starting the timer.");
-    return;
+  const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [String(c.id), c])), [clients]);
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [String(t.id), t])), [tasks]);
+  const nameOf = (id?: string) => team.find((t) => String(t.id) === String(id))?.name || "";
+
+  // Open tasks the user can log against
+  const taskOptions = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          t.stage !== "Approved" && (isAdmin || t.assigned_to === me || t.reviewer_id === me)
+      ),
+    [tasks, isAdmin, me]
+  );
+
+  /* ---------------- Timer ---------------- */
+
+  const elapsedSeconds = myTimer ? (now - new Date(myTimer.started_at).getTime()) / 1000 : 0;
+
+  function handleTimerTask(id: string) {
+    setTimerTaskId(id);
+    const t = taskById[id];
+    if (t?.client_id) setTimerClientId(t.client_id);
+    if (t && !timerDescription.trim()) setTimerDescription(t.title);
   }
 
-  setTimerActive(true);
-}
-
-
-  // Handle Stop Timer & Save Log
-  async function handleStopTimer() {
-    if (!timerDescription.trim()) {
-      alert("Please enter a description for this timer entry.");
+  async function handleStartTimer() {
+    if (!timerDescription.trim()) return showToast("error", "Please describe what you are working on.");
+    if (!timerClientId && !timerTaskId) return showToast("error", "Please select a client or a task.");
+    setTimerBusy(true);
+    const { error } = await supabase.from("time_timers").insert([
+      {
+        user_id: me,
+        description: timerDescription.trim(),
+        client_id: timerClientId || null,
+        task_id: timerTaskId || null,
+      },
+    ]);
+    setTimerBusy(false);
+    if (error) {
+      showToast("error", error.code === "23505" ? "You already have a timer running." : error.message);
+      loadTimers();
       return;
     }
-
-    setTimerActive(false);
-    const loggedHours = Number((timerSeconds / 3600).toFixed(2)) || 0.1;
-
-    const payload = {
-      user_id: currentUser.id,
-      client_id: timerClientId || null,
-      task_id: timerTaskId || null,
-      description: timerDescription.trim(),
-      hours: loggedHours,
-      log_date: new Date().toISOString().slice(0, 10),
-      is_billable: true,
-    };
-
-    const { data, error } = await supabase.from("time_logs").insert([payload]).select().single();
-    if (!error) {
-      logAuditEvent("CREATE_TIME_LOG", "TIME_LOGS", data.id, payload);
-      setTimerSeconds(0);
-      setTimerDescription("");
-      setTimerClientId("");
-      setTimerTaskId("");
-      loadData();
-    } else {
-      alert("Error saving log: " + error.message);
-    }
+    setNow(Date.now());
+    loadTimers();
   }
 
-  // Handle Manual Log Submission
+  async function handleStopTimer() {
+    setTimerBusy(true);
+    const { data, error } = await supabase.rpc("stop_time_timer", { p_billable: timerBillable });
+    setTimerBusy(false);
+    if (error) return showToast("error", error.message);
+
+    if (data) {
+      logAuditEvent("CREATE_TIME_LOG", "TIME_LOGS", data as string, {
+        source: "timer",
+        duration: formatTimerDisplay(elapsedSeconds),
+      });
+      showToast("success", `Saved ${formatHours(elapsedSeconds / 3600)} to your timesheet.`);
+    } else {
+      showToast("success", "Timer stopped. Under a minute, so nothing was saved.");
+    }
+    setMyTimer(null);
+    setTimerDescription("");
+    setTimerClientId("");
+    setTimerTaskId("");
+    loadTimers();
+    loadLogs(false);
+  }
+
+  async function handleDiscardTimer() {
+    setTimerBusy(true);
+    const { error } = await supabase.from("time_timers").delete().eq("user_id", me);
+    setTimerBusy(false);
+    setConfirmDiscard(false);
+    if (error) return showToast("error", error.message);
+    setMyTimer(null);
+    setTimerDescription("");
+    setTimerClientId("");
+    setTimerTaskId("");
+    showToast("success", "Timer discarded.");
+    loadTimers();
+  }
+
+  /* ---------------- Manual entry / edit ---------------- */
+
+  function canModify(log: any): boolean {
+    if (isAdmin) return true;
+    return log.user_id === me && String(log.log_date) >= lockDate;
+  }
+
+  function openModal(log?: any) {
+    setFormError("");
+    if (log) {
+      setEditingLog(log);
+      setDescription(log.description || "");
+      setClientId(log.client_id || "");
+      setTaskId(log.task_id || "");
+      const totalMins = Math.round(Number(log.hours || 0) * 60);
+      setHours(String(Math.floor(totalMins / 60)));
+      setMinutes(String(totalMins % 60));
+      setLogDate(String(log.log_date).slice(0, 10));
+      setIsBillable(log.is_billable !== false);
+    } else {
+      setEditingLog(null);
+      setDescription("");
+      setClientId("");
+      setTaskId("");
+      setHours("");
+      setMinutes("");
+      setLogDate(today);
+      setIsBillable(true);
+    }
+    setIsModalOpen(true);
+  }
+
+  function handleTaskChange(id: string) {
+    setTaskId(id);
+    const t = taskById[id];
+    if (t?.client_id) setClientId(t.client_id);
+    if (t && !description.trim()) setDescription(t.title);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    setFormError("");
+
+    const total = Number(hours || 0) + Number(minutes || 0) / 60;
+    if (!description.trim()) return setFormError("Please describe the work done.");
+    if (!(total > 0) || total > 24) return setFormError("Enter between 1 minute and 24 hours.");
+    if (logDate > today) return setFormError("Time cannot be logged for a future date.");
+    if (!isAdmin && logDate < lockDate) return setFormError(`Entries older than ${LOCK_DAYS} days are locked. Please ask an administrator.`);
 
     const payload = {
-      user_id: currentUser.id,
       client_id: clientId || null,
       task_id: taskId || null,
       description: description.trim(),
-      hours: Number(hours),
+      hours: Math.round(total * 100) / 100,
       log_date: logDate,
       is_billable: isBillable,
     };
 
-    const { data, error } = await supabase.from("time_logs").insert([payload]).select().single();
-    if (!error) {
-      logAuditEvent("CREATE_TIME_LOG", "TIME_LOGS", data.id, payload);
+    setSaving(true);
+    try {
+      if (editingLog) {
+        const { error } = await supabase.from("time_logs").update(payload).eq("id", editingLog.id);
+        if (error) throw error;
+        logAuditEvent("UPDATE_TIME_LOG", "TIME_LOGS", editingLog.id, payload);
+        showToast("success", "Time entry updated.");
+      } else {
+        const { data, error } = await supabase
+          .from("time_logs")
+          .insert([{ ...payload, user_id: me }])
+          .select()
+          .single();
+        if (error || !data) throw error || new Error("Could not save the entry.");
+        logAuditEvent("CREATE_TIME_LOG", "TIME_LOGS", data.id, { ...payload, source: "manual" });
+        showToast("success", `${formatHours(payload.hours)} logged for ${formatDate(logDate)}.`);
+      }
       setIsModalOpen(false);
-      resetForm();
-      loadData();
-    } else {
-      alert("Error logging time: " + error.message);
+      setEditingLog(null);
+      loadLogs(false);
+    } catch (err: any) {
+      setFormError(err?.message || "Could not save the entry.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this log entry?")) return;
-    const { error } = await supabase.from("time_logs").delete().eq("id", id);
-    if (!error) {
-      logAuditEvent("DELETE_TIME_LOG", "TIME_LOGS", id);
-      loadData();
-    } else alert("Error deleting log: " + error.message);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setActionBusy(true);
+    const { error } = await supabase.from("time_logs").delete().eq("id", deleteTarget.id);
+    setActionBusy(false);
+    if (error) {
+      setDeleteTarget(null);
+      return showToast("error", error.message);
+    }
+    logAuditEvent("DELETE_TIME_LOG", "TIME_LOGS", deleteTarget.id, {
+      hours: deleteTarget.hours,
+      log_date: deleteTarget.log_date,
+    });
+    setDeleteTarget(null);
+    showToast("success", "Time entry deleted.");
+    loadLogs(false);
   }
 
-  function resetForm() {
-    setDescription("");
-    setClientId("");
-    setTaskId("");
-    setHours("");
-    setLogDate(new Date().toISOString().slice(0, 10));
-    setIsBillable(true);
+  /* ---------------- Filtering & analytics ---------------- */
+
+  const filteredLogs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return logs.filter((l) => {
+      if (filterUser && l.user_id !== filterUser) return false;
+      if (filterClient && l.client_id !== filterClient) return false;
+      if (filterBillable === "billable" && l.is_billable === false) return false;
+      if (filterBillable === "non" && l.is_billable !== false) return false;
+      if (!q) return true;
+      return [l.description, nameOf(l.user_id), clientById[l.client_id]?.name, taskById[l.task_id]?.title]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(q));
+    });
+  }, [logs, search, filterUser, filterClient, filterBillable, clientById, taskById, team]);
+
+  const stats = useMemo(() => {
+    const total = filteredLogs.reduce((s, l) => s + Number(l.hours || 0), 0);
+    const billable = filteredLogs.filter((l) => l.is_billable !== false).reduce((s, l) => s + Number(l.hours || 0), 0);
+    const days = new Set(filteredLogs.map((l) => `${l.user_id}|${l.log_date}`)).size;
+    return {
+      total,
+      billable,
+      ratio: total > 0 ? Math.round((billable / total) * 100) : 0,
+      avgPerDay: days > 0 ? total / days : 0,
+      entries: filteredLogs.length,
+    };
+  }, [filteredLogs]);
+
+  const byClient = useMemo(() => {
+    const map: Record<string, { name: string; hours: number; billable: number }> = {};
+    filteredLogs.forEach((l) => {
+      const key = l.client_id || "internal";
+      if (!map[key]) map[key] = { name: clientById[l.client_id]?.name || "Internal / No client", hours: 0, billable: 0 };
+      map[key].hours += Number(l.hours || 0);
+      if (l.is_billable !== false) map[key].billable += Number(l.hours || 0);
+    });
+    return Object.values(map).sort((a, b) => b.hours - a.hours).slice(0, 6);
+  }, [filteredLogs, clientById]);
+
+  const byPerson = useMemo(() => {
+    const map: Record<string, { id: string; hours: number; billable: number }> = {};
+    filteredLogs.forEach((l) => {
+      if (!map[l.user_id]) map[l.user_id] = { id: l.user_id, hours: 0, billable: 0 };
+      map[l.user_id].hours += Number(l.hours || 0);
+      if (l.is_billable !== false) map[l.user_id].billable += Number(l.hours || 0);
+    });
+    return Object.values(map).sort((a, b) => b.hours - a.hours);
+  }, [filteredLogs]);
+
+  // Weekly timesheet grid (only for the "This Week" period)
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(mondayOf(today), i)), [today]);
+  const weekGrid = useMemo(() => {
+    if (period !== "week") return [];
+    const people = isAdmin ? Array.from(new Set(filteredLogs.map((l) => l.user_id))) : [me];
+    return people.map((pid) => {
+      const perDay = weekDays.map((d) =>
+        filteredLogs.filter((l) => l.user_id === pid && String(l.log_date).slice(0, 10) === d).reduce((s, l) => s + Number(l.hours || 0), 0)
+      );
+      return { id: pid, perDay, total: perDay.reduce((a, b) => a + b, 0) };
+    });
+  }, [period, filteredLogs, weekDays, isAdmin, me]);
+
+  const maxClientHours = Math.max(1, ...byClient.map((c) => c.hours));
+  const maxPersonHours = Math.max(1, ...byPerson.map((p) => p.hours));
+
+  function exportCSV() {
+    const headers = ["Date", "Staff", "Client", "Task", "Description", "Hours", "Billable"];
+    const lines = filteredLogs.map((l) =>
+      [
+        formatDate(l.log_date),
+        nameOf(l.user_id),
+        clientById[l.client_id]?.name || "",
+        taskById[l.task_id]?.title || "",
+        l.description,
+        Number(l.hours || 0).toFixed(2),
+        l.is_billable === false ? "No" : "Yes",
+      ]
+        .map(csvCell)
+        .join(",")
+    );
+    const blob = new Blob(["\uFEFF" + [headers.map(csvCell).join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `finetax_timesheet_${rangeFrom}_to_${rangeTo}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
-  function formatTimerDisplay(seconds: number) {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
+  const otherActiveTimers = activeTimers.filter((t) => t.user_id !== me);
 
-  const isAdmin = currentUser?.role === "admin";
-
-  // Calculations
-  const filteredLogs = logs.filter((l) => {
-    const matchesSearch = [l.description, l.profiles?.name, l.clients?.name, l.tasks?.title]
-      .filter(Boolean)
-      .some((f) => f.toLowerCase().includes(search.toLowerCase()));
-    const matchesUser = filterUser ? l.user_id === filterUser : true;
-    const matchesClient = filterClient ? l.client_id === filterClient : true;
-    return matchesSearch && matchesUser && matchesClient;
-  });
-
-  const totalHours = filteredLogs.reduce((sum, l) => sum + Number(l.hours || 0), 0);
-  const billableHours = filteredLogs.filter((l) => l.is_billable).reduce((sum, l) => sum + Number(l.hours || 0), 0);
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="space-y-6">
-      {/* Live Stopwatch Widget */}
-      <div className="bg-surface p-4 rounded-lg border border-border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="p-2.5 bg-navy/10 text-navy rounded-lg">
-            <Clock className="h-5 w-5" />
+      {/* Live Work Timer */}
+      <div className={`rounded-xl border p-5 shadow-sm ${myTimer ? "border-emerald-300 bg-emerald-50/40" : "border-border bg-surface"}`}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${myTimer ? "bg-emerald-600 text-white" : "bg-navy/10 text-navy"}`}>
+              <Clock className={`h-5 w-5 ${myTimer ? "animate-pulse" : ""}`} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-text-main">{myTimer ? "Timer running" : "Live Work Timer"}</h3>
+              <p className="text-[11px] text-text-muted">
+                {myTimer
+                  ? `Started ${new Date(myTimer.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Keeps running even if you close this page.`
+                  : "Track time as you work. The timer runs on the server, so it survives refreshes and closed tabs."}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-sm text-text-main">Live Work Timer</h3>
-            <p className="text-[11px] text-text-muted">Track billable time directly as you execute tasks.</p>
-          </div>
+
+          <div className="font-mono text-2xl font-bold tracking-tight text-navy">{formatTimerDisplay(elapsedSeconds)}</div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-12">
           <input
             type="text"
             placeholder="What are you working on?"
             value={timerDescription}
             onChange={(e) => setTimerDescription(e.target.value)}
-            disabled={timerActive}
-            className="w-full sm:w-60 border border-border rounded p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:bg-background"
+            disabled={!!myTimer}
+            maxLength={300}
+            className={`${inputClass} md:col-span-4`}
           />
-
-          <select
-            value={timerClientId}
-            onChange={(e) => setTimerClientId(e.target.value)}
-            disabled={timerActive}
-            className="w-full sm:w-40 border border-border rounded p-2 text-xs bg-surface disabled:bg-background"
-          >
-            <option value="">-- Client --</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+          <select value={timerTaskId} onChange={(e) => handleTimerTask(e.target.value)} disabled={!!myTimer} className={`${inputClass} md:col-span-3`}>
+            <option value="">— Task (optional) —</option>
+            {taskOptions.map((t) => (
+              <option key={t.id} value={t.id}>{t.title}</option>
             ))}
           </select>
-
-          <div className="font-mono text-base font-bold text-navy px-3 py-1.5 bg-background border border-border rounded min-w-[90px] text-center">
-            {formatTimerDisplay(timerSeconds)}
-          </div>
-
-          {!timerActive ? (
+          <select value={timerClientId} onChange={(e) => setTimerClientId(e.target.value)} disabled={!!myTimer} className={`${inputClass} md:col-span-3`}>
+            <option value="">— Client —</option>
+            {clients
+              .filter((c) => c.status !== "Inactive" || c.id === timerClientId)
+              .map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+          </select>
+          {!myTimer ? (
             <button
-  onClick={handleStartTimer}
-  className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded font-medium text-xs hover:bg-emerald-700 flex items-center justify-center gap-1.5"
->
-  <Play className="h-3.5 w-3.5" /> Start
-</button>
-          ) : (
-            <button
-              onClick={handleStopTimer}
-              className="w-full sm:w-auto px-4 py-2 bg-rose-600 text-white rounded font-medium text-xs hover:bg-rose-700 flex items-center justify-center gap-1.5"
+              type="button"
+              onClick={handleStartTimer}
+              disabled={timerBusy}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60 md:col-span-2"
             >
-              <Square className="h-3.5 w-3.5" /> Stop & Save
+              {timerBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start
             </button>
+          ) : (
+            <div className="flex gap-2 md:col-span-2">
+              <button
+                type="button"
+                onClick={handleStopTimer}
+                disabled={timerBusy}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+              >
+                {timerBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Stop & Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDiscard(true)}
+                disabled={timerBusy}
+                className="rounded-lg border border-border px-2 text-text-muted transition hover:bg-surface-alt"
+                title="Discard timer"
+                aria-label="Discard timer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
+        {myTimer && (
+          <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-text-muted">
+            <input type="checkbox" checked={timerBillable} onChange={(e) => setTimerBillable(e.target.checked)} className="accent-navy" />
+            Save as billable work
+          </label>
+        )}
+
+        {isAdmin && otherActiveTimers.length > 0 && (
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-text-main">
+              <Timer className="h-3.5 w-3.5 text-emerald-600" /> Clocked in right now
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {otherActiveTimers.map((t) => (
+                <span key={t.user_id} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-emerald-800">{nameOf(t.user_id) || "Staff"}</span>
+                  <span className="text-emerald-700">
+                    {formatTimerDisplay((now - new Date(t.started_at).getTime()) / 1000)} · {t.description}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Admin Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface p-4 rounded-lg border border-border shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-text-muted uppercase">Total Hours Logged</span>
-          <div className="text-2xl font-bold text-navy">{totalHours.toFixed(2)} hrs</div>
+      {/* Period + actions */}
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm lg:flex-row lg:items-center">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+          {(
+            [
+              { key: "today", label: "Today" },
+              { key: "week", label: "This Week" },
+              { key: "month", label: "This Month" },
+              { key: "lastMonth", label: "Last Month" },
+              { key: "custom", label: "Custom" },
+            ] as { key: Period; label: string }[]
+          ).map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setPeriod(p.key)}
+              className={`rounded-md px-2.5 py-1.5 transition ${period === p.key ? "bg-surface text-navy shadow-sm" : "text-text-muted hover:text-text-main"}`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
-
-        <div className="bg-surface p-4 rounded-lg border border-border shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-text-muted uppercase">Billable Hours</span>
-          <div className="text-2xl font-bold text-emerald-600">{billableHours.toFixed(2)} hrs</div>
+        {period === "custom" && (
+          <div className="flex items-center gap-2 text-xs">
+            <input type="date" value={customFrom} max={customTo} onChange={(e) => setCustomFrom(e.target.value)} className={`${inputClass} w-auto py-1.5`} />
+            <span className="text-text-muted">to</span>
+            <input type="date" value={customTo} min={customFrom} max={today} onChange={(e) => setCustomTo(e.target.value)} className={`${inputClass} w-auto py-1.5`} />
+          </div>
+        )}
+        <span className="flex items-center gap-1 text-[11px] text-text-muted">
+          <Calendar className="h-3.5 w-3.5" /> {formatDate(rangeFrom)} – {formatDate(rangeTo)}
+        </span>
+        <div className="flex gap-2 lg:ml-auto">
+          <button
+            type="button"
+            onClick={exportCSV}
+            disabled={filteredLogs.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt disabled:opacity-50"
+          >
+            <Download className="h-4 w-4 text-navy" /> Export
+          </button>
+          <button
+            type="button"
+            onClick={() => openModal()}
+            className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light"
+          >
+            <Plus className="h-4 w-4" /> Manual Entry
+          </button>
         </div>
+      </div>
 
-        <div className="bg-surface p-4 rounded-lg border border-border shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-text-muted uppercase">Billable Ratio</span>
-          <div className="text-2xl font-bold text-navy">
-            {totalHours > 0 ? ((billableHours / totalHours) * 100).toFixed(0) : 0}%
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {[
+          { label: "Total Hours", value: formatHours(stats.total), sub: `${stats.entries} entries`, icon: Clock, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
+          { label: "Billable Hours", value: formatHours(stats.billable), sub: `${formatHours(stats.total - stats.billable)} non-billable`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
+          { label: "Billable Ratio", value: `${stats.ratio}%`, sub: "Of all logged time", icon: TrendingUp, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+          { label: "Avg per Working Day", value: formatHours(stats.avgPerDay), sub: "Per person per day logged", icon: User, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
+        ].map((k) => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
+                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                </div>
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-text-muted">{k.sub}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Weekly timesheet grid */}
+      {period === "week" && weekGrid.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface shadow-sm">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
+              <Calendar className="h-4 w-4 text-navy" /> Weekly Timesheet
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th>Team Member</th>
+                  {weekDays.map((d) => (
+                    <th key={d} className={`text-center ${d === today ? "text-navy" : ""}`}>
+                      {new Date(d + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short" })}
+                      <span className="block text-[10px] font-normal normal-case">{formatDate(d).slice(0, 5)}</span>
+                    </th>
+                  ))}
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weekGrid.map((row) => (
+                  <tr key={row.id}>
+                    <td className="whitespace-nowrap font-semibold text-navy">{nameOf(row.id) || "—"}</td>
+                    {row.perDay.map((h, i) => (
+                      <td
+                        key={i}
+                        className={`text-center ${h === 0 ? "text-text-muted" : h > 10 ? "font-semibold text-rose-600" : "font-medium text-text-main"} ${
+                          weekDays[i] === today ? "bg-navy/5" : ""
+                        }`}
+                      >
+                        {h ? formatHours(h) : "—"}
+                      </td>
+                    ))}
+                    <td className="whitespace-nowrap text-right font-bold text-navy">{formatHours(row.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Toolbar & Filters */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-surface p-4 rounded-lg border border-border shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative w-full sm:w-48">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Search logs..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-navy"
-            />
+      {/* Breakdown panels */}
+      {filteredLogs.length > 0 && (
+        <div className={`grid grid-cols-1 gap-6 ${isAdmin ? "lg:grid-cols-2" : ""}`}>
+          <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+            <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-text-main">
+              <TrendingUp className="h-3.5 w-3.5 text-navy" /> Hours by Client
+            </p>
+            <div className="space-y-2.5">
+              {byClient.map((c) => (
+                <div key={c.name}>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="truncate font-medium text-text-main">{c.name}</span>
+                    <span className="shrink-0 text-text-muted">
+                      <span className="font-semibold text-text-main">{formatHours(c.hours)}</span> · {formatHours(c.billable)} billable
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                    <div className="h-full rounded-full bg-navy" style={{ width: `${(c.hours / maxClientHours) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {isAdmin && (
-            <select
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-              className="border border-border rounded-md p-2 text-xs bg-surface"
-            >
-              <option value="">All Team Members</option>
-              {team.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-text-main">
+                <Users className="h-3.5 w-3.5 text-navy" /> Hours by Team Member
+              </p>
+              <div className="space-y-2.5">
+                {byPerson.map((p) => (
+                  <button key={p.id} type="button" onClick={() => setFilterUser(filterUser === p.id ? "" : p.id)} className="block w-full text-left">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className={`flex items-center gap-1.5 font-medium ${filterUser === p.id ? "text-navy" : "text-text-main"}`}>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy">{getInitials(nameOf(p.id))}</span>
+                        {nameOf(p.id) || "—"}
+                      </span>
+                      <span className="text-text-muted">
+                        <span className="font-semibold text-text-main">{formatHours(p.hours)}</span> · {p.hours > 0 ? Math.round((p.billable / p.hours) * 100) : 0}% billable
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(p.hours / maxPersonHours) * 100}%` }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Log sheet */}
+      <div className="rounded-xl border border-border bg-surface shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-border p-4 lg:flex-row lg:items-center">
+          <div className="relative w-full lg:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Search description, client, task..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {isAdmin && (
+              <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">All team members</option>
+                {team.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            )}
+            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[180px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <select value={filterBillable} onChange={(e) => setFilterBillable(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+              <option value="">Billable & non-billable</option>
+              <option value="billable">Billable only</option>
+              <option value="non">Non-billable only</option>
+            </select>
+          </div>
+          {!isAdmin && (
+            <span className="flex items-center gap-1 text-[10px] text-text-muted lg:ml-auto">
+              <Lock className="h-3 w-3" /> Entries older than {LOCK_DAYS} days are locked
+            </span>
           )}
-
-          <select
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-            className="border border-border rounded-md p-2 text-xs bg-surface"
-          >
-            <option value="">All Clients</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-md font-medium text-xs hover:bg-navy/90 transition w-full md:w-auto justify-center"
-        >
-          <Plus className="h-4 w-4" /> Manual Log Entry
-        </button>
-      </div>
-
-      {/* Office Log Sheet Table */}
-      <div className="bg-surface rounded-lg border border-border shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-text-muted text-xs">Loading office log sheet...</div>
+          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading office log sheet...
+          </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="p-8 text-center text-text-muted text-xs">No time logs recorded yet.</div>
+          <div className="flex flex-col items-center gap-2 p-10 text-center">
+            <Clock className="h-6 w-6 text-text-muted" />
+            <p className="text-xs text-text-muted">No time logged in this period.</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border text-left text-text-muted bg-background/50">
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Staff Member</th>
-                  <th className="p-3">Client</th>
-                  <th className="p-3">Task / Description</th>
-                  <th className="p-3">Hours</th>
-                  <th className="p-3">Billable</th>
-                  <th className="p-3 text-right">Action</th>
+                <tr>
+                  <th>Date</th>
+                  {isAdmin && <th>Staff Member</th>}
+                  <th>Client</th>
+                  <th>Task / Description</th>
+                  <th className="text-right">Time</th>
+                  <th>Billable</th>
+                  <th className="text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-background/50 transition">
-                    <td className="p-3 font-medium whitespace-nowrap">{log.log_date}</td>
-                    <td className="p-3 font-bold text-navy">{log.profiles?.name || "Staff"}</td>
-                    <td className="p-3">{log.clients?.name || "-"}</td>
-                    <td className="p-3 font-medium text-text-main">
-                      {log.description}
-                      {log.tasks?.title && <span className="block text-[10px] text-text-muted">Task: {log.tasks.title}</span>}
-                    </td>
-                    <td className="p-3 font-bold text-text-main">{Number(log.hours).toFixed(2)} hrs</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.is_billable ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                        {log.is_billable ? "Billable" : "Non-Billable"}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => handleDelete(log.id)}
-                        className="p-1 text-rose-600 hover:bg-rose-50 rounded"
-                        title="Delete entry"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {filteredLogs.map((log) => {
+                  const editable = canModify(log);
+                  return (
+                    <tr key={log.id} className="transition hover:bg-surface-alt">
+                      <td className="whitespace-nowrap font-medium">{formatDate(log.log_date)}</td>
+                      {isAdmin && <td className="whitespace-nowrap font-semibold text-navy">{nameOf(log.user_id) || "Staff"}</td>}
+                      <td>{clientById[log.client_id]?.name || <span className="text-text-muted">Internal</span>}</td>
+                      <td className="max-w-md">
+                        <p className="font-medium text-text-main">{log.description}</p>
+                        {taskById[log.task_id]?.title && <p className="text-[10px] text-text-muted">Task: {taskById[log.task_id].title}</p>}
+                      </td>
+                      <td className="whitespace-nowrap text-right font-bold text-text-main">{formatHours(Number(log.hours))}</td>
+                      <td>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            log.is_billable !== false ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border bg-surface-alt text-text-muted"
+                          }`}
+                        >
+                          {log.is_billable !== false ? "Billable" : "Non-billable"}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap text-right">
+                        {editable ? (
+                          <div className="inline-flex gap-1">
+                            <button type="button" onClick={() => openModal(log)} className="rounded-md p-1.5 text-navy transition hover:bg-surface-alt" title="Edit entry" aria-label="Edit entry">
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => setDeleteTarget(log)} className="rounded-md p-1.5 text-rose-600 transition hover:bg-rose-50" title="Delete entry" aria-label="Delete entry">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Lock className="ml-auto h-3.5 w-3.5 text-text-muted" aria-label="Locked" />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Manual Log Modal */}
+      {/* ================= Manual Entry / Edit ================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-surface rounded-lg border border-border w-full max-w-md p-5 space-y-4 shadow-xl text-xs">
-            <div className="flex justify-between items-center border-b border-border pb-3">
-              <h3 className="font-semibold text-sm text-text-main">Manual Time Entry</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-text-muted hover:text-text-main">
-                <X className="h-4 w-4" />
+        <Modal
+          title={editingLog ? "Edit Time Entry" : "Manual Time Entry"}
+          subtitle={isAdmin ? "Administrators can correct entries of any date." : `You can log time for the last ${LOCK_DAYS} days.`}
+          onClose={() => !saving && setIsModalOpen(false)}
+          maxWidth="max-w-md"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setIsModalOpen(false)} disabled={saving} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="time-form"
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {editingLog ? "Save Changes" : "Save Entry"}
               </button>
             </div>
+          }
+        >
+          <form id="time-form" onSubmit={handleSubmit} className="space-y-4">
+            {formError && (
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className={labelClass}>Task</label>
+              <select value={taskId} onChange={(e) => handleTaskChange(e.target.value)} className={inputClass}>
+                <option value="">— Optional —</option>
+                {(taskId && !taskOptions.some((t) => t.id === taskId) && taskById[taskId] ? [taskById[taskId], ...taskOptions] : taskOptions).map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Client</label>
+              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={inputClass}>
+                <option value="">— Internal / No client —</option>
+                {clients
+                  .filter((c) => c.status !== "Inactive" || c.id === clientId)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Description *</label>
+              <textarea required rows={2} maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} placeholder="Summarise work completed..." />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block font-semibold text-text-muted mb-1">DESCRIPTION *</label>
-                <textarea
-                  required
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full border border-border rounded p-2 text-xs"
-                  placeholder="Summarize work completed..."
-                />
+                <label className={labelClass}>Hours</label>
+                <input type="number" min="0" max="24" step="1" value={hours} onChange={(e) => setHours(e.target.value)} className={inputClass} placeholder="0" />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">CLIENT</label>
-                  <select
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs bg-surface"
-                  >
-                    <option value="">-- Optional --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">TASK</label>
-                  <select
-                    value={taskId}
-                    onChange={(e) => setTaskId(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs bg-surface"
-                  >
-                    <option value="">-- Optional --</option>
-                    {tasks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className={labelClass}>Minutes</label>
+                <input type="number" min="0" max="59" step="5" value={minutes} onChange={(e) => setMinutes(e.target.value)} className={inputClass} placeholder="0" />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">HOURS SPENT *</label>
-                  <input
-                    type="number"
-                    step="0.25"
-                    required
-                    value={hours}
-                    onChange={(e) => setHours(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs"
-                    placeholder="e.g. 1.5"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-muted mb-1">LOG DATE</label>
-                  <input
-                    type="date"
-                    required
-                    value={logDate}
-                    onChange={(e) => setLogDate(e.target.value)}
-                    className="w-full border border-border rounded p-2 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
+              <div>
+                <label className={labelClass}>Date</label>
                 <input
-                  type="checkbox"
-                  id="billable"
-                  checked={isBillable}
-                  onChange={(e) => setIsBillable(e.target.checked)}
+                  type="date"
+                  required
+                  max={today}
+                  min={isAdmin ? undefined : lockDate}
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  className={inputClass}
                 />
-                <label htmlFor="billable" className="font-semibold text-text-main cursor-pointer">
-                  Mark as Billable Work
-                </label>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-1.5 border border-border rounded hover:bg-background"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="px-4 py-1.5 bg-navy text-white rounded font-medium hover:bg-navy/90">
-                  Save Log Entry
-                </button>
-              </div>
-            </form>
-          </div>
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-text-main">
+              <input type="checkbox" checked={isBillable} onChange={(e) => setIsBillable(e.target.checked)} className="h-4 w-4 accent-navy" />
+              Billable work
+            </label>
+          </form>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this time entry?"
+          message={`${formatHours(Number(deleteTarget.hours))} on ${formatDate(deleteTarget.log_date)}: "${deleteTarget.description}"`}
+          confirmLabel="Delete entry"
+          tone="danger"
+          loading={actionBusy}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+      {confirmDiscard && (
+        <ConfirmDialog
+          title="Discard the running timer?"
+          message={`${formatTimerDisplay(elapsedSeconds)} of tracked time will be thrown away and not saved.`}
+          confirmLabel="Discard timer"
+          tone="danger"
+          loading={timerBusy}
+          onConfirm={handleDiscardTimer}
+          onCancel={() => setConfirmDiscard(false)}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-lg border px-4 py-3 text-xs font-semibold shadow-lg animate-scale-in ${
+            toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
+          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100" aria-label="Dismiss">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>

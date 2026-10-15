@@ -1,8 +1,9 @@
 /**
  * Shared outbound email service. SERVER ONLY.
- * Used by /api/send-email, /api/invoices/send and /api/quotations/send.
+ * Used by /api/send-email, /api/invoices/send, /api/quotations/send and /api/sync-emails.
  */
 import nodemailer from "nodemailer";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, getAdminClient } from "@/lib/api/guard";
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -11,6 +12,16 @@ export const MAX_ATTACHMENTS = 10;
 export const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MB
 const MAX_SUBJECT_CHARS = 300;
 const MAX_BODY_CHARS = 200_000;
+
+const IMAP_HOSTS: Record<string, string> = {
+  "smtp.gmail.com": "imap.gmail.com",
+  "smtp.office365.com": "outlook.office365.com",
+  "smtp-mail.outlook.com": "outlook.office365.com",
+  "smtp.zoho.in": "imap.zoho.in",
+  "smtp.zoho.com": "imap.zoho.com",
+  "smtp.hostinger.com": "imap.hostinger.com",
+  "smtp.titan.email": "imap.titan.email",
+};
 
 export interface MailAttachment {
   filename: string;
@@ -51,6 +62,46 @@ export function escapeHtml(value: unknown): string {
 export function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[\r\n"\\/<>:|?*\x00-\x1f]/g, "_").trim().slice(0, 150);
   return cleaned || "attachment";
+}
+
+/** Decrypts the mailbox password from Supabase Vault (server only). */
+export async function getAccountPassword(supabase: SupabaseClient, account: any): Promise<string> {
+  if (account?.smtp_pass) return account.smtp_pass; // legacy fallback before encryption
+  const { data, error } = await supabase.rpc("get_email_account_secret", { p_account_id: account.id });
+  if (error) console.error("[mailer] secret lookup failed:", error.message);
+  if (!data) {
+    throw new ApiError(400, `No saved password for ${account.email_address}. Re-enter it under Inbox → Connected Accounts.`);
+  }
+  return data as string;
+}
+
+export function imapSettingsFor(account: any): { host: string; port: number; user: string } {
+  const smtpHost = String(account.smtp_host || "smtp.gmail.com").toLowerCase();
+  const host = account.imap_host || IMAP_HOSTS[smtpHost] || (smtpHost.startsWith("smtp.") ? smtpHost.replace(/^smtp\./, "imap.") : "imap.gmail.com");
+  return {
+    host,
+    port: Number(account.imap_port) || 993,
+    user: account.smtp_user || account.email_address,
+  };
+}
+
+export function createSmtpTransport(account: any, password: string) {
+  const port = Number(account.smtp_port) || 587;
+  const secure = port === 465;
+  return nodemailer.createTransport({
+    host: account.smtp_host || "smtp.gmail.com",
+    port,
+    secure,
+    requireTLS: !secure,
+    auth: {
+      user: account.smtp_user || account.email_address, // MUST match the From address
+      pass: password,
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
+    tls: { minVersion: "TLSv1.2" },
+  });
 }
 
 export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirmEmailResult> {
@@ -100,30 +151,15 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
     .single();
 
   if (accErr || !account) {
-    throw new ApiError(400, "Invalid email credentials in database.");
+    throw new ApiError(400, "Invalid email account.");
   }
   if (account.is_active === false) {
     throw new ApiError(400, "This email account is disabled.");
   }
 
-  // 3. Send over an encrypted connection
-  const port = Number(account.smtp_port) || 587;
-  const secure = port === 465;
-
-  const transporter = nodemailer.createTransport({
-    host: account.smtp_host || "smtp.gmail.com",
-    port,
-    secure,
-    requireTLS: !secure,
-    auth: {
-      user: account.smtp_user || account.email_address, // MUST match the From address
-      pass: account.smtp_pass,
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-    tls: { minVersion: "TLSv1.2" },
-  });
+  // 3. Send over an encrypted connection with the decrypted password
+  const password = await getAccountPassword(supabase, account);
+  const transporter = createSmtpTransport(account, password);
 
   const displayName = String(account.display_name || "").replace(/["\r\n]/g, "").trim() || account.email_address;
   const fromString = `"${displayName}" <${account.email_address}>`;
@@ -147,7 +183,7 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
     throw new ApiError(
       502,
       isAuthError
-        ? "The email account login failed. Please check its SMTP settings."
+        ? "The email account login failed. Please check its password under Inbox → Connected Accounts."
         : "The email could not be sent. Please try again."
     );
   }
