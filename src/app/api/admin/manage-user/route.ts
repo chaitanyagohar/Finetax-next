@@ -16,7 +16,7 @@ import { validatePassword } from "@/lib/password";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ACTIONS = ["set_password", "send_reset_link", "update_email"];
+const ACTIONS = ["set_password", "send_reset_link", "update_email", "delete_user"];
 
 /** Re-authenticates the admin with their own password before any sensitive change. */
 async function verifyCallerPassword(email: string | null, password: unknown) {
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       throw new ApiError(404, "User not found.");
     }
 
-    const { data: profile } = await admin.from("profiles").select("name").eq("id", userId).maybeSingle();
+    const { data: profile } = await admin.from("profiles").select("name, role").eq("id", userId).maybeSingle();
     const targetLabel = profile?.name || target.email || userId;
 
     // 3a. Set a new password directly
@@ -141,7 +141,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: `Password reset link sent to ${target.email}.` });
     }
 
-    // 3c. Change the login email (keeps Auth and the Team page in sync)
+    // 3c. Permanently delete the login and profile
+    if (action === "delete_user") {
+      if (userId === caller.userId) {
+        throw new ApiError(400, "You can't delete your own account.");
+      }
+
+      if (profile?.role === "admin") {
+        const { count } = await admin
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("role", "admin")
+          .or("is_active.is.null,is_active.eq.true");
+        if ((count || 0) <= 1) {
+          throw new ApiError(400, "You can't delete the last active administrator.");
+        }
+      }
+
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) {
+        console.error("[manage-user] delete_user error:", error.message);
+        throw new ApiError(
+          409,
+          "This person has linked records (tasks, time logs or history), so they can't be deleted. Deactivate their account instead to keep the records intact."
+        );
+      }
+
+      await writeAuditLog({
+        actor: caller,
+        action: "user_deleted",
+        entity: "profiles",
+        entity_id: userId,
+        metadata: { target: targetLabel, email: target.email },
+      });
+
+      return NextResponse.json({ success: true, message: `${targetLabel} has been permanently removed.` });
+    }
+
+    // 3d. Change the login email (keeps Auth and the Team page in sync)
     const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!EMAIL_RE.test(newEmail) || newEmail.length > 254) {
       throw new ApiError(400, "Please enter a valid email address.");
