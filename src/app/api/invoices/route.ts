@@ -1,37 +1,48 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { logAuditEvent } from "@/lib/audit";
 
-export async function POST(request: Request) {
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import {
+  ApiError,
+  assertSameOrigin,
+  errorResponse,
+  getAdminClient,
+  getSiteUrl,
+  requireModule,
+  writeAuditLog,
+} from "@/lib/api/guard";
+import { allocateDocumentNumber } from "@/lib/api/numbering";
+
+// Fields the browser must never set directly
+const PROTECTED_FIELDS = ["id", "invoice_number", "pdf_url", "email_sent_at", "created_at", "updated_at"];
+
+export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
+    // 0. Security gates (invoices module, or quotations for quote → invoice conversion)
+    assertSameOrigin(request);
+    const caller = await requireModule("invoices", "quotations");
 
-    const payload = await request.json();
+    const supabase = await createClient();
 
-    if (!payload.client_id || !payload.items || !payload.items.length) {
-      return NextResponse.json(
-        { error: "Client and at least one line item are required" }, 
-        { status: 400 }
-      );
+    let payload: any;
+    try {
+      payload = await request.json();
+    } catch {
+      throw new ApiError(400, "Invalid request body.");
+    }
+
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new ApiError(400, "Invalid request body.");
+    }
+    if (!payload.client_id || !Array.isArray(payload.items) || payload.items.length === 0) {
+      throw new ApiError(400, "Client and at least one line item are required");
+    }
+    if (payload.items.length > 100) {
+      throw new ApiError(400, "An invoice can have at most 100 line items.");
+    }
+
+    for (const field of PROTECTED_FIELDS) {
+      delete payload[field];
     }
 
     // --- 1. FETCH FIRM SETTINGS FOR CUSTOM PREFIX ---
@@ -42,65 +53,66 @@ export async function POST(request: Request) {
       .single();
 
     // Fallback to current year if settings table is empty
-    const prefix = settings?.invoice_prefix || `INV-${new Date().getFullYear()}-`;
+    const prefix = String(settings?.invoice_prefix || `INV-${new Date().getFullYear()}-`).trim();
 
-    // --- 2. CALCULATE NEXT SEQUENCE ---
-    const { count, error: countError } = await supabase
-      .from("invoices")
-      .select("*", { count: "exact", head: true });
-      
-    let nextSeq = 1;
-    if (!countError && count !== null) {
-      nextSeq = count + 1;
+    // --- 2. ALLOCATE NUMBER + INSERT (atomic counter, retry on rare collision) ---
+    const admin = getAdminClient();
+    let invoice: any = null;
+    let invoiceNumber = "";
+
+    for (let attempt = 0; attempt < 3 && !invoice; attempt++) {
+      invoiceNumber = await allocateDocumentNumber(admin, {
+        table: "invoices",
+        column: "invoice_number",
+        prefix,
+        pad: 4,
+      });
+
+      const { data, error } = await supabase
+        .from("invoices")
+        .insert([{ ...payload, invoice_number: invoiceNumber }])
+        .select()
+        .single();
+
+      if (!error && data) {
+        invoice = data;
+        break;
+      }
+      if (error?.code === "23505") continue; // Duplicate number: allocate the next one
+
+      console.error("[invoices] Insert error:", error?.message);
+      throw new ApiError(500, "Failed to create invoice");
     }
 
-    // Combine custom prefix with a 4-digit sequence (e.g., INV-2026-0001)
-    const invoiceNumber = `${prefix}${String(nextSeq).padStart(4, "0")}`;
-
-    const finalPayload = {
-      ...payload,
-      invoice_number: invoiceNumber,
-    };
-
-    // --- 3. INSERT THE INVOICE ---
-    const { data: invoice, error: insertError } = await supabase
-      .from("invoices")
-      .insert([finalPayload])
-      .select()
-      .single();
-
-    if (insertError || !invoice) {
-      return NextResponse.json({ error: insertError?.message || "Failed to create invoice" }, { status: 500 });
+    if (!invoice) {
+      throw new ApiError(500, "Could not allocate a unique invoice number. Please try again.");
     }
 
-    // --- 4. GENERATE AND SAVE THE DYNAMIC PDF LINK ---
-    const { origin } = new URL(request.url);
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
-    
-    const dynamicPdfUrl = `${baseUrl}/invoices/${invoice.id}/pdf`;
+    // --- 3. GENERATE AND SAVE THE DYNAMIC PDF LINK ---
+    const dynamicPdfUrl = `${getSiteUrl(request)}/invoices/${invoice.id}/pdf`;
 
     const { error: updateError } = await supabase
       .from("invoices")
       .update({ pdf_url: dynamicPdfUrl })
       .eq("id", invoice.id);
-      
+
     if (updateError) {
       console.error("Failed to update PDF URL:", updateError.message);
     }
-    
+
     invoice.pdf_url = dynamicPdfUrl;
 
-    // --- 5. LOG AUDIT EVENT ---
-    try {
-      await logAuditEvent("CREATE_INVOICE", "INVOICES", invoice.id, { invoiceNumber });
-    } catch (e) {
-      console.error("Audit log failed, but invoice was created.");
-    }
+    // --- 4. LOG AUDIT EVENT (server-side, records the acting user) ---
+    await writeAuditLog({
+      actor: caller,
+      action: "CREATE_INVOICE",
+      entity: "INVOICES",
+      entity_id: invoice.id,
+      metadata: { invoiceNumber },
+    });
 
     return NextResponse.json(invoice);
-
-  } catch (error: any) {
-    console.error("Invoice generation error:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

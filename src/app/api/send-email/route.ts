@@ -1,131 +1,86 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse, type NextRequest } from "next/server";
+import {
+  ApiError,
+  assertSameOrigin,
+  errorResponse,
+  requireUser,
+  writeAuditLog,
+} from "@/lib/api/guard";
+import { checkRateLimit } from "@/lib/api/rateLimit";
+import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, sendFirmEmail } from "@/lib/email/mailer";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // 0. Security gates
+    assertSameOrigin(request);
+    const caller = await requireUser();
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: "Supabase environment variables are missing." },
-        { status: 500 }
-      );
+    if (!checkRateLimit(`send-email:${caller.userId}`, 30, 10 * 60 * 1000)) {
+      throw new ApiError(429, "Too many emails sent in a short time. Please wait a few minutes.");
     }
 
-    // Initialize Supabase inside the request handler to prevent build-time evaluation errors
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      throw new ApiError(400, "Invalid request.");
+    }
 
-    const formData = await request.formData();
-    const to = formData.get("to") as string;
-    const subject = formData.get("subject") as string;
-    const body = formData.get("body") as string;
-    let accountId = formData.get("accountId") as string | null;
-
-    const files = formData.getAll("files") as File[];
+    const to = String(formData.get("to") || "").trim();
+    const subject = String(formData.get("subject") || "").trim();
+    const body = String(formData.get("body") || "");
+    const accountId = (formData.get("accountId") as string | null) || null;
+    const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
 
     if (!to || !subject || !body) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+      throw new ApiError(400, "Missing required fields");
     }
 
-    // System Fallback: If no account ID is passed (e.g. from Tasks), use the first active inbox.
-    if (!accountId) {
-      const { data: defaultAccount } = await supabase
-        .from("email_accounts")
-        .select("*")
-        .eq("is_active", true)
-        .limit(1)
-        .single();
-
-      if (defaultAccount) accountId = defaultAccount.id;
-      else
-        return NextResponse.json(
-          { error: "No connected email accounts found." },
-          { status: 400 }
-        );
+    // Check sizes before reading files into memory
+    if (files.length > MAX_ATTACHMENTS) {
+      throw new ApiError(400, `You can attach up to ${MAX_ATTACHMENTS} files.`);
+    }
+    if (files.reduce((sum, f) => sum + f.size, 0) > MAX_TOTAL_ATTACHMENT_BYTES) {
+      throw new ApiError(400, "Attachments exceed the 20 MB limit.");
     }
 
-    // Fetch credentials
-    const { data: account, error: accErr } = await supabase
-      .from("email_accounts")
-      .select("*")
-      .eq("id", accountId)
-      .single();
+    const attachments = await Promise.all(
+      files.map(async (file) => ({
+        filename: file.name,
+        content: Buffer.from(await file.arrayBuffer()),
+        contentType: file.type || undefined,
+      }))
+    );
 
-    if (accErr || !account) {
-      return NextResponse.json(
-        { error: "Invalid email credentials in database." },
-        { status: 400 }
-      );
-    }
-
-    // 1. DISPATCH VIA NODEMAILER
-    const smtpConfig = {
-      host: account.smtp_host || "smtp.gmail.com",
-      port: account.smtp_port || 587,
-      secure: account.smtp_port === 465,
-      auth: {
-        user: account.smtp_user || account.email_address, // MUST match the From address
-        pass: account.smtp_pass,
-      },
-      from: `"${account.display_name}" <${account.email_address}>`, // MUST match the auth user
-    };
-
-    const transporter = nodemailer.createTransport(smtpConfig as any);
-    const mailOptions: nodemailer.SendMailOptions = {
-      from: smtpConfig.from,
+    // 1. Dispatch via the shared mailer
+    const result = await sendFirmEmail({
       to,
       subject,
       html: body.replace(/\n/g, "<br/>"),
-      attachments: [],
-    };
+      text: body,
+      attachments,
+      accountId,
+    });
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        mailOptions.attachments!.push({
-          filename: file.name,
-          content: buffer,
-        });
-      }
-    }
-
-    await transporter.sendMail(mailOptions);
-
-    // 2. SAVE TO SUPABASE (Wrapped in Try/Catch so it doesn't break the whole route if it fails)
-    try {
-      const { error: dbError } = await supabase.from("email_messages").insert([
-        {
-          account_id: account.id,
-          direction: "outbound",
-          from_address: smtpConfig.from,
-          to_address: to,
-          subject,
-          body_text: body,
-          body_html: mailOptions.html,
-          is_read: true,
-        },
-      ]);
-
-      if (dbError) {
-        console.error("DATABASE INSERT FAILED:", dbError.message);
-      }
-    } catch (e) {
-      console.error("DATABASE FATAL ERROR:", e);
-    }
+    // 2. Audit trail
+    await writeAuditLog({
+      entity: "email_messages",
+      entity_id: null,
+      action: "email_sent",
+      metadata: {
+        sent_by: caller.userId,
+        sent_by_email: caller.email,
+        account_id: result.accountId,
+        to: result.recipients,
+        subject,
+        attachment_count: attachments.length,
+      },
+    });
 
     return NextResponse.json({ success: true, message: "Email sent!" });
-  } catch (error: any) {
-    console.error("NODEMAILER ERROR:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to send email" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

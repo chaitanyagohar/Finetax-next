@@ -1,43 +1,25 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
 export const dynamic = "force-dynamic";
 
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { NextResponse, type NextRequest } from "next/server";
-
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
+  // 1. Sign out from Supabase (clears session cookies on the server side)
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.error("[logout] Sign-out error:", error);
+  }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          // Explicitly pass options so maxAge: 0 clears the auth token across subdomains/paths
-          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
-        },
-      },
-    }
-  );
+  // 2. Plain HTML form posts get a redirect; fetch() calls get a lightweight JSON reply
+  const wantsHtml = (request.headers.get("accept") || "").includes("text/html");
+  if (wantsHtml) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    return NextResponse.redirect(loginUrl, { status: 303 });
+  }
 
-  // 1. Sign out from Supabase (clears session cookies on server side)
-  await supabase.auth.signOut();
-
-  // 2. Dynamically construct redirect URL using the request origin
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.search = ""; // clear any active query params
-
-  const handleLogout = async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  window.location.href = "/login"; // Force full browser reload to clear cached layout states
-};
-
-  return NextResponse.redirect(loginUrl, { status: 302 });
+  return NextResponse.json({ success: true }, { headers: { "Cache-Control": "no-store" } });
 }

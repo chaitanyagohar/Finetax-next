@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -35,8 +35,10 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts",
-    "next.config.mjs"
-, "src/components/layout/Topbar.tsx", "src/app/audit-page"  ],
+    "next.config.mjs",
+    "src/components/layout/Topbar.tsx",
+    "src/app/audit-page"
+  ],
   "exclude": [
     "node_modules"
   ]

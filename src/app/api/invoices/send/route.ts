@@ -1,52 +1,55 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
 import React from "react";
-import { renderToStream } from "@react-pdf/renderer";
+import { renderToBuffer } from "@react-pdf/renderer";
 import InvoiceTemplate from "./InvoiceTemplate";
-import { Buffer } from "buffer";
+import {
+  ApiError,
+  assertSameOrigin,
+  errorResponse,
+  getAdminClient,
+  requireModule,
+  writeAuditLog,
+} from "@/lib/api/guard";
+import { checkRateLimit } from "@/lib/api/rateLimit";
+import { EMAIL_RE, escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 
-export async function POST(request: Request) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate the current user session
-    const cookieStore = await cookies();
-    const supabaseAuth = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
-    );
-    const { data: { user } } = await supabaseAuth.auth.getUser();
-    
-    // Smart name extraction: Checks metadata, then falls back to capitalizing the email prefix
-    let actorName = user?.user_metadata?.full_name || user?.user_metadata?.name;
-    
-    if (!actorName && user?.email) {
-      const emailPrefix = user.email.split('@')[0];
-      actorName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-    } else if (!actorName) {
-      actorName = "System API";
-    }
-    const userId = user?.id || null;
+    // 1. Security gates
+    assertSameOrigin(request);
+    const caller = await requireModule("invoices");
 
-    // 2. Initialize Admin Client for DB Operations
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ error: "Supabase environment variables missing." }, { status: 500 });
+    if (!checkRateLimit(`send-email:${caller.userId}`, 30, 10 * 60 * 1000)) {
+      throw new ApiError(429, "Too many emails sent in a short time. Please wait a few minutes.");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { invoiceId, recipientEmail } = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ApiError(400, "Invalid request body.");
+    }
+
+    const invoiceId = typeof body?.invoiceId === "string" ? body.invoiceId : "";
+    const recipientEmail = typeof body?.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
 
     if (!invoiceId || !recipientEmail) {
-      return NextResponse.json({ error: "Invoice ID and recipient email are required." }, { status: 400 });
+      throw new ApiError(400, "Invoice ID and recipient email are required.");
+    }
+    if (!UUID_RE.test(invoiceId)) {
+      throw new ApiError(400, "Invalid invoice.");
+    }
+    if (!EMAIL_RE.test(recipientEmail)) {
+      throw new ApiError(400, "Please enter a valid recipient email address.");
     }
 
-    // 3. Fetch Invoice & Firm Data
+    // 2. Fetch Invoice & Firm Data
+    const supabase = getAdminClient();
+
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .select("*, clients!client_id(name, email, address, gstin, pan)")
@@ -54,16 +57,17 @@ export async function POST(request: Request) {
       .single();
 
     if (invErr || !invoice) {
-      return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+      throw new ApiError(404, "Invoice not found.");
     }
 
     const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
 
     const clientName = invoice.clients?.name || invoice.organisation || "Valued Client";
     const invNum = invoice.invoice_number || "INV-000";
+    const firmName = firm?.firm_name || "Finetax Accounts";
 
-    // 4. Generate Pure PDF Binary Stream on Server
-    const pdfStream = await renderToStream(
+    // 3. Generate the PDF on the server
+    const pdfBuffer = await renderToBuffer(
       React.createElement(InvoiceTemplate, {
         invoice,
         client: invoice.clients,
@@ -71,81 +75,63 @@ export async function POST(request: Request) {
       }) as any
     );
 
-    // Convert Stream to Blob for FormData attachment
-    const chunks: any[] = [];
-    for await (const chunk of pdfStream) {
-      chunks.push(chunk);
-    }
-    const pdfBuffer = Buffer.concat(chunks);
-    const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" });
-
-    // 5. Draft Email
-    const host = request.headers.get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`;
-    
+    // 4. Draft Email (all dynamic values escaped)
     const emailSubject = `Tax Invoice ${invNum} from ${firm?.firm_name || "Finetax"}`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 24px;">
-        <p>Dear <strong>${clientName}</strong>,</p>
-        <p>Please find attached your formal tax invoice <strong>${invNum}</strong> for recent services.</p>
+        <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
+        <p>Please find attached your formal tax invoice <strong>${escapeHtml(invNum)}</strong> for recent services.</p>
         <p>You can securely view, download, or print the full document from the PDF attachment below.</p>
         <br/>
-        <p>Best regards,<br/><strong>${firm?.firm_name || "Finetax Accounts"}</strong></p>
+        <p>Best regards,<br/><strong>${escapeHtml(firmName)}</strong></p>
       </div>
     `;
+    const textBody =
+      `Dear ${clientName},\n\n` +
+      `Please find attached your formal tax invoice ${invNum} for recent services.\n\n` +
+      `Best regards,\n${firmName}`;
 
-    // 6. Attach and Dispatch
-    const formData = new FormData();
-    formData.append("to", recipientEmail);
-    formData.append("subject", emailSubject);
-    formData.append("body", htmlBody);
-    
-    // Attach the true PDF binary file
-    formData.append("files", pdfBlob, `${invNum.replace(/\//g, "-")}.pdf`);
-
-    const sendRes = await fetch(`${baseUrl}/api/send-email`, {
-      method: "POST",
-      body: formData,
+    // 5. Send directly via the shared mailer (no internal HTTP hop)
+    await sendFirmEmail({
+      to: recipientEmail,
+      subject: emailSubject,
+      html: htmlBody,
+      text: textBody,
+      attachments: [
+        {
+          filename: `${invNum.replace(/\//g, "-")}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
     });
 
-    const sendData = await sendRes.json();
-    if (!sendRes.ok) throw new Error(sendData.error || "Failed to send email");
-
-    // 7. Update DB Status
-    const now = new Date().toISOString();
+    // 6. Update DB Status
     const { error: updateError } = await supabase
       .from("invoices")
-      .update({ 
-        email_sent_at: now,
-      })
+      .update({ email_sent_at: new Date().toISOString() })
       .eq("id", invoiceId);
 
     if (updateError) {
-      console.error("Supabase Update Error:", updateError);
-      throw new Error(`Database update failed: ${updateError.message}`);
+      console.error("Supabase Update Error:", updateError.message);
+      throw new ApiError(500, "The email was sent, but the invoice status could not be updated.");
     }
 
-    // 8. Log to Audit Table
-    try {
-      await supabase.from("audit_logs").insert({
-        action: "SEND_INVOICE_EMAIL",
-        entity: "INVOICES",
-        entity_id: invoiceId,
-        user_id: userId,
-        metadata: { 
-          recipientEmail, 
-          invoiceNumber: invNum, 
-          actor_name: actorName 
-        }
-      });
-    } catch (e) {
-      console.error("Audit Log Error:", e);
-    }
+    // 7. Audit trail
+    await writeAuditLog({
+      action: "SEND_INVOICE_EMAIL",
+      entity: "INVOICES",
+      entity_id: invoiceId,
+      metadata: {
+        recipientEmail,
+        invoiceNumber: invNum,
+        actor_name: caller.name,
+        user_id: caller.userId,
+      },
+    });
 
     return NextResponse.json({ success: true, message: "Invoice email sent successfully with PDF attachment!" });
-  } catch (error: any) {
-    console.error("Invoice Send Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to send invoice email" }, { status: 500 });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

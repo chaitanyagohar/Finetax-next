@@ -1,75 +1,98 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
-import Topbar from "@/components/layout/Topbar";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import AppShell from "@/components/layout/AppShell";
+import SignOutButton from "@/components/layout/SignOutButton";
+import type { SessionUser } from "@/components/layout/navConfig";
+import { createClient } from "@/lib/supabase/server";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Finetax Manager",
+  title: {
+    default: "Finetax Manager",
+    template: "%s · Finetax Manager",
+  },
   description: "CA Firm Finetax Management System",
+  robots: { index: false, follow: false }, // Internal system — never index
 };
 
-// Define the shape of the user prop
-interface UserProfile {
-  name?: string;
-  role?: string;
-  [key: string]: any;
-}
+export const viewport: Viewport = {
+  themeColor: "#10233f",
+};
+
+const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
-  );
+  const supabase = await createClient();
 
+  // getUser() validates the session with Supabase Auth (safe for authorization)
   const { data: { user } } = await supabase.auth.getUser();
 
   // If no user is logged in, ONLY render the login page children
   if (!user) {
     return (
-      <html lang="en">
-        <body className="bg-background text-text-main antialiased m-0 p-0">
-          {children}
+      <html lang="en" className={inter.variable}>
+        <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>
+      </html>
+    );
+  }
+
+  // Fetch profile once on the server and share it with the whole client shell
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  // Block deactivated accounts
+  if (profile && profile.is_active === false) {
+    return (
+      <html lang="en" className={inter.variable}>
+        <body className="m-0 bg-background p-0 text-text-main antialiased">
+          <div className="flex min-h-screen items-center justify-center p-6">
+            <div className="w-full max-w-md rounded-xl border border-border bg-surface p-8 text-center shadow-lg">
+              <h1 className="text-lg font-bold text-navy">Account Deactivated</h1>
+              <p className="mt-2 text-sm text-text-muted">
+                Your access to Finetax Manager has been disabled. Please contact your firm administrator.
+              </p>
+              <div className="mt-6 flex justify-center">
+                <SignOutButton />
+              </div>
+            </div>
+          </div>
         </body>
       </html>
     );
   }
 
-  // If logged in, fetch their specific role/profile
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, role")
-    .eq("id", user.id)
-    .single();
+  const role: string = profile?.role || "staff";
+  const isAdmin = role === "admin";
 
-  const activeUser: UserProfile = profile || { name: "Staff Member", role: "staff" };
+  // Only pass the minimum required fields to the browser
+  const sessionUser: SessionUser = {
+    id: user.id,
+    name: profile?.name || user.email?.split("@")[0] || "Staff Member",
+    email: profile?.email || user.email || "",
+    role,
+    designation: profile?.designation ?? null,
+    isAdmin,
+    isReviewer: isAdmin || role === "reviewer" || !!profile?.is_reviewer,
+    moduleAccess: Array.isArray(profile?.module_access) ? profile.module_access : DEFAULT_STAFF_MODULES,
+  };
 
-return (
-    <html lang="en">
-      <body className="bg-background text-text-main antialiased m-0 p-0">
-        <div className="flex h-screen w-screen overflow-hidden bg-background">
-          {/* Render layout components safely */}
-          <Sidebar />
-          
-          <div className="flex-1 flex flex-col overflow-hidden relative">
-            {/* <Topbar /> */}
-            <main className="flex-1 overflow-auto p-6">{children}</main>
-          </div>
-        </div>
+  return (
+    <html lang="en" className={inter.variable}>
+      <body className="m-0 bg-background p-0 text-text-main antialiased">
+        <AppShell user={sessionUser}>{children}</AppShell>
       </body>
     </html>
   );
