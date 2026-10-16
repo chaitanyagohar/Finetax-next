@@ -28,6 +28,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
+import ImportantNotifications from "@/components/notifications/ImportantNotifications";
+import AnnouncementsPanel from "@/components/notifications/AnnouncementsPanel";
 import Link from "next/link";
 
 /* =========================================================
@@ -655,6 +657,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <ImportantNotifications />
       {/* ================= HEADER ================= */}
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div className="min-w-0">
@@ -731,6 +734,8 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      <AnnouncementsPanel isAdmin={isAdmin} />
 
       {isAdmin ? (
         /* ================= ADMIN EAGLE'S EYE VIEW ================= */

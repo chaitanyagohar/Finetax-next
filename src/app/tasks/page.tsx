@@ -23,6 +23,7 @@ import {
   Timer,
   CheckSquare,
   ListChecks,
+  Tags,
   Edit2,
   GitMerge,
 } from "lucide-react";
@@ -32,6 +33,8 @@ import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 type TaskRow = Omit<Task, "category"> & Record<string, any>;
@@ -155,6 +158,14 @@ export default function TasksPage() {
   const isReviewerUser = !!currentUser?.isReviewer;
   const [supabase] = useState(() => createClient());
 
+  // Editable categories (replaces the fixed list inside this page)
+  const { categories: categoryRows, activeNames: CATEGORIES, colorOf, reload: reloadCategories } = useTaskCategories();
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+
+  // Notifications link straight to a task: /tasks?task=<id>
+  const router = useRouter();
+  const taskParam = useSearchParams().get("task");
+
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [team, setTeam] = useState<ProfileRow[]>([]);
@@ -233,6 +244,13 @@ export default function TasksPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!taskParam || loading) return;
+    const target = tasks.find((x) => x.id === taskParam);
+    if (target) openModal(target);
+    router.replace("/tasks");
+  }, [taskParam, loading, tasks]);
 
   function showToast(type: "success" | "error", message: string) {
     setToast({ type, message });
@@ -883,6 +901,15 @@ export default function TasksPage() {
           {isAdmin && (
             <button
               type="button"
+              onClick={() => setCategoriesOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
+            >
+              <Tags className="h-4 w-4 text-navy" /> Categories
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
               onClick={() => openModal()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
             >
@@ -1132,7 +1159,9 @@ export default function TasksPage() {
                           )}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap">{t.category || "—"}</td>
+                      <td className="whitespace-nowrap">
+                        <CategoryBadge name={t.category} colorOf={colorOf} />
+                      </td>
                       <td>
                         <ClientCell t={t} />
                       </td>
@@ -1741,6 +1770,18 @@ export default function TasksPage() {
             )}
           </div>
         </Modal>
+      )}
+
+      {categoriesOpen && (
+        <TaskCategoriesManager
+          categories={categoryRows}
+          usageTasks={tasks.map((t) => ({ category: t.category }))}
+          onClose={() => setCategoriesOpen(false)}
+          onChanged={() => {
+            reloadCategories();
+            loadData(false);
+          }}
+        />
       )}
 
       {confirmDelete && editingTask && (
