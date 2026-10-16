@@ -30,6 +30,7 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import ImportantNotifications from "@/components/notifications/ImportantNotifications";
 import AnnouncementsPanel from "@/components/notifications/AnnouncementsPanel";
+import { clientLabel } from "@/components/ui/ClientPicker";
 import Link from "next/link";
 
 /* =========================================================
@@ -385,7 +386,7 @@ export default function DashboardPage() {
 
       const [taskRes, clientRes, teamRes, eventRes] = await Promise.all([
         taskQuery,
-        supabase.from("clients").select("id, name, status"),
+        supabase.from("clients").select("id, name, organization_name, status"),
         supabase.from("profiles").select("id, name, role, designation, is_active, is_reviewer").order("name", { ascending: true }),
         supabase.from("compliance_events").select("id, title, category, due_date").gte("due_date", today).lte("due_date", horizon),
       ]);
@@ -430,7 +431,7 @@ export default function DashboardPage() {
 
   const clientName = useMemo(() => {
     const map: Record<string, string> = {};
-    clients.forEach((c) => (map[c.id] = c.name));
+    clients.forEach((c) => (map[c.id] = clientLabel(c)));
     return (id?: string) => (id ? map[id] || "" : "");
   }, [clients]);
 
@@ -814,7 +815,14 @@ export default function DashboardPage() {
               href="/quotations"
               sub={`${openQuotes.length} live quote${openQuotes.length === 1 ? "" : "s"} awaiting decision`}
             />
-            <KpiCard label="Active Clients" value={activeClients.length} icon={Users} tone="navy" href="/clients" sub={`${clients.length} in client master`} />
+            <KpiCard
+              label="Active Clients"
+              value={activeClients.length}
+              icon={Users}
+              tone="navy"
+              href="/clients"
+              sub={`${clients.filter((c) => c.status !== "Merged").length} in client master`}
+            />
             <KpiCard
               label="Client Follow-ups"
               value={discussionFollowUps.length}

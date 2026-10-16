@@ -25,6 +25,9 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
+import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 const LOCK_DAYS = 7; // must match v_lock_days in the database rule
@@ -91,6 +94,8 @@ export default function TimeTrackingPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [logs, setLogs] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -162,7 +167,7 @@ export default function TimeTrackingPage() {
 
   async function loadReferenceData() {
     const [cRes, tRes, pRes] = await Promise.all([
-      supabase.from("clients").select("id, name, organization_name, status").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status").order("name", { ascending: true }),
       supabase.from("tasks").select("id, title, client_id, stage, assigned_to, reviewer_id").order("title", { ascending: true }),
       supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
@@ -423,7 +428,7 @@ export default function TimeTrackingPage() {
     const map: Record<string, { name: string; hours: number; billable: number }> = {};
     filteredLogs.forEach((l) => {
       const key = l.client_id || "internal";
-      if (!map[key]) map[key] = { name: clientById[l.client_id]?.name || "Internal / No client", hours: 0, billable: 0 };
+      if (!map[key]) map[key] = { name: clientLabel(clientById[l.client_id]) || "Internal / No client", hours: 0, billable: 0 };
       map[key].hours += Number(l.hours || 0);
       if (l.is_billable !== false) map[key].billable += Number(l.hours || 0);
     });
@@ -462,7 +467,7 @@ export default function TimeTrackingPage() {
       [
         formatDate(l.log_date),
         nameOf(l.user_id),
-        clientById[l.client_id]?.name || "",
+        clientLabel(clientById[l.client_id]),
         taskById[l.task_id]?.title || "",
         l.description,
         Number(l.hours || 0).toFixed(2),
@@ -524,14 +529,7 @@ export default function TimeTrackingPage() {
               <option key={t.id} value={t.id}>{t.title}</option>
             ))}
           </select>
-          <select value={timerClientId} onChange={(e) => setTimerClientId(e.target.value)} disabled={!!myTimer} className={`${inputClass} md:col-span-3`}>
-            <option value="">— Client —</option>
-            {clients
-              .filter((c) => c.status !== "Inactive" || c.id === timerClientId)
-              .map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-          </select>
+          <ClientPicker clients={clients as any} value={timerClientId} onChange={setTimerClientId} disabled={!!myTimer} noneLabel="No client" className="md:col-span-3" />
           {!myTimer ? (
             <button
               type="button"
@@ -789,8 +787,8 @@ export default function TimeTrackingPage() {
             )}
             <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[180px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {sortByLabel(clients.filter((c) => c.status !== "Merged")).map((c) => (
+                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
               ))}
             </select>
             <select value={filterBillable} onChange={(e) => setFilterBillable(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
@@ -836,7 +834,7 @@ export default function TimeTrackingPage() {
                     <tr key={log.id} className="transition hover:bg-surface-alt">
                       <td className="whitespace-nowrap font-medium">{formatDate(log.log_date)}</td>
                       {isAdmin && <td className="whitespace-nowrap font-semibold text-navy">{nameOf(log.user_id) || "Staff"}</td>}
-                      <td>{clientById[log.client_id]?.name || <span className="text-text-muted">Internal</span>}</td>
+                      <td>{clientLabel(clientById[log.client_id]) || <span className="text-text-muted">Internal</span>}</td>
                       <td className="max-w-md">
                         <p className="font-medium text-text-main">{log.description}</p>
                         {taskById[log.task_id]?.title && <p className="text-[10px] text-text-muted">Task: {taskById[log.task_id].title}</p>}
@@ -918,14 +916,7 @@ export default function TimeTrackingPage() {
 
             <div>
               <label className={labelClass}>Client</label>
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={inputClass}>
-                <option value="">— Internal / No client —</option>
-                {clients
-                  .filter((c) => c.status !== "Inactive" || c.id === clientId)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-              </select>
+              <ClientPicker clients={clients as any} value={clientId} onChange={setClientId} noneLabel="Internal / No client" />
             </div>
 
             <div>

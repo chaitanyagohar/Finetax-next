@@ -24,6 +24,10 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 
 const CATEGORIES = ["GST", "Income Tax", "TDS", "ROC", "Audit", "Accounting", "Payroll", "Other"];
@@ -47,6 +51,8 @@ function addDays(iso: string, days: number): string {
 
 export default function PackagesPage() {
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [packages, setPackages] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
@@ -94,7 +100,7 @@ export default function PackagesPage() {
     const [pRes, sRes, cRes, tRes] = await Promise.all([
       supabase.from("service_packages").select("*, package_services(*)").order("created_at", { ascending: false }),
       supabase.from("client_packages").select("*").order("start_date", { ascending: false }),
-      supabase.from("clients").select("id, name, organization_name, assigned_to, status").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, assigned_to, status").order("name", { ascending: true }),
       supabase.from("profiles").select("id, name, role, is_active, is_reviewer").order("name", { ascending: true }),
     ]);
     if (pRes.error) showToast("error", "Could not load packages.");
@@ -280,7 +286,7 @@ export default function PackagesPage() {
     });
     showToast(
       "success",
-      `${selectedClient?.name} onboarded to ${selectedPkg.name}. ${result?.tasks_created ?? 0} tasks created${
+      `${clientLabel(selectedClient)} onboarded to ${selectedPkg.name}. ${result?.tasks_created ?? 0} tasks created${
         result?.unassigned ? `, ${result.unassigned} unassigned (client has no relationship manager)` : ""
       }.`
     );
@@ -433,7 +439,7 @@ export default function PackagesPage() {
                       ) : (
                         subs.map((s) => (
                           <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-1.5 text-[11px]">
-                            <span className="font-medium text-text-main">{clientById[s.client_id]?.name || "Client"}</span>
+                            <span className="font-medium text-text-main">{clientLabel(clientById[s.client_id]) || "Client"}</span>
                             <span className="flex items-center gap-2 text-text-muted">
                               since {formatDate(s.start_date)}
                               <button type="button" onClick={() => setConfirm({ kind: "end", target: s })} className="rounded px-1.5 py-0.5 font-semibold text-rose-600 transition hover:bg-rose-50">
@@ -620,17 +626,10 @@ export default function PackagesPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="sm:col-span-2">
                 <label className={labelClass}>Client *</label>
-                <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className={inputClass}>
-                  <option value="">— Choose client —</option>
-                  {clients
-                    .filter((c) => c.status !== "Inactive")
-                    .map((c) => (
-                      <option key={c.id} value={c.id} disabled={subscribedClientIds.has(c.id)}>
-                        {c.name}
-                        {subscribedClientIds.has(c.id) ? " (already subscribed)" : ""}
-                      </option>
-                    ))}
-                </select>
+                <ClientPicker clients={clients.filter((c) => !subscribedClientIds.has(c.id)) as any} value={selectedClientId} onChange={setSelectedClientId} />
+                {subscribedClientIds.size > 0 && (
+                  <p className="mt-1 text-[10px] text-text-muted">{subscribedClientIds.size} client(s) already on this package are hidden.</p>
+                )}
                 {selectedClient && (
                   <p className="mt-1 text-[10px] text-text-muted">Relationship manager: {teamName(selectedClient.assigned_to) || "none (tasks without a default assignee will be unassigned)"}</p>
                 )}

@@ -27,6 +27,8 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { formatDate, localISODate } from "@/lib/format";
 
 const CATEGORIES = ["GST", "Income Tax", "TDS", "ROC", "Audit", "Accounting", "Payroll", "Other"];
@@ -74,6 +76,8 @@ export default function ComplianceCalendarPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const today = localISODate();
   const [cursor, setCursor] = useState(() => {
@@ -143,7 +147,7 @@ export default function ComplianceCalendarPage() {
 
   async function loadReference() {
     const [cRes, pRes] = await Promise.all([
-      supabase.from("clients").select("id, name, gstin, status, assigned_to").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status, assigned_to").order("name", { ascending: true }),
       supabase.from("profiles").select("id, name, role, is_active, is_reviewer").order("name", { ascending: true }),
     ]);
     setClients(cRes.data || []);
@@ -170,7 +174,7 @@ export default function ComplianceCalendarPage() {
     setLoading(false);
   }
 
-  const clientName = (id?: string) => clients.find((c) => c.id === id)?.name || "";
+  const clientName = (id?: string) => clientLabel(clients.find((c) => c.id === id));
   const teamName = (id?: string) => team.find((t) => t.id === id)?.name || "";
   const activeTeam = team.filter((t) => t.is_active !== false);
   const reviewers = activeTeam.filter((t) => t.role === "admin" || t.role === "reviewer" || t.is_reviewer);
@@ -301,8 +305,10 @@ export default function ComplianceCalendarPage() {
     setGenError("");
   }
 
-  const activeClients = clients.filter((c) => c.status !== "Inactive");
-  const genVisibleClients = activeClients.filter((c) => !genSearch || c.name.toLowerCase().includes(genSearch.toLowerCase()));
+  const activeClients = sortByLabel(clients.filter((c) => c.status !== "Inactive" && c.status !== "Merged"));
+  const genVisibleClients = activeClients.filter(
+    (c) => !genSearch || `${clientLabel(c)} ${c.gstin || ""} ${c.pan || ""}`.toLowerCase().includes(genSearch.toLowerCase())
+  );
 
   function toggleGenClient(id: string) {
     setGenClients((prev) => {
@@ -860,7 +866,7 @@ export default function ComplianceCalendarPage() {
                   genVisibleClients.map((c) => (
                     <label key={c.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 transition hover:bg-surface-alt">
                       <input type="checkbox" checked={genClients.has(c.id)} onChange={() => toggleGenClient(c.id)} className="h-4 w-4 accent-navy" />
-                      <span className="flex-1 font-medium text-text-main">{c.name}</span>
+                      <span className="flex-1 font-medium text-text-main">{clientLabel(c)}</span>
                       {c.gstin && <span className="font-mono text-[10px] text-text-muted">{c.gstin}</span>}
                       <span className="text-[10px] text-text-muted">{teamName(c.assigned_to) || "No RM"}</span>
                     </label>

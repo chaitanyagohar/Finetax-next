@@ -37,6 +37,9 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import PasswordInput from "@/components/ui/PasswordInput";
 import { formatDate, localISODate } from "@/lib/format";
 
@@ -83,6 +86,8 @@ export default function UnifiedInboxPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -176,7 +181,10 @@ export default function UnifiedInboxPage() {
   }
 
   async function loadClients() {
-    const { data } = await supabase.from("clients").select("id, name, email").order("name", { ascending: true });
+    const { data } = await supabase
+      .from("clients")
+      .select("id, name, organization_name, email, phone, pan, gstin, status")
+      .order("name", { ascending: true });
     setClients(data || []);
   }
 
@@ -314,7 +322,7 @@ export default function UnifiedInboxPage() {
     if (error) return showToast("error", "Could not link this email.");
     setMessages((list) => list.map((m) => (m.id === msg.id ? { ...m, client_id: clientId || null } : m)));
     setSelectedMessage((s: any) => (s?.id === msg.id ? { ...s, client_id: clientId || null } : s));
-    showToast("success", clientId ? `Linked to ${clientById[clientId]?.name}.` : "Client link removed.");
+    showToast("success", clientId ? `Linked to ${clientLabel(clientById[clientId])}.` : "Client link removed.");
   }
 
   async function logAsDiscussion(msg: any) {
@@ -888,7 +896,7 @@ export default function UnifiedInboxPage() {
                             <div className="mt-0.5 flex items-center gap-1.5">
                               {client && (
                                 <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-indigo-50 px-1.5 text-[9px] font-semibold text-indigo-700">
-                                  <Building2 className="h-2.5 w-2.5" /> {client.name}
+                                  <Building2 className="h-2.5 w-2.5" /> {client.organization_name || client.name}
                                 </span>
                               )}
                               <span className="truncate text-[11px] text-text-muted">{String(msg.body_text || "").replace(/\s+/g, " ").slice(0, 90)}</span>
@@ -966,16 +974,14 @@ export default function UnifiedInboxPage() {
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-1.5 text-xs">
                         <Building2 className="h-3.5 w-3.5 text-text-muted" />
-                        <select
+                        <ClientPicker
+                          clients={clients as any}
                           value={selectedMessage.client_id || ""}
-                          onChange={(e) => linkClient(selectedMessage, e.target.value)}
-                          className="max-w-[220px] rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-navy"
-                        >
-                          <option value="">Not linked to a client</option>
-                          {clients.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                          onChange={(id) => linkClient(selectedMessage, id)}
+                          noneLabel="Not linked to a client"
+                          includeInactive
+                          className="w-72"
+                        />
                       </div>
                       {selectedMessage.client_id && (
                         <button
@@ -1158,7 +1164,7 @@ export default function UnifiedInboxPage() {
                 {clients
                   .filter((c) => c.email)
                   .map((c) => (
-                    <option key={c.id} value={c.email}>{c.name}</option>
+                    <option key={c.id} value={c.email}>{clientLabel(c)}</option>
                   ))}
               </datalist>
             </div>

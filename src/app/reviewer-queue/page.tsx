@@ -78,6 +78,8 @@ export default function ReviewerQueuePage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [tasks, setTasks] = useState<any[]>([]);

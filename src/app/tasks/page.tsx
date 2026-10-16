@@ -32,6 +32,8 @@ import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
 import { useRouter, useSearchParams } from "next/navigation";

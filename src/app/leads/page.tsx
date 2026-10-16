@@ -30,6 +30,8 @@ import { Lead, Profile, Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/lib/format";
 
 type LeadRow = Lead & Record<string, any>;
@@ -129,6 +131,8 @@ export default function LeadsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [team, setTeam] = useState<ProfileRow[]>([]);

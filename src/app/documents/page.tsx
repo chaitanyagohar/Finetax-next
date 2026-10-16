@@ -29,6 +29,9 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import { useTaskCategories } from "@/components/tasks/TaskCategories";
+import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { formatDate, localISODate } from "@/lib/format";
 
 const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
@@ -67,6 +70,8 @@ export default function DocumentsPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
+  // Editable categories (replaces the fixed list inside this page)
+  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -118,7 +123,7 @@ export default function DocumentsPage() {
     setLoading(true);
     const [dRes, cRes, tRes, pRes] = await Promise.all([
       supabase.from("documents").select("*").order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, email, status").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, status").order("name", { ascending: true }),
       supabase.from("tasks").select("id, title, client_id, stage").neq("stage", "Approved").order("due_date", { ascending: true }),
       supabase.from("profiles").select("id, name").order("name", { ascending: true }),
     ]);
@@ -157,7 +162,7 @@ export default function DocumentsPage() {
       if (uploaderFilter === "mine" && d.uploaded_by !== me) return false;
       if (uploaderFilter !== "all" && uploaderFilter !== "mine" && d.uploaded_by !== uploaderFilter) return false;
       if (!q) return true;
-      return [d.title, d.file_name, d.category, d.description, clientById[d.client_id]?.name]
+      return [d.title, d.file_name, d.category, d.description, clientById[d.client_id]?.name, clientById[d.client_id]?.organization_name]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(q));
     });
@@ -489,8 +494,8 @@ export default function DocumentsPage() {
             <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="max-w-[200px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="all">All clients</option>
               <option value="internal">Internal (no client)</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {sortByLabel(clients.filter((c) => c.status !== "Merged")).map((c) => (
+                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
               ))}
             </select>
             <select value={uploaderFilter} onChange={(e) => setUploaderFilter(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
@@ -547,7 +552,16 @@ export default function DocumentsPage() {
                       <td>
                         <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-semibold text-navy">{doc.category || "Other"}</span>
                       </td>
-                      <td className="font-medium">{clientById[doc.client_id]?.name || <span className="text-text-muted">Internal</span>}</td>
+                      <td>
+                        {clientById[doc.client_id] ? (
+                          <>
+                            <p className="font-medium">{clientById[doc.client_id].organization_name || clientById[doc.client_id].name}</p>
+                            {clientById[doc.client_id].organization_name && <p className="text-[10px] text-text-muted">{clientById[doc.client_id].name}</p>}
+                          </>
+                        ) : (
+                          <span className="text-text-muted">Internal</span>
+                        )}
+                      </td>
                       <td className="text-text-muted">{teamName(doc.uploaded_by) || "—"}</td>
                       <td className="whitespace-nowrap text-right font-mono text-[11px] text-text-muted">{formatBytes(sizeOf(doc)) || doc.file_size || "—"}</td>
                       <td className="whitespace-nowrap text-text-muted">{doc.created_at ? formatDate(doc.created_at) : "—"}</td>
@@ -668,21 +682,15 @@ export default function DocumentsPage() {
               </div>
               <div>
                 <label className={labelClass}>Client</label>
-                <select
+                <ClientPicker
+                  clients={clients as any}
                   value={clientId}
-                  onChange={(e) => {
-                    setClientId(e.target.value);
+                  onChange={(id) => {
+                    setClientId(id);
                     setTaskId("");
                   }}
-                  className={inputClass}
-                >
-                  <option value="">Internal / none</option>
-                  {clients
-                    .filter((c) => c.status !== "Inactive" || c.id === clientId)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </select>
+                  noneLabel="Internal / none"
+                />
               </div>
             </div>
 
