@@ -27,6 +27,7 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 type ClientRow = Client & Record<string, any>;
@@ -468,9 +469,12 @@ export default function ClientDiscussionsPage() {
               className="max-w-[200px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy"
             >
               <option value="">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+                            {[...clients]
+                .filter((c) => c.status !== "Merged")
+                .sort((a, b) => clientLabel(a).localeCompare(clientLabel(b)))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{clientLabel(c)}</option>
+                ))}
             </select>
             <select value={handlerFilter} onChange={(e) => setHandlerFilter(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="">Everyone</option>
@@ -531,8 +535,8 @@ export default function ClientDiscussionsPage() {
                     <tr key={d.id} className="cursor-pointer transition hover:bg-surface-alt" onClick={() => openModal(d)}>
                       <td className="whitespace-nowrap font-medium text-text-main">{formatDate(d.date)}</td>
                       <td>
-                        <p className="font-semibold text-navy">{c?.name || "—"}</p>
-                        {c?.organization_name && <p className="text-[10px] text-text-muted">{c.organization_name}</p>}
+                        <p className="font-semibold text-navy">{c?.organization_name || c?.name || "—"}</p>
+                        {c?.organization_name && <p className="text-[10px] text-text-muted">{c.name}</p>}
                       </td>
                       <td className="max-w-md">
                         <div className="flex items-start gap-1.5">
@@ -631,16 +635,7 @@ export default function ClientDiscussionsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Client *</label>
-                  <select required value={clientId} onChange={(e) => setClientId(e.target.value)} className={inputClass}>
-                    <option value="">— Select Client —</option>
-                    {clients
-                      .filter((c) => c.status !== "Inactive" || String(c.id) === String(clientId))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.organization_name ? `(${c.organization_name})` : ""}
-                        </option>
-                      ))}
-                  </select>
+                  <ClientPicker clients={clients as any} value={clientId} onChange={setClientId} />
                 </div>
                 <div>
                   <label className={labelClass}>Date *</label>

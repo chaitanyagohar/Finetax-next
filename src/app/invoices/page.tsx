@@ -26,6 +26,7 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 
 interface LineItem {
@@ -729,8 +730,8 @@ export default function InvoicesPage() {
                       <td className="whitespace-nowrap font-mono font-bold text-navy">{i.invoice_number || "—"}</td>
                       <td className="whitespace-nowrap">{formatDate(issueOf(i))}</td>
                       <td>
-                        <p className="font-medium text-text-main">{clientNameOf(i)}</p>
-                        {i.organisation && <p className="text-[10px] text-text-muted">{i.organisation}</p>}
+                        <p className="font-medium text-text-main">{i.organisation || clientNameOf(i)}</p>
+                        {i.organisation && i.organisation !== clientNameOf(i) && <p className="text-[10px] text-text-muted">{clientNameOf(i)}</p>}
                       </td>
                       <td className={`whitespace-nowrap ${overdue ? "font-semibold text-rose-600" : ""}`}>
                         {dueOf(i) ? formatDate(dueOf(i)) : "—"}
@@ -896,14 +897,7 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Client *</label>
-                <select required disabled={isLocked} value={selectedClientId} onChange={(e) => handleClientChange(e.target.value)} className={inputClass}>
-                  <option value="">— Select Client —</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.organization_name ? `(${c.organization_name})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <ClientPicker clients={clients as any} value={selectedClientId} onChange={handleClientChange} disabled={isLocked} />
               </div>
 
               <div>

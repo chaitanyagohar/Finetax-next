@@ -25,6 +25,7 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 
 type ClientRow = Client & Record<string, any>;
@@ -714,9 +715,9 @@ export default function QuotationsPage() {
                       <td className="whitespace-nowrap font-bold text-navy">{getQuoteNumber(q)}</td>
                       <td className="whitespace-nowrap">{formatDate(getIsoDate(q.date) || q.created_at)}</td>
                       <td>
-                        <p className="font-medium text-text-main">{recipientOf(q)}</p>
+                        <p className="font-medium text-text-main">{q.organisation || recipientOf(q)}</p>
                         <p className="text-[10px] text-text-muted">
-                          {q.organisation && q.organisation !== recipientOf(q) ? `${q.organisation} · ` : ""}
+                          {q.organisation && q.organisation !== recipientOf(q) ? `${recipientOf(q)} · ` : ""}
                           {q.client_id ? "Client" : q.lead_id ? "Lead" : ""}
                         </p>
                       </td>
@@ -894,14 +895,7 @@ export default function QuotationsPage() {
                 </div>
 
                 {targetType === "client" ? (
-                  <select required value={clientId} onChange={(e) => handleClientChange(e.target.value)} className={inputClass}>
-                    <option value="">— Select Client —</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.organization_name ? `(${c.organization_name})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <ClientPicker clients={clients as any} value={clientId} onChange={handleClientChange} />
                 ) : (
                   <select required value={leadId} onChange={(e) => handleLeadChange(e.target.value)} className={inputClass}>
                     <option value="">— Select Lead —</option>

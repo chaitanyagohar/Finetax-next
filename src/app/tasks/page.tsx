@@ -22,23 +22,38 @@ import {
   RotateCcw,
   Timer,
   CheckSquare,
+  ListChecks,
+  Edit2,
+  GitMerge,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 type TaskRow = Omit<Task, "category"> & Record<string, any>;
 type ClientRow = Client & Record<string, any>;
 type ProfileRow = Profile & Record<string, any>;
+type TaskType = {
+  id: string;
+  name: string;
+  category: string;
+  default_recurrence: string;
+  statutory_day: number | null;
+  statutory_month_offset: number;
+  internal_buffer_days: number;
+  is_active: boolean;
+};
 
 const BASE_CATEGORIES: TaskCategory[] = ["GST", "Income Tax", "Audit", "ROC", "Other"];
 const CATEGORIES: string[] = ["GST", "Income Tax", "TDS", "Audit", "ROC", "Accounting", "Payroll", ...BASE_CATEGORIES.filter((c) => c === "Other")];
 const STAGES: TaskStage[] = ["Assigned", "In Progress", "Submitted for Review", "Changes Required", "Approved"];
 const RECURRENCE_OPTIONS = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
 const PRIORITIES = ["Low", "Medium", "High"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const STAGE_STYLES: Record<string, string> = {
   Assigned: "bg-slate-100 text-slate-700 border-slate-200",
@@ -65,6 +80,14 @@ const labelClass = "mb-1 block text-[11px] font-semibold uppercase tracking-wide
 function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((Date.parse(toIso.slice(0, 10)) - Date.parse(fromIso.slice(0, 10))) / 86400000);
 }
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return localISODate(new Date(y, m - 1, d + days));
+}
+function clampDate(y: number, monthIndex: number, day: number): string {
+  const last = new Date(y, monthIndex + 1, 0).getDate();
+  return localISODate(new Date(y, monthIndex, Math.min(day, last)));
+}
 function formatMinutes(mins: number): string {
   const m = Math.max(0, Math.round(mins || 0));
   const h = Math.floor(m / 60);
@@ -76,6 +99,51 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return `${formatDate(localISODate(d))} ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+}
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+function parsePeriodMonth(p: string): { y: number; m: number } | null {
+  const mm = String(p || "").trim().match(/^([A-Za-z]{3}) (\d{4})$/);
+  if (!mm) return null;
+  const idx = MONTHS.findIndex((x) => x.toLowerCase() === mm[1].toLowerCase());
+  return idx < 0 ? null : { y: Number(mm[2]), m: idx };
+}
+/** Statutory + internal deadline from a task type's rule. */
+function deadlinesFor(t: TaskType, period: string, today: string): { statutory: string; internal: string } | null {
+  if (!t.statutory_day) return null;
+  const pm = parsePeriodMonth(period);
+  let statutory: string;
+  if (pm) {
+    statutory = clampDate(pm.y, pm.m + (t.statutory_month_offset || 0), t.statutory_day);
+  } else {
+    const [y, m] = today.split("-").map(Number);
+    statutory = clampDate(y, m - 1, t.statutory_day);
+    if (statutory < today) statutory = clampDate(y, m, t.statutory_day);
+  }
+  let internal = addDays(statutory, -(t.internal_buffer_days ?? 3));
+  if (internal < today && statutory >= today) internal = today;
+  return { statutory, internal };
+}
+function ruleText(t: TaskType): string {
+  if (!t.statutory_day) return "—";
+  const off = t.statutory_month_offset || 0;
+  const when = off === 0 ? "same month" : off === 1 ? "next month" : `${off} months later`;
+  return `${ordinal(t.statutory_day)} of ${when}`;
+}
+function periodSuggestions(today: string): string[] {
+  const [y, m] = today.split("-").map(Number);
+  const months = [-2, -1, 0, 1].map((o) => {
+    const d = new Date(y, m - 1 + o, 1);
+    return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  });
+  const fy = m >= 4 ? y : y - 1;
+  const fyLabel = (s: number) => `FY ${s}-${String((s + 1) % 100).padStart(2, "0")}`;
+  const q = Math.floor(((m - 4 + 12) % 12) / 3) + 1;
+  const prevQ = q === 1 ? `Q4 ${fyLabel(fy - 1)}` : `Q${q - 1} ${fyLabel(fy)}`;
+  return [...months, `Q${q} ${fyLabel(fy)}`, prevQ, fyLabel(fy), fyLabel(fy - 1)];
 }
 
 /* ---------------- Page ---------------- */
@@ -90,6 +158,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [team, setTeam] = useState<ProfileRow[]>([]);
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [loading, setLoading] = useState(true);
 
   // View & Filters
@@ -116,7 +185,9 @@ export default function TasksPage() {
   const [loadingTimeline, setLoadingTimeline] = useState(false);
 
   // Form State
+  const [taskTypeId, setTaskTypeId] = useState("");
   const [title, setTitle] = useState("");
+  const [period, setPeriod] = useState("");
   const [clientId, setClientId] = useState("");
   const [organisation, setOrganisation] = useState("");
   const [category, setCategory] = useState<string>("Other");
@@ -140,7 +211,24 @@ export default function TasksPage() {
   const [logBillable, setLogBillable] = useState(true);
   const [logSaving, setLogSaving] = useState(false);
 
+  // Task list manager (admin)
+  const [typesOpen, setTypesOpen] = useState(false);
+  const [typeEditingId, setTypeEditingId] = useState<string | null>(null);
+  const [tName, setTName] = useState("");
+  const [tCategory, setTCategory] = useState("GST");
+  const [tRecurrence, setTRecurrence] = useState("Monthly");
+  const [tDay, setTDay] = useState("");
+  const [tOffset, setTOffset] = useState(1);
+  const [tBuffer, setTBuffer] = useState(3);
+  const [typeSaving, setTypeSaving] = useState(false);
+  const [typeError, setTypeError] = useState("");
+  const [typeSearch, setTypeSearch] = useState("");
+  const [showInactiveTypes, setShowInactiveTypes] = useState(false);
+  const [mergeFrom, setMergeFrom] = useState<TaskType | null>(null);
+  const [mergeInto, setMergeInto] = useState("");
+
   const today = localISODate();
+  const periodOptions = useMemo(() => periodSuggestions(today), [today]);
 
   useEffect(() => {
     loadData();
@@ -149,6 +237,11 @@ export default function TasksPage() {
   function showToast(type: "success" | "error", message: string) {
     setToast({ type, message });
     window.setTimeout(() => setToast(null), 4500);
+  }
+
+  async function loadTaskTypes() {
+    const { data } = await supabase.from("task_types").select("*").order("category", { ascending: true }).order("name", { ascending: true });
+    setTaskTypes((data || []) as TaskType[]);
   }
 
   async function loadData(showSpinner = true) {
@@ -162,8 +255,9 @@ export default function TasksPage() {
 
     const [tRes, cRes, pRes] = await Promise.all([
       query,
-      supabase.from("clients").select("id, name, email, organization_name, status").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, email, phone, pan, gstin, organization_name, status").order("name", { ascending: true }),
       supabase.from("profiles").select("id, name, email, role, is_active, is_reviewer").order("name", { ascending: true }),
+      loadTaskTypes(),
     ]);
 
     if (tRes.error) showToast("error", "Could not load tasks. Please refresh the page.");
@@ -186,9 +280,29 @@ export default function TasksPage() {
 
   const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [String(c.id), c])), [clients]);
   const teamById = useMemo(() => Object.fromEntries(team.map((t) => [String(t.id), t])), [team]);
+  const typeById = useMemo(() => Object.fromEntries(taskTypes.map((t) => [t.id, t])), [taskTypes]);
   const nameOf = (id?: string) => (id ? teamById[String(id)]?.name || "" : "");
   const activeTeam = team.filter((t) => t.is_active !== false);
   const reviewers = team.filter((t) => t.is_active !== false && (t.role === "admin" || t.role === "reviewer" || t.is_reviewer));
+  const titleOf = (t: TaskRow) => `${t.title}${t.period ? ` · ${t.period}` : ""}`;
+
+  const typeGroups = useMemo(() => {
+    const groups: Record<string, TaskType[]> = {};
+    taskTypes
+      .filter((t) => t.is_active || t.id === taskTypeId)
+      .forEach((t) => {
+        (groups[t.category || "Other"] = groups[t.category || "Other"] || []).push(t);
+      });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [taskTypes, taskTypeId]);
+
+  const taskCountByType = useMemo(() => {
+    const map: Record<string, number> = {};
+    tasks.forEach((t) => {
+      if (t.task_type_id) map[t.task_type_id] = (map[t.task_type_id] || 0) + 1;
+    });
+    return map;
+  }, [tasks]);
 
   function dueInfo(date?: string, done?: boolean): { label: string; cls: string } {
     if (!date) return { label: "", cls: "text-text-muted" };
@@ -210,11 +324,7 @@ export default function TasksPage() {
 
   const stats = useMemo(() => {
     const open = scopedTasks.filter((t) => t.stage !== "Approved");
-    const weekAhead = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 7);
-      return localISODate(d);
-    })();
+    const weekAhead = addDays(today, 7);
     return {
       open: open.length,
       overdue: open.filter((t) => t.due_date && t.due_date < today).length,
@@ -229,7 +339,8 @@ export default function TasksPage() {
     const q = search.trim().toLowerCase();
     return scopedTasks.filter((t) => {
       if (q) {
-        const hay = [t.title, t.notes, t.category, t.organisation, clientById[t.client_id]?.name].filter(Boolean).join(" ").toLowerCase();
+        const c = clientById[t.client_id];
+        const hay = [t.title, t.period, t.notes, t.category, t.organisation, c?.name, c?.organization_name].filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (filterStage && t.stage !== filterStage) return false;
@@ -284,7 +395,9 @@ export default function TasksPage() {
     setLogBillable(true);
     if (task) {
       setEditingTask(task);
+      setTaskTypeId(task.task_type_id || "");
       setTitle(task.title || "");
+      setPeriod(task.period || "");
       setClientId(task.client_id || "");
       setOrganisation(task.organisation || clientById[task.client_id]?.organization_name || "");
       setCategory(task.category || "Other");
@@ -316,7 +429,9 @@ export default function TasksPage() {
   }
 
   function resetForm() {
+    setTaskTypeId("");
     setTitle("");
+    setPeriod("");
     setClientId("");
     setOrganisation("");
     setCategory("Other");
@@ -330,6 +445,38 @@ export default function TasksPage() {
     setNotes("");
     setReviewComments("");
     setNotifyClient(true);
+  }
+
+  function applyTypeDefaults(t: TaskType, nextPeriod: string) {
+    const d = deadlinesFor(t, nextPeriod, today);
+    if (d) {
+      setOfficialDueDate(d.statutory);
+      setDueDate(d.internal);
+    }
+  }
+
+  function handleTypeChange(id: string) {
+    if (id === "__legacy") return;
+    if (!id) {
+      setTaskTypeId("");
+      setTitle("");
+      return;
+    }
+    const t = typeById[id];
+    if (!t) return;
+    setTaskTypeId(id);
+    setTitle(t.name);
+    if (!editingTask) {
+      setCategory(t.category || "Other");
+      setRecurrence(t.default_recurrence || "None");
+      applyTypeDefaults(t, period);
+    }
+  }
+
+  function handlePeriodChange(value: string) {
+    setPeriod(value);
+    const t = typeById[taskTypeId];
+    if (!editingTask && t) applyTypeDefaults(t, value);
   }
 
   function handleClientChange(id: string) {
@@ -358,7 +505,9 @@ export default function TasksPage() {
 
     const nextStage = stageOverride || stage;
     const cleanTitle = title.trim();
+    const fullTitle = `${cleanTitle}${period.trim() ? ` · ${period.trim()}` : ""}`;
 
+    if (!editingTask && !taskTypeId) return setFormError("Choose a task from the list.");
     if (!cleanTitle) return setFormError("Task title is required.");
     if (!dueDate) return setFormError("Please set the internal team deadline.");
     if (officialDueDate && dueDate > officialDueDate) return setFormError("The internal deadline must be on or before the statutory deadline.");
@@ -368,7 +517,9 @@ export default function TasksPage() {
     }
 
     const fullPayload = {
+      task_type_id: taskTypeId || null,
       title: cleanTitle,
+      period: period.trim() || null,
       client_id: clientId || null,
       organisation: organisation.trim(),
       category,
@@ -404,21 +555,22 @@ export default function TasksPage() {
       } else {
         const { data, error } = await supabase.from("tasks").insert([fullPayload]).select().single();
         if (error || !data) throw error || new Error("Could not create the task.");
-        await logAuditEvent("CREATE_TASK", "TASKS", data.id, { title: cleanTitle, stage: nextStage });
+        await logAuditEvent("CREATE_TASK", "TASKS", data.id, { title: fullTitle, stage: nextStage });
       }
 
       // --- WORKFLOW EMAIL ENGINE ---
       const assignee = teamById[String(assignedTo)];
       const reviewer = teamById[String(reviewerId)];
       const selectedClient = clientById[String(clientId)];
+      const clientText = selectedClient ? clientLabel(selectedClient) : "Internal";
       const mails: Promise<boolean>[] = [];
 
       if ((isNewTask || isReassigned) && assignee?.email && assignedTo !== me) {
         mails.push(
           dispatchEmail(
             assignee.email,
-            `New Task Assigned: ${cleanTitle}`,
-            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${cleanTitle}".\n\nClient: ${selectedClient?.name || "Internal"}\nInternal deadline: ${formatDate(dueDate)}${officialDueDate ? `\nStatutory deadline: ${formatDate(officialDueDate)}` : ""}\nPriority: ${priority}\n\nPlease log into the portal, mark it as 'In Progress', and execute.`
+            `New Task Assigned: ${fullTitle}`,
+            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${fullTitle}".\n\nClient: ${clientText}\nInternal deadline: ${formatDate(dueDate)}${officialDueDate ? `\nStatutory deadline: ${formatDate(officialDueDate)}` : ""}\nPriority: ${priority}\n\nPlease log into the portal, mark it as 'In Progress', and execute.`
           )
         );
       }
@@ -426,8 +578,8 @@ export default function TasksPage() {
         mails.push(
           dispatchEmail(
             selectedClient.email,
-            `Service Request Initiated: ${cleanTitle}`,
-            `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${cleanTitle}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
+            `Service Request Initiated: ${fullTitle}`,
+            `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${fullTitle}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
           )
         );
       }
@@ -435,24 +587,24 @@ export default function TasksPage() {
         mails.push(
           dispatchEmail(
             reviewer.email,
-            `Task Ready for Review: ${cleanTitle}`,
-            `Hello ${reviewer.name},\n\nThe task "${cleanTitle}" was submitted for review by ${assignee?.name || "staff"}.\n\nPlease review it in your queue.`
+            `Task Ready for Review: ${fullTitle}`,
+            `Hello ${reviewer.name},\n\nThe task "${fullTitle}" (${clientText}) was submitted for review by ${assignee?.name || "staff"}.\n\nPlease review it in your queue.`
           )
         );
       } else if (stageChangedTo === "Changes Required" && assignee?.email) {
         mails.push(
           dispatchEmail(
             assignee.email,
-            `Task Needs Correction: ${cleanTitle}`,
-            `Hello ${assignee.name},\n\nYour submitted task "${cleanTitle}" requires corrections.\n\nReviewer feedback: ${reviewComments.trim()}\n\nPlease revise and resubmit.`
+            `Task Needs Correction: ${fullTitle}`,
+            `Hello ${assignee.name},\n\nYour submitted task "${fullTitle}" requires corrections.\n\nReviewer feedback: ${reviewComments.trim()}\n\nPlease revise and resubmit.`
           )
         );
       } else if (stageChangedTo === "Approved" && notifyClient && selectedClient?.email) {
         mails.push(
           dispatchEmail(
             selectedClient.email,
-            `Task Completed: ${cleanTitle}`,
-            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${cleanTitle}" has been completed and verified.\n\nBest regards,\nFinetax Team`
+            `Task Completed: ${fullTitle}`,
+            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${fullTitle}" has been completed and verified.\n\nBest regards,\nFinetax Team`
           )
         );
       }
@@ -487,7 +639,7 @@ export default function TasksPage() {
     setActionBusy(false);
     setConfirmDelete(false);
     if (error) return showToast("error", "Could not delete this task. Only administrators can delete tasks.");
-    logAuditEvent("DELETE_TASK", "TASKS", editingTask.id, { title: editingTask.title });
+    logAuditEvent("DELETE_TASK", "TASKS", editingTask.id, { title: titleOf(editingTask) });
     showToast("success", "Task deleted.");
     setIsModalOpen(false);
     setEditingTask(null);
@@ -536,12 +688,108 @@ export default function TasksPage() {
     loadData(false);
   }
 
+  /* ---------------- Task list manager (admin) ---------------- */
+
+  function resetTypeForm() {
+    setTypeEditingId(null);
+    setTName("");
+    setTCategory("GST");
+    setTRecurrence("Monthly");
+    setTDay("");
+    setTOffset(1);
+    setTBuffer(3);
+    setTypeError("");
+  }
+
+  function editType(t: TaskType) {
+    setTypeEditingId(t.id);
+    setTName(t.name);
+    setTCategory(t.category || "Other");
+    setTRecurrence(t.default_recurrence || "None");
+    setTDay(t.statutory_day ? String(t.statutory_day) : "");
+    setTOffset(t.statutory_month_offset ?? 0);
+    setTBuffer(t.internal_buffer_days ?? 3);
+    setTypeError("");
+  }
+
+  async function saveType(e: React.FormEvent) {
+    e.preventDefault();
+    if (typeSaving) return;
+    setTypeError("");
+    const day = tDay ? Number(tDay) : null;
+    if (!tName.trim()) return setTypeError("Task name is required.");
+    if (day !== null && !(day >= 1 && day <= 31)) return setTypeError("Statutory day must be between 1 and 31.");
+
+    const payload = {
+      name: tName.trim(),
+      category: tCategory,
+      default_recurrence: tRecurrence,
+      statutory_day: day,
+      statutory_month_offset: tOffset,
+      internal_buffer_days: tBuffer,
+    };
+
+    setTypeSaving(true);
+    const { error } = typeEditingId
+      ? await supabase.from("task_types").update(payload).eq("id", typeEditingId)
+      : await supabase.from("task_types").insert([payload]);
+    setTypeSaving(false);
+
+    if (error) {
+      setTypeError(error.code === "23505" ? `"${payload.name}" is already in the list.` : error.message);
+      return;
+    }
+    logAuditEvent(typeEditingId ? "UPDATE_TASK_TYPE" : "CREATE_TASK_TYPE", "TASK_TYPES", typeEditingId || undefined, { name: payload.name });
+    showToast("success", typeEditingId ? `"${payload.name}" updated.` : `"${payload.name}" added to the task list.`);
+    resetTypeForm();
+    await loadTaskTypes();
+    if (typeEditingId) loadData(false);
+  }
+
+  async function toggleTypeActive(t: TaskType) {
+    const { error } = await supabase.from("task_types").update({ is_active: !t.is_active }).eq("id", t.id);
+    if (error) return showToast("error", error.message);
+    logAuditEvent(t.is_active ? "ARCHIVE_TASK_TYPE" : "RESTORE_TASK_TYPE", "TASK_TYPES", t.id, { name: t.name });
+    loadTaskTypes();
+  }
+
+  async function confirmMergeTypes() {
+    if (!mergeFrom || !mergeInto) return;
+    setActionBusy(true);
+    const { data, error } = await supabase.rpc("merge_task_types", { p_from: mergeFrom.id, p_into: mergeInto });
+    setActionBusy(false);
+    if (error) return showToast("error", error.message);
+    logAuditEvent("MERGE_TASK_TYPES", "TASK_TYPES", mergeInto, { from: mergeFrom.name, into: typeById[mergeInto]?.name, tasks_moved: data });
+    showToast("success", `"${mergeFrom.name}" merged into "${typeById[mergeInto]?.name}". ${data ?? 0} open task(s) updated.`);
+    setMergeFrom(null);
+    setMergeInto("");
+    loadData(false);
+  }
+
+  const visibleTypes = taskTypes.filter(
+    (t) => (showInactiveTypes || t.is_active) && (!typeSearch || `${t.name} ${t.category}`.toLowerCase().includes(typeSearch.toLowerCase()))
+  );
+
   /* ---------------- Render helpers ---------------- */
+
+  function ClientCell({ t }: { t: TaskRow }) {
+    const c = clientById[t.client_id];
+    const org = c?.organization_name || t.organisation;
+    if (!c && !org) return <span className="text-text-muted">Internal</span>;
+    return (
+      <>
+        <p className="font-medium text-text-main">{org || c?.name}</p>
+        {org && c?.name && org !== c.name && <p className="text-[10px] text-text-muted">{c.name}</p>}
+      </>
+    );
+  }
 
   function TaskCard({ t }: { t: TaskRow }) {
     const done = t.stage === "Approved";
     const internal = dueInfo(t.due_date, done);
+    const statutory = dueInfo(t.official_due_date, done);
     const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
+    const c = clientById[t.client_id];
     return (
       <button
         type="button"
@@ -551,29 +799,43 @@ export default function TasksPage() {
         }`}
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold leading-snug text-navy">{t.title}</p>
+          <p className="text-xs font-semibold leading-snug text-navy">
+            {t.title}
+            {t.period && <span className="ml-1 font-normal text-text-muted">· {t.period}</span>}
+          </p>
           <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
         </div>
-        <p className="mt-1 truncate text-[11px] text-text-muted">{clientById[t.client_id]?.name || "Internal"}</p>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className={`text-[10px] font-semibold ${internal.cls}`}>
-            {t.due_date ? formatDate(t.due_date) : "—"}
+        <p className="mt-1 truncate text-[11px] text-text-muted">{c ? clientLabel(c) : t.organisation || "Internal"}</p>
+        <div className="mt-2 space-y-0.5 text-[10px]">
+          <p className={`font-semibold ${internal.cls}`}>
+            Int: {t.due_date ? formatDate(t.due_date) : "—"}
             {internal.label && ` · ${internal.label}`}
-          </span>
+          </p>
+          <p className={t.official_due_date ? `font-semibold ${statutory.cls === "text-text-muted" ? "text-text-main" : statutory.cls}` : "text-text-muted"}>
+            Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
+            {t.official_due_date && statutory.label && ` · ${statutory.label}`}
+          </p>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {t.recurrence && t.recurrence !== "None" ? (
+            <span className="flex items-center gap-1 text-[10px] text-text-muted">
+              <RefreshCw className="h-3 w-3" /> {t.recurrence}
+            </span>
+          ) : (
+            <span />
+          )}
           {t.assigned_to && (
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy" title={nameOf(t.assigned_to)}>
               {getInitials(nameOf(t.assigned_to))}
             </span>
           )}
         </div>
-        {t.recurrence && t.recurrence !== "None" && (
-          <p className="mt-1 flex items-center gap-1 text-[10px] text-text-muted">
-            <RefreshCw className="h-3 w-3" /> {t.recurrence}
-          </p>
-        )}
       </button>
     );
   }
+
+  const clientFilterOptions = useMemo(() => sortByLabel(clients.filter((c) => c.status !== "Merged")), [clients]);
+  const isLegacyTitle = !!editingTask && !taskTypeId && !!title;
 
   /* ---------------- Render ---------------- */
 
@@ -606,6 +868,18 @@ export default function TasksPage() {
               <LayoutGrid className="h-3.5 w-3.5" /> Board
             </button>
           </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                resetTypeForm();
+                setTypesOpen(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
+            >
+              <ListChecks className="h-4 w-4 text-navy" /> Task List
+            </button>
+          )}
           {isAdmin && (
             <button
               type="button"
@@ -715,7 +989,7 @@ export default function TasksPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
-                placeholder="Search task, client, notes..."
+                placeholder="Search task, period, organisation, client..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
@@ -740,10 +1014,10 @@ export default function TasksPage() {
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[180px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[240px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {clientFilterOptions.map((c) => (
+                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
               ))}
             </select>
             {isAdmin && (
@@ -817,7 +1091,7 @@ export default function TasksPage() {
                   <th>Deadlines (Int / Statutory)</th>
                   <th>Task</th>
                   <th>Category</th>
-                  <th>Client</th>
+                  <th>Organisation / Client</th>
                   <th>Assignee</th>
                   <th>Reviewer</th>
                   <th className="text-right">Time</th>
@@ -842,7 +1116,7 @@ export default function TasksPage() {
                           Int: {t.due_date ? formatDate(t.due_date) : "—"}
                           {internal.label && <span className={`ml-1 text-[10px] ${internal.cls}`}>({internal.label})</span>}
                         </p>
-                        <p className="mt-0.5 text-[10px] text-text-muted">
+                        <p className={`mt-0.5 text-[10px] ${t.official_due_date ? "text-text-main" : "text-text-muted"}`}>
                           Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
                           {t.official_due_date && statutory.label && <span className={`ml-1 font-semibold ${statutory.cls}`}>({statutory.label})</span>}
                         </p>
@@ -851,6 +1125,7 @@ export default function TasksPage() {
                         <div className="flex items-center gap-1.5">
                           <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
                           <span className="font-semibold text-navy">{t.title}</span>
+                          {t.period && <span className="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">{t.period}</span>}
                           {t.recurrence && t.recurrence !== "None" && <RefreshCw className="h-3 w-3 shrink-0 text-text-muted" />}
                           {(needsAction || needsReview) && (
                             <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500" title={needsReview ? "Awaiting your review" : "Action required"} />
@@ -859,8 +1134,7 @@ export default function TasksPage() {
                       </td>
                       <td className="whitespace-nowrap">{t.category || "—"}</td>
                       <td>
-                        <p className="font-medium">{clientById[t.client_id]?.name || "Internal"}</p>
-                        {t.organisation && <p className="text-[10px] text-text-muted">{t.organisation}</p>}
+                        <ClientCell t={t} />
                       </td>
                       <td className="whitespace-nowrap">{nameOf(t.assigned_to) || <span className="font-semibold text-rose-500">Unassigned</span>}</td>
                       <td className="whitespace-nowrap">{nameOf(t.reviewer_id) || <span className="text-text-muted">—</span>}</td>
@@ -882,11 +1156,11 @@ export default function TasksPage() {
       {/* ================= Task Modal ================= */}
       {isModalOpen && (
         <Modal
-          title={editingTask ? editingTask.title : "Add Task"}
+          title={editingTask ? titleOf(editingTask) : "Add Task"}
           subtitle={
             editingTask
-              ? `${clientById[editingTask.client_id]?.name || "Internal"} · ${editingTask.category || "Other"}`
-              : "Assign work with internal and statutory deadlines."
+              ? `${clientById[editingTask.client_id] ? clientLabel(clientById[editingTask.client_id]) : editingTask.organisation || "Internal"} · ${editingTask.category || "Other"}`
+              : "Choose a task from the list. Deadlines fill in automatically where a rule is set."
           }
           onClose={closeModal}
           maxWidth="max-w-6xl"
@@ -916,7 +1190,6 @@ export default function TasksPage() {
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
                 )}
-                {/* One-click workflow actions */}
                 {editingTask && isTaskAssignee && ["Assigned", "Changes Required"].includes(editingTask.stage) && (
                   <button
                     type="button"
@@ -986,22 +1259,71 @@ export default function TasksPage() {
               )}
 
               <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className={labelClass}>Task Title *</label>
-                  <input disabled={!canEditCoreDetails} required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B filing for September" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="sm:col-span-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Task *</span>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resetTypeForm();
+                            setTypesOpen(true);
+                          }}
+                          className="text-[11px] font-semibold text-navy hover:underline"
+                        >
+                          Manage task list
+                        </button>
+                      )}
+                    </div>
+                    <select
+                      disabled={!canEditCoreDetails}
+                      value={taskTypeId || (isLegacyTitle ? "__legacy" : "")}
+                      onChange={(e) => handleTypeChange(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">— Choose a task —</option>
+                      {isLegacyTitle && <option value="__legacy">{title} (not in the task list)</option>}
+                      {typeGroups.map(([cat, list]) => (
+                        <optgroup key={cat} label={cat}>
+                          {list.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                              {!t.is_active ? " (archived)" : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    {taskTypeId && typeById[taskTypeId]?.statutory_day ? (
+                      <p className="mt-1 text-[10px] text-text-muted">
+                        Statutory rule: {ruleText(typeById[taskTypeId])} · internal deadline {typeById[taskTypeId].internal_buffer_days} day(s) earlier
+                      </p>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className={labelClass}>Period</label>
+                    <input
+                      disabled={!canEditCoreDetails}
+                      list="period-options"
+                      value={period}
+                      onChange={(e) => handlePeriodChange(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Sep 2026"
+                      maxLength={40}
+                    />
+                    <datalist id="period-options">
+                      {periodOptions.map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelClass}>Client</label>
-                    <select disabled={!canEditCoreDetails} value={clientId} onChange={(e) => handleClientChange(e.target.value)} className={inputClass}>
-                      <option value="">(Internal / No Client)</option>
-                      {clients
-                        .filter((c) => c.status !== "Inactive" || String(c.id) === String(clientId))
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                    </select>
+                    <ClientPicker clients={clients as any} value={clientId} onChange={handleClientChange} disabled={!canEditCoreDetails} noneLabel="Internal / No client" />
                   </div>
                   <div>
                     <label className={labelClass}>Organisation</label>
@@ -1093,7 +1415,8 @@ export default function TasksPage() {
                 {recurrence !== "None" && (
                   <div className="flex items-center gap-2 rounded-lg border border-navy/20 bg-navy/5 p-2.5 text-xs text-navy">
                     <RefreshCw className="h-4 w-4 shrink-0" />
-                    When this task is approved, the next {recurrence.toLowerCase()} occurrence is created automatically with both deadlines moved forward.
+                    When this task is approved, the next {recurrence.toLowerCase()} occurrence is created automatically with both deadlines
+                    {period ? " and the period" : ""} moved forward.
                   </div>
                 )}
 
@@ -1214,12 +1537,8 @@ export default function TasksPage() {
                               → {log.metadata.stage_changed_to}
                             </span>
                           )}
-                          {log.metadata?.reassigned_to && (
-                            <p className="mt-1 text-[10px] text-text-muted">Reassigned to {log.metadata.reassigned_to}</p>
-                          )}
-                          {log.metadata?.feedback && (
-                            <p className="mt-1 rounded bg-amber-50 p-1.5 text-[10px] text-amber-800">{log.metadata.feedback}</p>
-                          )}
+                          {log.metadata?.reassigned_to && <p className="mt-1 text-[10px] text-text-muted">Reassigned to {log.metadata.reassigned_to}</p>}
+                          {log.metadata?.feedback && <p className="mt-1 rounded bg-amber-50 p-1.5 text-[10px] text-amber-800">{log.metadata.feedback}</p>}
                           {log.metadata?.time_logged && (
                             <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                               Logged {log.metadata.time_logged}
@@ -1236,10 +1555,198 @@ export default function TasksPage() {
         </Modal>
       )}
 
+      {/* ================= Task List Manager (admin) ================= */}
+      {typesOpen && (
+        <Modal
+          title="Task List"
+          subtitle="Staff can only choose task titles from this list. Rules fill in deadlines automatically."
+          onClose={() => !typeSaving && setTypesOpen(false)}
+          maxWidth="max-w-5xl"
+        >
+          <div className="space-y-5 text-xs">
+            <form onSubmit={saveType} className="space-y-3 rounded-lg border border-border bg-surface-alt p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-navy">{typeEditingId ? "Edit task" : "Add a task to the list"}</p>
+              {typeError && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-2.5 font-medium text-danger">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{typeError}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                <div className="col-span-2 sm:col-span-2">
+                  <label className={labelClass}>Task Name *</label>
+                  <input value={tName} onChange={(e) => setTName(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B Return" maxLength={120} />
+                </div>
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select value={tCategory} onChange={(e) => setTCategory(e.target.value)} className={inputClass}>
+                    {(CATEGORIES.includes(tCategory) ? CATEGORIES : [tCategory, ...CATEGORIES]).map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Recurrence</label>
+                  <select value={tRecurrence} onChange={(e) => setTRecurrence(e.target.value)} className={inputClass}>
+                    {RECURRENCE_OPTIONS.map((r) => (
+                      <option key={r} value={r}>{r === "None" ? "One-time" : r}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Statutory Day</label>
+                  <input type="number" min={1} max={31} value={tDay} onChange={(e) => setTDay(e.target.value)} className={inputClass} placeholder="None" />
+                </div>
+                <div>
+                  <label className={labelClass}>Of Which Month</label>
+                  <select value={tOffset} onChange={(e) => setTOffset(Number(e.target.value))} className={inputClass} disabled={!tDay}>
+                    <option value={0}>Same month</option>
+                    <option value={1}>Next month</option>
+                    <option value={2}>2 months later</option>
+                    <option value={3}>3 months later</option>
+                    <option value={4}>4 months later</option>
+                    <option value={6}>6 months later</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Internal Buffer</label>
+                  <select value={tBuffer} onChange={(e) => setTBuffer(Number(e.target.value))} className={inputClass} disabled={!tDay}>
+                    {[0, 1, 2, 3, 5, 7, 10, 15].map((d) => (
+                      <option key={d} value={d}>{d === 0 ? "Same day" : `${d} day${d === 1 ? "" : "s"} before`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-text-muted">
+                Example: GSTR-3B for period "Sep 2026" with day 20 of the next month gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={typeSaving}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+                >
+                  {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  {typeEditingId ? "Save Changes" : "Add to List"}
+                </button>
+                {typeEditingId && (
+                  <button type="button" onClick={resetTypeForm} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface">
+                    Cancel edit
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                <input value={typeSearch} onChange={(e) => setTypeSearch(e.target.value)} placeholder="Search the list..." className={`${inputClass} py-1.5 pl-8 text-xs`} />
+              </div>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-text-muted">
+                <input type="checkbox" checked={showInactiveTypes} onChange={(e) => setShowInactiveTypes(e.target.checked)} className="accent-navy" /> Show archived
+              </label>
+              <span className="ml-auto text-[11px] text-text-muted">{taskTypes.filter((t) => t.is_active).length} active tasks in the list</span>
+            </div>
+
+            <div className="max-h-[45vh] overflow-auto rounded-lg border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th>Category</th>
+                    <th>Recurrence</th>
+                    <th>Statutory Rule</th>
+                    <th className="text-right">Tasks</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTypes.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-text-muted">No tasks match.</td>
+                    </tr>
+                  ) : (
+                    visibleTypes.map((t) => (
+                      <tr key={t.id} className={t.is_active ? "" : "opacity-60"}>
+                        <td className="font-semibold text-navy">
+                          {t.name}
+                          {!t.is_active && <span className="ml-1 text-[10px] font-normal text-text-muted">(archived)</span>}
+                        </td>
+                        <td>{t.category}</td>
+                        <td>{t.default_recurrence === "None" ? "One-time" : t.default_recurrence}</td>
+                        <td className="whitespace-nowrap">
+                          {ruleText(t)}
+                          {t.statutory_day ? <span className="text-text-muted"> · −{t.internal_buffer_days}d internal</span> : null}
+                        </td>
+                        <td className="text-right">{taskCountByType[t.id] || 0}</td>
+                        <td className="whitespace-nowrap text-right">
+                          <div className="inline-flex gap-1">
+                            <button type="button" onClick={() => editType(t)} className="rounded-md p-1.5 text-navy transition hover:bg-surface-alt" title="Edit">
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMergeFrom(t);
+                                setMergeInto("");
+                              }}
+                              className="rounded-md p-1.5 text-violet-600 transition hover:bg-violet-50"
+                              title="Merge into another task"
+                            >
+                              <GitMerge className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleTypeActive(t)}
+                              className="rounded-md px-2 py-1 text-[10px] font-semibold text-text-muted transition hover:bg-surface-alt"
+                            >
+                              {t.is_active ? "Archive" : "Restore"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {mergeFrom && (
+              <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-3">
+                <p className="font-semibold text-violet-800">
+                  Merge "{mergeFrom.name}" into another task. Its open tasks move over and "{mergeFrom.name}" is archived.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className={`${inputClass} max-w-sm`}>
+                    <option value="">— Choose the task to keep —</option>
+                    {taskTypes
+                      .filter((t) => t.is_active && t.id !== mergeFrom.id)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={confirmMergeTypes}
+                    disabled={!mergeInto || actionBusy}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                  >
+                    {actionBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Merge
+                  </button>
+                  <button type="button" onClick={() => setMergeFrom(null)} className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
       {confirmDelete && editingTask && (
         <ConfirmDialog
           title="Delete this task?"
-          message={`"${editingTask.title}" will be permanently removed. Its history stays in the audit log.`}
+          message={`"${titleOf(editingTask)}" will be permanently removed. Its history stays in the audit log.`}
           confirmLabel="Delete task"
           tone="danger"
           loading={actionBusy}

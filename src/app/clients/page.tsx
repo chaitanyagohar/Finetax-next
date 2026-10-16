@@ -24,12 +24,16 @@ import {
   UserX,
   Phone,
   Mail,
+  GitMerge,
+  ArrowLeftRight,
+  Copy,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, getInitials } from "@/lib/format";
 
 type ClientRow = Client & Record<string, any>;
@@ -52,6 +56,20 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_IMPORT_ROWS = 5000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+
+const MERGE_FIELDS: { key: string; label: string }[] = [
+  { key: "organization_name", label: "Organisation" },
+  { key: "name", label: "Client name" },
+  { key: "type", label: "Type" },
+  { key: "pan", label: "PAN" },
+  { key: "gstin", label: "GSTIN" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Mobile" },
+  { key: "state", label: "State" },
+  { key: "address", label: "Address" },
+  { key: "assigned_to", label: "Relationship manager" },
+  { key: "notes", label: "Notes" },
+];
 
 const GST_STATE_CODES: Record<string, string> = {
   "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
@@ -190,8 +208,10 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [panWarning, setPanWarning] = useState("");
-  const [panDupConfirmed, setPanDupConfirmed] = useState(false);
+
+  // Duplicate check on save
+  const [dupMatches, setDupMatches] = useState<any[] | null>(null);
+  const [dupConfirmed, setDupConfirmed] = useState(false);
 
   // Form State
   const [name, setName] = useState("");
@@ -218,13 +238,31 @@ export default function ClientsPage() {
   const [importing, setImporting] = useState(false);
   const [importCount, setImportCount] = useState<number | null>(null);
 
+  // Duplicates review & merge (admin)
+  const [pairsOpen, setPairsOpen] = useState(false);
+  const [pairs, setPairs] = useState<{ a: ClientRow; b: ClientRow; reasons: string[]; score: number }[]>([]);
+  const [loadingPairs, setLoadingPairs] = useState(false);
+  const [mergeKeep, setMergeKeep] = useState<ClientRow | null>(null);
+  const [mergeRemove, setMergeRemove] = useState<ClientRow | null>(null);
+  const [mergeChoice, setMergeChoice] = useState<Record<string, "keep" | "remove">>({});
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState("");
+  const [mergePickOpen, setMergePickOpen] = useState(false);
+  const [mergePickId, setMergePickId] = useState("");
+
   useEffect(() => {
     fetchClients();
   }, []);
 
+  // Any change to identity fields requires a fresh duplicate check
+  useEffect(() => {
+    setDupConfirmed(false);
+    setDupMatches(null);
+  }, [name, organizationName, pan, gstin, phone, email]);
+
   function showToast(type: "success" | "error", message: string) {
     setToast({ type, message });
-    window.setTimeout(() => setToast(null), 4500);
+    window.setTimeout(() => setToast(null), 5000);
   }
 
   async function fetchClients(showSpinner = true) {
@@ -260,25 +298,27 @@ export default function ClientsPage() {
         .select("id, invoice_number, total, amount_paid, status, date, due_date")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false }),
-      supabase.from("tasks").select("id, title, stage, due_date").eq("client_id", clientId).order("due_date", { ascending: true }),
+      supabase.from("tasks").select("id, title, period, stage, due_date").eq("client_id", clientId).order("due_date", { ascending: true }),
       supabase.from("quotations").select("id, quote_number, total, status").eq("client_id", clientId),
     ]);
     setSnapshot({ invoices: invRes.data || [], tasks: taskRes.data || [], quotations: quoteRes.data || [] });
     setLoadingSnapshot(false);
   }
 
+  const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [String(c.id), c])), [clients]);
   const teamName = (id?: string) => team.find((t) => String(t.id) === String(id))?.name || "";
   const statusOf = (c: ClientRow) => c.status || "Active";
 
   /* ---------------- Analytics & filtering ---------------- */
 
   const stats = useMemo(() => {
-    const active = clients.filter((c) => statusOf(c) === "Active");
+    const live = clients.filter((c) => statusOf(c) !== "Merged");
+    const active = live.filter((c) => statusOf(c) === "Active");
     const outstandingTotal = Object.values(outstandingByClient).reduce((a, b) => a + b, 0);
     return {
-      total: clients.length,
+      total: live.length,
       active: active.length,
-      gstRegistered: clients.filter((c) => !!c.gstin).length,
+      gstRegistered: live.filter((c) => !!c.gstin).length,
       outstandingTotal,
       withDues: Object.keys(outstandingByClient).length,
     };
@@ -286,16 +326,18 @@ export default function ClientsPage() {
 
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return clients.filter((c) => {
-      if (statusFilter !== "All" && statusOf(c) !== statusFilter) return false;
-      if (typeFilter && (c.type || "Individual") !== typeFilter) return false;
-      if (rmFilter === "unassigned" && c.assigned_to) return false;
-      if (rmFilter && rmFilter !== "unassigned" && String(c.assigned_to) !== rmFilter) return false;
-      if (!q) return true;
-      return [c.name, c.organization_name, c.pan, c.gstin, c.email, c.phone, c.state]
-        .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(q));
-    });
+    return clients
+      .filter((c) => {
+        if (statusFilter !== "All" && statusOf(c) !== statusFilter) return false;
+        if (typeFilter && (c.type || "Individual") !== typeFilter) return false;
+        if (rmFilter === "unassigned" && c.assigned_to) return false;
+        if (rmFilter && rmFilter !== "unassigned" && String(c.assigned_to) !== rmFilter) return false;
+        if (!q) return true;
+        return [c.name, c.organization_name, c.pan, c.gstin, c.email, c.phone, c.state]
+          .filter(Boolean)
+          .some((f) => String(f).toLowerCase().includes(q));
+      })
+      .sort((a, b) => clientLabel(a).localeCompare(clientLabel(b)));
   }, [clients, search, statusFilter, typeFilter, rmFilter]);
 
   /* ---------------- Form ---------------- */
@@ -318,8 +360,6 @@ export default function ClientsPage() {
 
   function openModal(client?: ClientRow) {
     setFormError("");
-    setPanWarning("");
-    setPanDupConfirmed(false);
     setSnapshot(null);
     if (client) {
       setEditingClient(client);
@@ -372,6 +412,7 @@ export default function ClientsPage() {
     setFormError("");
 
     const cleanName = name.trim();
+    const cleanOrg = organizationName.trim();
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanName) return setFormError("Client name is required.");
@@ -383,30 +424,50 @@ export default function ClientsPage() {
 
     setSaving(true);
     try {
-      // Duplicate checks (GSTIN is unique; a shared PAN is allowed after confirmation)
+      // 1. GSTIN must be unique
       if (gstinUpper) {
-        let q = supabase.from("clients").select("id, name").eq("gstin", gstinUpper).limit(1);
+        let q = supabase.from("clients").select("id, name, organization_name").eq("gstin", gstinUpper).limit(1);
         if (editingClient) q = q.neq("id", editingClient.id);
         const { data } = await q;
         if (data && data.length) {
-          setFormError(`GSTIN ${gstinUpper} already belongs to "${data[0].name}".`);
+          setFormError(`GSTIN ${gstinUpper} already belongs to "${clientLabel(data[0])}".`);
           return;
         }
       }
-      if (panUpper && !panDupConfirmed) {
-        let q = supabase.from("clients").select("id, name").eq("pan", panUpper).limit(1);
-        if (editingClient) q = q.neq("id", editingClient.id);
-        const { data } = await q;
-        if (data && data.length) {
-          setPanWarning(`PAN ${panUpper} is already used by "${data[0].name}". If this is another GST registration of the same business, click Save again.`);
-          setPanDupConfirmed(true);
+
+      // 2. Possible duplicates (PAN, mobile, email, similar names), only when identity details changed
+      const identityChanged =
+        !editingClient ||
+        (
+          [
+            ["name", cleanName],
+            ["organization_name", cleanOrg],
+            ["pan", panUpper],
+            ["phone", phone.trim()],
+            ["email", cleanEmail],
+          ] as const
+        ).some(([k, v]) => String(editingClient[k] || "").trim().toLowerCase() !== String(v).toLowerCase());
+
+      if (identityChanged && !dupConfirmed) {
+        const { data: matches, error: matchErr } = await supabase.rpc("find_client_matches", {
+          p_name: cleanName,
+          p_org: cleanOrg,
+          p_pan: panUpper,
+          p_gstin: gstinUpper,
+          p_phone: phone.trim(),
+          p_email: cleanEmail,
+          p_exclude: editingClient?.id || null,
+        });
+        if (!matchErr && matches && matches.length > 0) {
+          setDupMatches(matches);
+          setDupConfirmed(true);
           return;
         }
       }
 
       const payload = {
         name: cleanName,
-        organization_name: organizationName.trim(),
+        organization_name: cleanOrg,
         type,
         pan: panUpper || null,
         gstin: gstinUpper || null,
@@ -423,12 +484,12 @@ export default function ClientsPage() {
         const { error } = await supabase.from("clients").update(payload).eq("id", editingClient.id);
         if (error) throw error;
         logAuditEvent("UPDATE_CLIENT", "CLIENTS", editingClient.id, payload);
-        showToast("success", `${cleanName} updated.`);
+        showToast("success", `${clientLabel(payload)} updated.`);
       } else {
         const { data, error } = await supabase.from("clients").insert([payload]).select().single();
         if (error || !data) throw error || new Error("Could not create the client.");
-        logAuditEvent("CREATE_CLIENT", "CLIENTS", data.id, payload);
-        showToast("success", `${cleanName} added to the client master.`);
+        logAuditEvent("CREATE_CLIENT", "CLIENTS", data.id, { ...payload, duplicate_warning_overridden: !!dupMatches?.length });
+        showToast("success", `${clientLabel(payload)} added to the client master.`);
       }
 
       setIsModalOpen(false);
@@ -454,7 +515,7 @@ export default function ClientsPage() {
       return;
     }
     logAuditEvent("DELETE_CLIENT", "CLIENTS", editingClient.id, { name: editingClient.name });
-    showToast("success", `${editingClient.name} deleted.`);
+    showToast("success", `${clientLabel(editingClient)} deleted.`);
     setIsModalOpen(false);
     setEditingClient(null);
     fetchClients(false);
@@ -468,9 +529,101 @@ export default function ClientsPage() {
     setConfirm(null);
     if (error) return showToast("error", error.message);
     logAuditEvent("DEACTIVATE_CLIENT", "CLIENTS", editingClient.id, { name: editingClient.name });
-    showToast("success", `${editingClient.name} marked Inactive.`);
+    showToast("success", `${clientLabel(editingClient)} marked Inactive.`);
     setIsModalOpen(false);
     setEditingClient(null);
+    fetchClients(false);
+  }
+
+  /* ---------------- Duplicates & merge (admin) ---------------- */
+
+  async function loadPairs() {
+    setLoadingPairs(true);
+    const { data, error } = await supabase.rpc("client_duplicate_pairs", { p_limit: 200 });
+    setLoadingPairs(false);
+    if (error) return showToast("error", error.message);
+    setPairs(
+      (data || [])
+        .map((p: any) => ({ a: clientById[p.a_id], b: clientById[p.b_id], reasons: p.reasons || [], score: p.score }))
+        .filter((p: any) => p.a && p.b)
+    );
+  }
+
+  function openPairs() {
+    setPairsOpen(true);
+    loadPairs();
+  }
+
+  async function dismissPair(a: ClientRow, b: ClientRow) {
+    const [x, y] = [String(a.id), String(b.id)].sort();
+    const { error } = await supabase.from("client_duplicate_dismissals").insert([{ client_a: x, client_b: y }]);
+    if (error && error.code !== "23505") return showToast("error", error.message);
+    logAuditEvent("DISMISS_DUPLICATE", "CLIENTS", x, { a: clientLabel(a), b: clientLabel(b) });
+    setPairs((list) => list.filter((p) => !(String(p.a.id) === String(a.id) && String(p.b.id) === String(b.id))));
+  }
+
+  const isEmpty = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
+
+  function openMerge(keep: ClientRow, remove: ClientRow) {
+    const choice: Record<string, "keep" | "remove"> = {};
+    MERGE_FIELDS.forEach((f) => {
+      choice[f.key] = isEmpty(keep[f.key]) && !isEmpty(remove[f.key]) ? "remove" : "keep";
+    });
+    setMergeKeep(keep);
+    setMergeRemove(remove);
+    setMergeChoice(choice);
+    setMergeError("");
+  }
+
+  function swapMerge() {
+    if (!mergeKeep || !mergeRemove) return;
+    const flipped: Record<string, "keep" | "remove"> = {};
+    Object.entries(mergeChoice).forEach(([k, v]) => (flipped[k] = v === "keep" ? "remove" : "keep"));
+    setMergeKeep(mergeRemove);
+    setMergeRemove(mergeKeep);
+    setMergeChoice(flipped);
+  }
+
+  function displayValue(c: ClientRow, key: string): string {
+    if (key === "assigned_to") return teamName(c.assigned_to) || "";
+    return String(c[key] ?? "").trim();
+  }
+
+  async function confirmMerge() {
+    if (!mergeKeep || !mergeRemove || merging) return;
+    setMergeError("");
+
+    const fields: Record<string, string | null> = {};
+    MERGE_FIELDS.forEach((f) => {
+      const src = mergeChoice[f.key] === "remove" ? mergeRemove : mergeKeep;
+      const v = src[f.key];
+      fields[f.key] = isEmpty(v) ? null : String(v);
+    });
+
+    if (!fields.name) return setMergeError("The kept client must have a name.");
+    const p = (fields.pan || "").toUpperCase();
+    const g = (fields.gstin || "").toUpperCase();
+    if (p && g && g.slice(2, 12) !== p) return setMergeError("The chosen GSTIN does not belong to the chosen PAN. Pick matching values.");
+
+    setMerging(true);
+    const { data, error } = await supabase.rpc("merge_clients", { p_keep: mergeKeep.id, p_remove: mergeRemove.id, p_fields: fields });
+    setMerging(false);
+
+    if (error) return setMergeError(error.message);
+
+    const moved = (data as any)?.moved || {};
+    const total = Object.values(moved).reduce((s: number, n: any) => s + Number(n || 0), 0);
+    logAuditEvent("MERGE_CLIENTS", "CLIENTS", mergeKeep.id, {
+      kept: clientLabel(mergeKeep),
+      merged: clientLabel(mergeRemove),
+      merged_id: mergeRemove.id,
+      records_moved: moved,
+    });
+    showToast("success", `"${clientLabel(mergeRemove)}" merged into "${clientLabel(mergeKeep)}". ${total} linked record${total === 1 ? "" : "s"} moved.`);
+    const removedId = mergeRemove.id;
+    setMergeKeep(null);
+    setMergeRemove(null);
+    setPairs((list) => list.filter((pr) => String(pr.a.id) !== String(removedId) && String(pr.b.id) !== String(removedId)));
     fetchClients(false);
   }
 
@@ -495,11 +648,11 @@ export default function ClientsPage() {
   }
 
   function exportClients() {
-    const headers = ["Name", "Organization Name", "Type", "PAN", "GSTIN", "Email", "Phone", "State", "Address", "Status", "Relationship Manager", "Outstanding", "Notes"];
+    const headers = ["Organization Name", "Name", "Type", "PAN", "GSTIN", "Email", "Phone", "State", "Address", "Status", "Relationship Manager", "Outstanding", "Notes"];
     const lines = filteredClients.map((c) =>
       [
-        c.name,
         c.organization_name,
+        c.name,
         c.type,
         c.pan,
         c.gstin,
@@ -546,8 +699,11 @@ export default function ClientsPage() {
       const headerKeys = rows[0].map((h) => HEADER_MAP[h.toLowerCase().replace(/[^a-z]/g, "")] || "");
       if (!headerKeys.includes("name")) throw new Error('A "Name" column is required. Please use the template headers.');
 
-      const existingPan = new Set(clients.map((c) => (c.pan || "").toUpperCase()).filter(Boolean));
-      const existingGstin = new Set(clients.map((c) => (c.gstin || "").toUpperCase()).filter(Boolean));
+      const live = clients.filter((c) => statusOf(c) !== "Merged");
+      const existingPan = new Set(live.map((c) => (c.pan || "").toUpperCase()).filter(Boolean));
+      const existingGstin = new Set(live.map((c) => (c.gstin || "").toUpperCase()).filter(Boolean));
+      const existingPhone = new Set(live.map((c) => String(c.phone || "").replace(/\D/g, "").slice(-10)).filter((p) => p.length === 10));
+      const existingOrg = new Set(live.map((c) => String(c.organization_name || "").trim().toLowerCase()).filter(Boolean));
       const seenGstin = new Set<string>();
 
       const parsed: ImportRow[] = rows.slice(1).map((cells, idx) => {
@@ -573,6 +729,9 @@ export default function ClientsPage() {
         if (data.gstin && seenGstin.has(data.gstin)) errors.push("Duplicate GSTIN in file");
         if (data.gstin) seenGstin.add(data.gstin);
         if (data.pan && existingPan.has(data.pan)) warnings.push("PAN already used by another client");
+        const ph = String(data.phone || "").replace(/\D/g, "").slice(-10);
+        if (ph.length === 10 && existingPhone.has(ph)) warnings.push("Mobile already used by another client");
+        if (data.organization_name && existingOrg.has(data.organization_name.toLowerCase())) warnings.push("Organisation already exists");
 
         // Fill state from GSTIN and PAN from GSTIN when missing
         if (data.gstin && GSTIN_RE.test(data.gstin)) {
@@ -663,6 +822,7 @@ export default function ClientsPage() {
 
   const validImportCount = importRows ? importRows.filter((r) => r.errors.length === 0).length : 0;
   const hasLinkedRecords = !!snapshot && (snapshot.invoices.length > 0 || snapshot.tasks.length > 0 || snapshot.quotations.length > 0);
+  const editingMerged = !!editingClient && statusOf(editingClient) === "Merged";
 
   /* ---------------- Render ---------------- */
 
@@ -677,6 +837,15 @@ export default function ClientsPage() {
           <p className="mt-1 text-xs text-text-muted">Verified PAN and GSTIN records, relationship managers and receivables for every client.</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={openPairs}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
+            >
+              <Copy className="h-4 w-4 text-violet-600" /> Find Duplicates
+            </button>
+          )}
           <button
             type="button"
             onClick={exportClients}
@@ -735,7 +904,7 @@ export default function ClientsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
-              placeholder="Search name, organisation, PAN, GSTIN, email, phone..."
+              placeholder="Search organisation, name, PAN, GSTIN, email, phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
@@ -771,7 +940,7 @@ export default function ClientsPage() {
             </select>
           </div>
           <span className="text-[11px] text-text-muted lg:ml-auto">
-            Showing {filteredClients.length} of {clients.length}
+            Showing {filteredClients.length} of {stats.total}
           </span>
         </div>
 
@@ -791,7 +960,7 @@ export default function ClientsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Client</th>
+                  <th>Organisation / Client</th>
                   <th>Type</th>
                   <th>PAN</th>
                   <th>GSTIN</th>
@@ -805,16 +974,18 @@ export default function ClientsPage() {
                 {filteredClients.map((c) => {
                   const due = outstandingByClient[c.id] || 0;
                   const rm = teamName(c.assigned_to);
+                  const st = statusOf(c);
+                  const primary = c.organization_name || c.name;
                   return (
-                    <tr key={c.id} className="cursor-pointer transition hover:bg-surface-alt" onClick={() => openModal(c)}>
+                    <tr key={c.id} className={`cursor-pointer transition hover:bg-surface-alt ${st === "Merged" ? "opacity-60" : ""}`} onClick={() => openModal(c)}>
                       <td>
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold text-navy">
-                            {getInitials(c.name)}
+                            {getInitials(primary)}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-text-main">{c.name}</p>
-                            {c.organization_name && <p className="truncate text-[10px] text-text-muted">{c.organization_name}</p>}
+                            <p className="truncate font-semibold text-text-main">{primary}</p>
+                            {c.organization_name && c.name !== c.organization_name && <p className="truncate text-[10px] text-text-muted">{c.name}</p>}
                           </div>
                         </div>
                       </td>
@@ -842,11 +1013,18 @@ export default function ClientsPage() {
                       <td>
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                            statusOf(c) === "Active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border bg-surface-alt text-text-muted"
+                            st === "Active"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : st === "Merged"
+                              ? "border-violet-200 bg-violet-50 text-violet-700"
+                              : "border-border bg-surface-alt text-text-muted"
                           }`}
                         >
-                          {statusOf(c)}
+                          {st}
                         </span>
+                        {st === "Merged" && c.merged_into && clientById[c.merged_into] && (
+                          <p className="mt-0.5 max-w-[160px] truncate text-[10px] text-text-muted">→ {clientLabel(clientById[c.merged_into])}</p>
+                        )}
                       </td>
                     </tr>
                   );
@@ -898,6 +1076,7 @@ export default function ClientsPage() {
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
               <p className="text-base font-bold text-emerald-800">Import Successful</p>
               <p className="text-sm text-emerald-700">{importCount} clients have been added to your master database.</p>
+              {isAdmin && <p className="text-xs text-emerald-700">Tip: run "Find Duplicates" to check the imported records.</p>}
               <button
                 type="button"
                 onClick={() => setIsImportModalOpen(false)}
@@ -942,7 +1121,7 @@ export default function ClientsPage() {
                     <thead>
                       <tr>
                         <th>Row</th>
-                        <th>Name</th>
+                        <th>Organisation / Name</th>
                         <th>PAN</th>
                         <th>GSTIN</th>
                         <th>Result</th>
@@ -952,7 +1131,7 @@ export default function ClientsPage() {
                       {importRows.slice(0, 200).map((r) => (
                         <tr key={r.line} className={r.errors.length ? "bg-rose-50/50" : ""}>
                           <td className="text-text-muted">{r.line}</td>
-                          <td className="font-medium">{r.data.name || "—"}</td>
+                          <td className="font-medium">{clientLabel({ name: r.data.name, organization_name: r.data.organization_name }) || "—"}</td>
                           <td className="font-mono">{r.data.pan || "—"}</td>
                           <td className="font-mono">{r.data.gstin || "—"}</td>
                           <td>
@@ -983,11 +1162,11 @@ export default function ClientsPage() {
       {/* ================= Add / Edit Client ================= */}
       {isModalOpen && (
         <Modal
-          title={editingClient ? editingClient.name : "Add Client"}
+          title={editingClient ? clientLabel(editingClient) : "Add Client"}
           subtitle={
             editingClient
-              ? [editingClient.organization_name, editingClient.lead_source ? `Source: ${editingClient.lead_source}` : ""].filter(Boolean).join(" · ") || "Client record"
-              : "PAN and GSTIN are validated automatically."
+              ? [editingClient.lead_source ? `Source: ${editingClient.lead_source}` : "", editingClient.type].filter(Boolean).join(" · ") || "Client record"
+              : "PAN and GSTIN are validated, and possible duplicates are checked before saving."
           }
           onClose={closeModal}
           maxWidth={editingClient ? "max-w-5xl" : "max-w-2xl"}
@@ -1003,7 +1182,19 @@ export default function ClientsPage() {
                     <UserX className="h-3.5 w-3.5" /> Mark Inactive
                   </button>
                 )}
-                {editingClient && isAdmin && !hasLinkedRecords && !loadingSnapshot && (
+                {editingClient && isAdmin && !editingMerged && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMergePickId("");
+                      setMergePickOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+                  >
+                    <GitMerge className="h-3.5 w-3.5" /> Merge with…
+                  </button>
+                )}
+                {editingClient && isAdmin && !hasLinkedRecords && !loadingSnapshot && !editingMerged && (
                   <button
                     type="button"
                     onClick={() => setConfirm("delete")}
@@ -1017,15 +1208,17 @@ export default function ClientsPage() {
                 <button type="button" onClick={closeModal} className="flex-1 rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt sm:flex-none">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  form="client-form"
-                  disabled={saving}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
-                >
-                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {panDupConfirmed && panWarning ? "Save Anyway" : "Save Client"}
-                </button>
+                {!editingMerged && (
+                  <button
+                    type="submit"
+                    form="client-form"
+                    disabled={saving}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                  >
+                    {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {dupConfirmed && dupMatches?.length ? "Save Anyway" : "Save Client"}
+                  </button>
+                )}
               </div>
             </div>
           }
@@ -1033,130 +1226,169 @@ export default function ClientsPage() {
           <div className={`grid grid-cols-1 gap-6 ${editingClient ? "lg:grid-cols-5" : ""}`}>
             {/* Form */}
             <form id="client-form" onSubmit={handleSubmit} className={`space-y-4 ${editingClient ? "lg:col-span-3" : ""}`}>
+              {editingMerged && (
+                <div className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs font-medium text-violet-800">
+                  <GitMerge className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    This record was merged into{" "}
+                    {editingClient?.merged_into && clientById[editingClient.merged_into] ? (
+                      <button type="button" className="font-bold underline" onClick={() => openModal(clientById[editingClient.merged_into])}>
+                        {clientLabel(clientById[editingClient.merged_into])}
+                      </button>
+                    ) : (
+                      "another client"
+                    )}
+                    {editingClient?.merged_at ? ` on ${formatDate(editingClient.merged_at)}` : ""}. It is kept for history only.
+                  </span>
+                </div>
+              )}
               {formError && (
                 <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
-              {panWarning && (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{panWarning}</span>
+              {dupMatches && dupMatches.length > 0 && (
+                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
+                  <p className="flex items-center gap-1.5 font-bold text-amber-800">
+                    <ShieldAlert className="h-4 w-4" /> Possible duplicate{dupMatches.length === 1 ? "" : "s"} found
+                  </p>
+                  {dupMatches.map((m) => (
+                    <div key={m.id} className="flex items-start justify-between gap-2 rounded-lg border border-amber-200 bg-surface p-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-text-main">{clientLabel(m)}</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(m.reasons || []).map((r: string) => (
+                            <span key={r} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{r}</span>
+                          ))}
+                          {m.status && m.status !== "Active" && <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] text-text-muted">{m.status}</span>}
+                        </div>
+                      </div>
+                      {clientById[m.id] && (
+                        <button
+                          type="button"
+                          onClick={() => openModal(clientById[m.id])}
+                          className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-navy transition hover:bg-surface-alt"
+                        >
+                          Open
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-amber-800">
+                    If this really is a different client (for example a proprietor and their firm sharing a PAN), click <strong>Save Anyway</strong>.
+                  </p>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Client Name *</label>
-                  <input required type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Organisation Name</label>
-                  <input type="text" placeholder="e.g. Moonvita Foods Pvt Ltd" value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Type</label>
-                  <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass}>
-                    {(CLIENT_TYPES.includes(type) ? CLIENT_TYPES : [type, ...CLIENT_TYPES]).map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Status</label>
-                  <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className={labelClass}>PAN</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="ABCDE1234F"
-                      maxLength={10}
-                      value={pan}
-                      onChange={(e) => {
-                        setPan(e.target.value.toUpperCase().replace(/\s/g, ""));
-                        setPanWarning("");
-                        setPanDupConfirmed(false);
-                      }}
-                      className={`${inputClass} pr-8 font-mono uppercase ${!panValid ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200" : ""}`}
-                    />
-                    {panUpper && panValid && <CheckCircle2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />}
+              <fieldset disabled={editingMerged} className="min-w-0 space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Organisation Name</label>
+                    <input type="text" placeholder="e.g. Moonvita Foods Pvt Ltd" value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} className={inputClass} />
                   </div>
-                  {!panValid && <p className="mt-1 text-[10px] font-medium text-rose-600">Format: 5 letters, 4 digits, 1 letter</p>}
-                </div>
-
-                <div>
-                  <label className={labelClass}>GSTIN</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="07ABCDE1234F1Z5"
-                      maxLength={15}
-                      value={gstin}
-                      onChange={(e) => handleGstinChange(e.target.value)}
-                      className={`${inputClass} pr-8 font-mono uppercase ${!gstinValid || gstPanMismatch ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200" : ""}`}
-                    />
-                    {gstinUpper && gstinValid && !gstPanMismatch && (
-                      <CheckCircle2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
-                    )}
+                  <div>
+                    <label className={labelClass}>Client (Contact) Name *</label>
+                    <input required type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
                   </div>
-                  {!gstinValid && <p className="mt-1 text-[10px] font-medium text-rose-600">15 characters, e.g. 07ABCDE1234F1Z5</p>}
-                  {gstPanMismatch && <p className="mt-1 text-[10px] font-medium text-rose-600">This GSTIN belongs to a different PAN</p>}
-                  {gstinUpper && gstinValid && !gstPanMismatch && (
-                    <p className="mt-1 text-[10px] text-text-muted">State auto-filled from GSTIN</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className={labelClass}>Email</label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputClass} pl-9`} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>Mobile</label>
-                  <div className="relative">
-                    <Phone className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
-                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${inputClass} pl-9`} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>State</label>
-                  <input type="text" list="state-list" placeholder="e.g. Delhi" value={state} onChange={(e) => setState(e.target.value)} className={inputClass} />
-                  <datalist id="state-list">
-                    {STATE_NAMES.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                </div>
-                <div>
-                  <label className={labelClass}>Relationship Manager</label>
-                  <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
-                    <option value="">— Unassigned —</option>
-                    {team
-                      .filter((t) => t.is_active !== false || String(t.id) === String(assignedTo))
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
+                  <div>
+                    <label className={labelClass}>Type</label>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass}>
+                      {(CLIENT_TYPES.includes(type) ? CLIENT_TYPES : [type, ...CLIENT_TYPES]).map((t) => (
+                        <option key={t} value={t}>{t}</option>
                       ))}
-                  </select>
-                </div>
-              </div>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Status</label>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                      {status === "Merged" && <option value="Merged">Merged</option>}
+                    </select>
+                  </div>
 
-              <div>
-                <label className={labelClass}>Address</label>
-                <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>Notes</label>
-                <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
-              </div>
+                  <div>
+                    <label className={labelClass}>PAN</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="ABCDE1234F"
+                        maxLength={10}
+                        value={pan}
+                        onChange={(e) => setPan(e.target.value.toUpperCase().replace(/\s/g, ""))}
+                        className={`${inputClass} pr-8 font-mono uppercase ${!panValid ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200" : ""}`}
+                      />
+                      {panUpper && panValid && <CheckCircle2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />}
+                    </div>
+                    {!panValid && <p className="mt-1 text-[10px] font-medium text-rose-600">Format: 5 letters, 4 digits, 1 letter</p>}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>GSTIN</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="07ABCDE1234F1Z5"
+                        maxLength={15}
+                        value={gstin}
+                        onChange={(e) => handleGstinChange(e.target.value)}
+                        className={`${inputClass} pr-8 font-mono uppercase ${!gstinValid || gstPanMismatch ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200" : ""}`}
+                      />
+                      {gstinUpper && gstinValid && !gstPanMismatch && (
+                        <CheckCircle2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
+                      )}
+                    </div>
+                    {!gstinValid && <p className="mt-1 text-[10px] font-medium text-rose-600">15 characters, e.g. 07ABCDE1234F1Z5</p>}
+                    {gstPanMismatch && <p className="mt-1 text-[10px] font-medium text-rose-600">This GSTIN belongs to a different PAN</p>}
+                    {gstinUpper && gstinValid && !gstPanMismatch && <p className="mt-1 text-[10px] text-text-muted">State auto-filled from GSTIN</p>}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Email</label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputClass} pl-9`} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Mobile</label>
+                    <div className="relative">
+                      <Phone className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${inputClass} pl-9`} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>State</label>
+                    <input type="text" list="state-list" placeholder="e.g. Delhi" value={state} onChange={(e) => setState(e.target.value)} className={inputClass} />
+                    <datalist id="state-list">
+                      {STATE_NAMES.map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Relationship Manager</label>
+                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
+                      <option value="">— Unassigned —</option>
+                      {team
+                        .filter((t) => t.is_active !== false || String(t.id) === String(assignedTo))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Address</label>
+                  <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Notes</label>
+                  <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+                </div>
+              </fieldset>
             </form>
 
             {/* Client snapshot */}
@@ -1221,7 +1453,10 @@ export default function ClientsPage() {
                         <div className="space-y-1.5">
                           {snap.openTasks.slice(0, 5).map((t) => (
                             <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-1.5 text-[11px]">
-                              <p className="truncate font-medium">{t.title}</p>
+                              <p className="truncate font-medium">
+                                {t.title}
+                                {t.period ? ` · ${t.period}` : ""}
+                              </p>
                               <p className="shrink-0 text-text-muted">{t.due_date ? formatDate(t.due_date) : "—"}</p>
                             </div>
                           ))}
@@ -1235,9 +1470,9 @@ export default function ClientsPage() {
                       </p>
                     )}
 
-                    {hasLinkedRecords && (
+                    {hasLinkedRecords && !editingMerged && (
                       <p className="text-[10px] text-text-muted">
-                        This client has linked records, so it can't be deleted. Mark it Inactive instead.
+                        This client has linked records, so it can't be deleted. Mark it Inactive instead{isAdmin ? ", or merge it into the correct record" : ""}.
                       </p>
                     )}
                   </>
@@ -1248,11 +1483,228 @@ export default function ClientsPage() {
         </Modal>
       )}
 
+      {/* ================= Pick a client to merge with ================= */}
+      {mergePickOpen && editingClient && (
+        <Modal
+          title="Merge with another client"
+          subtitle={`Choose the duplicate of "${clientLabel(editingClient)}". You'll choose which details to keep next.`}
+          onClose={() => setMergePickOpen(false)}
+          maxWidth="max-w-lg"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setMergePickOpen(false)} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!mergePickId}
+                onClick={() => {
+                  const other = clientById[mergePickId];
+                  if (!other) return;
+                  setMergePickOpen(false);
+                  setIsModalOpen(false);
+                  openMerge(editingClient, other);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+              >
+                <GitMerge className="h-3.5 w-3.5" /> Continue
+              </button>
+            </div>
+          }
+        >
+          <div className="min-h-[300px]">
+            <ClientPicker
+              clients={clients.filter((c) => String(c.id) !== String(editingClient.id)) as any}
+              value={mergePickId}
+              onChange={setMergePickId}
+              includeInactive
+            />
+          </div>
+        </Modal>
+      )}
+
+      {/* ================= Possible duplicates (admin) ================= */}
+      {pairsOpen && (
+        <Modal
+          title="Possible Duplicate Clients"
+          subtitle="Matched on PAN, mobile, email and similar names. Merge real duplicates, or hide pairs that are genuinely different."
+          onClose={() => setPairsOpen(false)}
+          maxWidth="max-w-5xl"
+        >
+          {loadingPairs ? (
+            <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" /> Scanning the client master...
+            </div>
+          ) : pairs.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 p-10 text-center">
+              <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+              <p className="text-sm font-semibold text-text-main">No likely duplicates found</p>
+              <p className="text-xs text-text-muted">Your client master looks clean.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px] text-text-muted">{pairs.length} possible pair{pairs.length === 1 ? "" : "s"}, strongest matches first.</p>
+              {pairs.map((p) => (
+                <div key={`${p.a.id}-${p.b.id}`} className="rounded-xl border border-border p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        p.score >= 70 ? "bg-rose-100 text-rose-700" : p.score >= 50 ? "bg-amber-100 text-amber-700" : "bg-surface-alt text-text-muted"
+                      }`}
+                    >
+                      Match {p.score}%
+                    </span>
+                    {p.reasons.map((r) => (
+                      <span key={r} className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{r}</span>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    {[p.a, p.b].map((c) => (
+                      <div key={c.id} className="rounded-lg bg-surface-alt p-2.5 text-[11px]">
+                        <p className="font-semibold text-navy">{c.organization_name || c.name}</p>
+                        {c.organization_name && <p className="text-text-muted">{c.name}</p>}
+                        <p className="mt-1 font-mono text-text-muted">
+                          {[c.pan, c.gstin].filter(Boolean).join(" · ") || "No PAN / GSTIN"}
+                        </p>
+                        <p className="text-text-muted">{[c.phone, c.email].filter(Boolean).join(" · ") || "—"}</p>
+                        <p className="text-text-muted">
+                          {statusOf(c)} · RM {teamName(c.assigned_to) || "—"}
+                          {outstandingByClient[c.id] ? ` · Due ${formatINR(outstandingByClient[c.id])}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => dismissPair(p.a, p.b)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-text-muted transition hover:bg-surface-alt"
+                    >
+                      Not a duplicate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openMerge(p.a, p.b)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-violet-700"
+                    >
+                      <GitMerge className="h-3.5 w-3.5" /> Merge
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ================= Merge two clients ================= */}
+      {mergeKeep && mergeRemove && (
+        <Modal
+          title="Merge clients"
+          subtitle="Pick the value to keep for each field. Every linked record moves to the kept client in one step."
+          onClose={() => !merging && setMergeKeep(null)}
+          maxWidth="max-w-4xl"
+          footer={
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={swapMerge}
+                disabled={merging}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" /> Swap which record is kept
+              </button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setMergeKeep(null)} disabled={merging} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmMerge}
+                  disabled={merging}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5" />} Merge Permanently
+                </button>
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            {mergeError && (
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-3 font-medium text-danger">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{mergeError}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Keep this record</p>
+                <p className="font-semibold text-text-main">{clientLabel(mergeKeep)}</p>
+              </div>
+              <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">Merge and retire</p>
+                <p className="font-semibold text-text-main">{clientLabel(mergeRemove)}</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="w-40">Field</th>
+                    <th>From kept record</th>
+                    <th>From retired record</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MERGE_FIELDS.map((f) => {
+                    const kv = displayValue(mergeKeep, f.key);
+                    const rv = displayValue(mergeRemove, f.key);
+                    const same = kv.toLowerCase() === rv.toLowerCase();
+                    return (
+                      <tr key={f.key}>
+                        <td className="font-semibold text-text-main">{f.label}</td>
+                        {(["keep", "remove"] as const).map((side) => {
+                          const val = side === "keep" ? kv : rv;
+                          const chosen = mergeChoice[f.key] === side;
+                          return (
+                            <td key={side}>
+                              <label className={`flex cursor-pointer items-start gap-2 rounded-md p-1.5 ${chosen ? "bg-navy/5" : ""} ${same && side === "remove" ? "opacity-50" : ""}`}>
+                                <input
+                                  type="radio"
+                                  name={`merge-${f.key}`}
+                                  checked={chosen}
+                                  disabled={same && side === "remove"}
+                                  onChange={() => setMergeChoice((c) => ({ ...c, [f.key]: side }))}
+                                  className="mt-0.5 accent-navy"
+                                />
+                                <span className={`break-words ${val ? "text-text-main" : "italic text-text-muted"}`}>{val || "(empty)"}</span>
+                              </label>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
+              All tasks, invoices, quotations, payments, discussions, documents, time logs, emails, packages and leads of the retired record move to the kept client. The
+              retired record is marked <strong>Merged</strong> and kept for history. Invoice numbers do not change. This cannot be undone automatically.
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Confirmations */}
       {confirm === "delete" && editingClient && (
         <ConfirmDialog
           title="Delete this client?"
-          message={`"${editingClient.name}" will be permanently removed. This is only possible because the client has no invoices, tasks or quotations.`}
+          message={`"${clientLabel(editingClient)}" will be permanently removed. This is only possible because the client has no invoices, tasks or quotations.`}
           confirmLabel="Delete client"
           tone="danger"
           loading={actionBusy}
@@ -1263,7 +1715,7 @@ export default function ClientsPage() {
       {confirm === "inactive" && editingClient && (
         <ConfirmDialog
           title="Mark this client inactive?"
-          message={`"${editingClient.name}" will be hidden from the Active list. All history stays intact and you can reactivate them anytime.`}
+          message={`"${clientLabel(editingClient)}" will be hidden from the Active list. All history stays intact and you can reactivate them anytime.`}
           confirmLabel="Mark inactive"
           tone="primary"
           loading={actionBusy}
@@ -1276,7 +1728,7 @@ export default function ClientsPage() {
       {toast && (
         <div
           role="status"
-          className={`fixed bottom-5 right-5 z-[70] flex max-w-sm items-start gap-2 rounded-lg border px-4 py-3 text-xs font-semibold shadow-lg animate-scale-in ${
+          className={`fixed bottom-5 right-5 z-[90] flex max-w-sm items-start gap-2 rounded-lg border px-4 py-3 text-xs font-semibold shadow-lg animate-scale-in ${
             toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
           }`}
         >
