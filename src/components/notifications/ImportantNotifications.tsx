@@ -25,7 +25,62 @@ const LOOK: Record<string, { icon: LucideIcon; tone: string; label: string }> = 
   task_submitted: { icon: ShieldCheck, tone: "bg-violet-600 text-white", label: "Review requested" },
   task_changes: { icon: RotateCcw, tone: "bg-amber-500 text-white", label: "Changes requested" },
   announcement: { icon: Megaphone, tone: "bg-emerald-600 text-white", label: "Announcement" },
+  task_not_started: { icon: Clock, tone: "bg-amber-500 text-white", label: "Not started yet" },
+  task_due_soon: { icon: Clock, tone: "bg-amber-600 text-white", label: "Deadline approaching" },
+  task_overdue: { icon: AlertCircle, tone: "bg-rose-600 text-white", label: "Overdue" },
+  statutory_risk: { icon: AlertCircle, tone: "bg-rose-700 text-white", label: "Statutory deadline" },
+  transfer_request: { icon: BellRing, tone: "bg-navy text-white", label: "Transfer request" },
 };
+
+/** "Remind me later" choices. */
+function LaterMenu({ onSnooze, onHide }: { onSnooze: (until: Date, label: string) => void; onHide: () => void }) {
+  const [open, setOpen] = useState(false);
+  const inHours = (h: number) => new Date(Date.now() + h * 3600 * 1000);
+  const tomorrow10 = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d;
+  };
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(!open)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt">
+        Remind me later ▾
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 z-10 mb-1 w-44 overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+          {[
+            { label: "In 1 hour", at: () => inHours(1) },
+            { label: "In 3 hours", at: () => inHours(3) },
+            { label: "Tomorrow 10 AM", at: tomorrow10 },
+          ].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onSnooze(o.at(), o.label);
+              }}
+              className="block w-full px-3 py-2 text-left text-xs transition hover:bg-surface-alt"
+            >
+              {o.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onHide();
+            }}
+            className="block w-full border-t border-border px-3 py-2 text-left text-xs text-text-muted transition hover:bg-surface-alt"
+          >
+            Just hide it
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Popups for important, not-yet-dismissed notifications. Mounted on the dashboard. */
 export default function ImportantNotifications() {
@@ -72,6 +127,15 @@ export default function ImportantNotifications() {
       .update(markRead ? { read_at: now, popup_dismissed_at: now } : { popup_dismissed_at: now })
       .in("id", ids);
     setItems((list) => list.filter((x) => !ids.includes(x.id)));
+    setError("");
+  }
+
+  async function snooze(n: Item, until: Date) {
+    setBusy(n.id);
+    const { error: err } = await supabase.rpc("snooze_notification", { p_id: n.id, p_until: until.toISOString() });
+    setBusy(null);
+    if (err) return setError(err.message);
+    setItems((list) => list.filter((x) => x.id !== n.id));
     setError("");
   }
 
@@ -179,14 +243,8 @@ export default function ImportantNotifications() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2 border-t border-border p-4">
-                  <button
-                    type="button"
-                    onClick={() => dismiss([current.id], false)}
-                    className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt"
-                  >
-                    Later
-                  </button>
-                  {current.type === "task_assigned" && (
+                  <LaterMenu onSnooze={(until) => snooze(current, until)} onHide={() => dismiss([current.id], false)} />
+                  {["task_assigned", "task_not_started", "task_due_soon"].includes(current.type) && (
                     <>
                       <button
                         type="button"
@@ -224,7 +282,7 @@ export default function ImportantNotifications() {
                       {busy === current.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} I've read this
                     </button>
                   )}
-                  {!["task_assigned", "task_submitted", "task_changes", "announcement"].includes(current.type) && (
+                  {!["task_assigned", "task_not_started", "task_due_soon", "task_submitted", "task_changes", "announcement"].includes(current.type) && (
                     <button
                       type="button"
                       onClick={() => open(current)}

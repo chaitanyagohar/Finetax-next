@@ -27,6 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getInitials, localISODate } from "@/lib/format";
 import { getPageTitle, getVisibleSections, REVIEWER_SUB_TABS, type SessionUser } from "./navConfig";
 import { useLogout } from "./useLogout";
+import WorkSession from "@/components/time/WorkSession";
 
 interface TopbarProps {
   user: SessionUser;
@@ -66,6 +67,19 @@ const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   task_deadline: { icon: CalendarClock, style: "bg-rose-50 text-rose-600" },
   task_reassigned: { icon: ArrowRightLeft, style: "bg-slate-100 text-slate-600" },
   announcement: { icon: Megaphone, style: "bg-emerald-50 text-emerald-600" },
+  transfer_request: { icon: ArrowRightLeft, style: "bg-amber-50 text-amber-600" },
+  transfer_declined: { icon: ArrowRightLeft, style: "bg-rose-50 text-rose-600" },
+  task_handover: { icon: ClipboardList, style: "bg-blue-50 text-blue-600" },
+  queue_changed: { icon: ClipboardList, style: "bg-violet-50 text-violet-600" },
+  task_not_started: { icon: CalendarClock, style: "bg-amber-50 text-amber-600" },
+  task_due_soon: { icon: CalendarClock, style: "bg-amber-50 text-amber-600" },
+  task_overdue: { icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
+  statutory_risk: { icon: AlertCircle, style: "bg-rose-100 text-rose-700" },
+  review_waiting: { icon: ShieldCheck, style: "bg-violet-50 text-violet-600" },
+  timer_auto_stopped: { icon: Bell, style: "bg-slate-100 text-slate-600" },
+  billing_ready: { icon: ClipboardList, style: "bg-amber-50 text-amber-600" },
+  proposal_accepted: { icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600" },
+  proposal_declined: { icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
 };
 
 function timeAgo(iso: string): string {
@@ -458,6 +472,8 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
           </div>
         </div>
       </header>
+
+      <WorkSession userId={user.id} />
 
       {/* New-notification toast */}
       {toast && (

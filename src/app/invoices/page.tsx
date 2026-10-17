@@ -117,8 +117,6 @@ export default function InvoicesPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
-  // Editable categories (replaces the fixed list inside this page)
-  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);

@@ -131,8 +131,6 @@ export default function LeadsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
-  // Editable categories (replaces the fixed list inside this page)
-  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [team, setTeam] = useState<ProfileRow[]>([]);

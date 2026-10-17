@@ -27,9 +27,7 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
-import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
+import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 type ClientRow = Client & Record<string, any>;
@@ -76,8 +74,6 @@ export default function ClientDiscussionsPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
-  // Editable categories (replaces the fixed list inside this page)
-  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [discussions, setDiscussions] = useState<any[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);

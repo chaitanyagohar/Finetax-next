@@ -25,9 +25,8 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import AttendancePanel from "@/components/time/AttendancePanel";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 const LOCK_DAYS = 7; // must match v_lock_days in the database rule
@@ -94,8 +93,6 @@ export default function TimeTrackingPage() {
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
-  // Editable categories (replaces the fixed list inside this page)
-  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [logs, setLogs] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -223,7 +220,9 @@ export default function TimeTrackingPage() {
 
   /* ---------------- Timer ---------------- */
 
-  const elapsedSeconds = myTimer ? (now - new Date(myTimer.started_at).getTime()) / 1000 : 0;
+  const elapsedSeconds = myTimer
+    ? ((myTimer.paused_at ? new Date(myTimer.paused_at).getTime() : now) - new Date(myTimer.started_at).getTime()) / 1000 - Number(myTimer.paused_seconds || 0)
+    : 0;
 
   function handleTimerTask(id: string) {
     setTimerTaskId(id);
@@ -632,6 +631,13 @@ export default function TimeTrackingPage() {
           </button>
           <button
             type="button"
+            onClick={() => window.dispatchEvent(new Event("finetax:open-day-review"))}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
+          >
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Review my day
+          </button>
+          <button
+            type="button"
             onClick={() => openModal()}
             className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light"
           >
@@ -710,6 +716,8 @@ export default function TimeTrackingPage() {
           </div>
         </div>
       )}
+
+      {isAdmin && <AttendancePanel from={rangeFrom} to={rangeTo} team={team} />}
 
       {/* Breakdown panels */}
       {filteredLogs.length > 0 && (
@@ -836,7 +844,14 @@ export default function TimeTrackingPage() {
                       {isAdmin && <td className="whitespace-nowrap font-semibold text-navy">{nameOf(log.user_id) || "Staff"}</td>}
                       <td>{clientLabel(clientById[log.client_id]) || <span className="text-text-muted">Internal</span>}</td>
                       <td className="max-w-md">
-                        <p className="font-medium text-text-main">{log.description}</p>
+                        <p className="font-medium text-text-main">
+                          {log.description}
+                          {log.source && log.source !== "manual" && (
+                            <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700">{log.source === "auto" ? "Auto" : "Timer"}</span>
+                          )}
+                          {log.edited_at && <span className="ml-1 rounded bg-surface-alt px-1.5 py-0.5 text-[9px] font-bold uppercase text-text-muted">Edited</span>}
+                          {log.needs_review && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">Check</span>}
+                        </p>
                         {taskById[log.task_id]?.title && <p className="text-[10px] text-text-muted">Task: {taskById[log.task_id].title}</p>}
                       </td>
                       <td className="whitespace-nowrap text-right font-bold text-text-main">{formatHours(Number(log.hours))}</td>

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages anyone may open without being signed in
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/confirm"];
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/confirm", "/engagement"];
 
 // Routes that only administrators may open (enforced server-side)
 const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings"];

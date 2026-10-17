@@ -1,10 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse, type NextRequest } from "next/server";
-import React from "react";
-import { renderToBuffer } from "@react-pdf/renderer";
-import InvoiceTemplate from "../invoices/send/InvoiceTemplate";
-import QuotationTemplate from "../quotations/send/QuotationTemplate";
+import { pdfFileName, renderInvoicePdf, renderQuotationPdf } from "@/lib/pdf/firmDocuments";
 import {
   ApiError,
   assertSameOrigin,
@@ -83,21 +80,17 @@ export async function POST(request: NextRequest) {
         const { data: firm } = await admin.from("firm_settings").select("*").eq("id", 1).single();
 
         for (const id of invoiceIds) {
-          const { data: invoice } = await admin.from("invoices").select("*, clients!client_id(name, email, address, gstin, pan)").eq("id", id).single();
+          const { data: invoice } = await admin.from("invoices").select("*, clients!client_id(*)").eq("id", id).single();
           if (!invoice) throw new ApiError(404, "One of the selected invoices was not found.");
-          const pdf = await renderToBuffer(React.createElement(InvoiceTemplate, { invoice, client: invoice.clients, firm }) as any);
-          attachments.push({ filename: `${String(invoice.invoice_number || "Invoice").replace(/\//g, "-")}.pdf`, content: pdf, contentType: "application/pdf" });
+          const pdf = await renderInvoicePdf(invoice, invoice.clients, firm);
+          attachments.push({ filename: pdfFileName(invoice.invoice_number, "Invoice"), content: pdf, contentType: "application/pdf" });
         }
 
         for (const id of quotationIds) {
-          const { data: quotation } = await admin.from("quotations").select("*, clients!client_id(name, email, address, gstin, pan)").eq("id", id).single();
+          const { data: quotation } = await admin.from("quotations").select("*, clients!client_id(*)").eq("id", id).single();
           if (!quotation) throw new ApiError(404, "One of the selected quotations was not found.");
-          const pdf = await renderToBuffer(React.createElement(QuotationTemplate, { quotation, client: quotation.clients, firm }) as any);
-          attachments.push({
-            filename: `${String(quotation.quote_number || quotation.quotation_number || "Quotation").replace(/\//g, "-")}.pdf`,
-            content: pdf,
-            contentType: "application/pdf",
-          });
+          const pdf = await renderQuotationPdf(quotation, quotation.clients, firm);
+          attachments.push({ filename: pdfFileName(quotation.quote_number || quotation.quotation_number, "Quotation"), content: pdf, contentType: "application/pdf" });
         }
       }
 

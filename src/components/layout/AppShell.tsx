@@ -9,7 +9,7 @@ import { UserProvider } from "./UserContext";
 import type { SessionUser } from "./navConfig";
 
 // Full-screen pages that must not show the sidebar / topbar
-const BARE_PATHS = ["/reset-password"];
+const BARE_PATHS = ["/reset-password", "/engagement"];
 
 export default function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -20,7 +20,7 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
     setMobileNavOpen(false);
   }, [pathname]);
 
-  if (BARE_PATHS.includes(pathname)) {
+  if (BARE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     return <UserProvider value={user}>{children}</UserProvider>;
   }
 

@@ -79,6 +79,7 @@ export default function ComplianceCalendarPage() {
   // Editable categories (replaces the fixed list inside this page)
   const { activeNames: CATEGORIES } = useTaskCategories();
 
+
   const today = localISODate();
   const [cursor, setCursor] = useState(() => {
     const now = new Date();

@@ -26,16 +26,19 @@ import {
   Tags,
   Edit2,
   GitMerge,
+  ListOrdered,
+  ArrowRightLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Task, Client, Profile, TaskStage, TaskCategory } from "@/types/database";
+import { Task, Client, Profile, TaskStage } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
+import WorkQueue from "@/components/tasks/WorkQueue";
+import ReminderSettingsButton from "@/components/tasks/ReminderSettings";
+import { TransferDialog, TransferHistory, TransferRequestsBanner } from "@/components/tasks/TaskTransfer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
@@ -50,11 +53,10 @@ type TaskType = {
   statutory_day: number | null;
   statutory_month_offset: number;
   internal_buffer_days: number;
+  default_estimate_minutes: number | null;
   is_active: boolean;
 };
 
-const BASE_CATEGORIES: TaskCategory[] = ["GST", "Income Tax", "Audit", "ROC", "Other"];
-const CATEGORIES: string[] = ["GST", "Income Tax", "TDS", "Audit", "ROC", "Accounting", "Payroll", ...BASE_CATEGORIES.filter((c) => c === "Other")];
 const STAGES: TaskStage[] = ["Assigned", "In Progress", "Submitted for Review", "Changes Required", "Approved"];
 const RECURRENCE_OPTIONS = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
 const PRIORITIES = ["Low", "Medium", "High"];
@@ -150,6 +152,14 @@ function periodSuggestions(today: string): string[] {
   const prevQ = q === 1 ? `Q4 ${fyLabel(fy - 1)}` : `Q${q - 1} ${fyLabel(fy)}`;
   return [...months, `Q${q} ${fyLabel(fy)}`, prevQ, fyLabel(fy), fyLabel(fy - 1)];
 }
+function splitMinutes(total?: number | null): [string, string] {
+  if (!total) return ["", ""];
+  return [String(Math.floor(total / 60)), String(total % 60)];
+}
+function joinMinutes(h: string, m: string): number | null {
+  const total = Math.round(Number(h || 0) * 60 + Number(m || 0));
+  return total > 0 ? total : null;
+}
 
 /* ---------------- Page ---------------- */
 
@@ -160,13 +170,15 @@ export default function TasksPage() {
   const isReviewerUser = !!currentUser?.isReviewer;
   const [supabase] = useState(() => createClient());
 
-  // Editable categories (replaces the fixed list inside this page)
+  // Editable categories
   const { categories: categoryRows, activeNames: CATEGORIES, colorOf, reload: reloadCategories } = useTaskCategories();
   const [categoriesOpen, setCategoriesOpen] = useState(false);
 
-  // Notifications link straight to a task: /tasks?task=<id>
+  // Deep links from notifications: /tasks?task=<id> and /tasks?view=queue
   const router = useRouter();
-  const taskParam = useSearchParams().get("task");
+  const searchParams = useSearchParams();
+  const taskParam = searchParams.get("task");
+  const viewParam = searchParams.get("view");
 
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -175,7 +187,7 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
 
   // View & Filters
-  const [view, setView] = useState<"list" | "board">("list");
+  const [view, setView] = useState<"list" | "board" | "queue">("list");
   const [scope, setScope] = useState<"mine" | "review" | "all">(isAdmin ? "all" : "mine");
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState("");
@@ -214,6 +226,12 @@ export default function TasksPage() {
   const [notes, setNotes] = useState("");
   const [reviewComments, setReviewComments] = useState("");
   const [notifyClient, setNotifyClient] = useState(true);
+  const [estHours, setEstHours] = useState("");
+  const [estMinutes, setEstMinutes] = useState("");
+
+  // Transfers
+  const [transferMode, setTransferMode] = useState<null | "request" | "direct">(null);
+  const [transferKey, setTransferKey] = useState(0);
 
   // Time logs
   const [timeLogs, setTimeLogs] = useState<any[]>([]);
@@ -233,6 +251,8 @@ export default function TasksPage() {
   const [tDay, setTDay] = useState("");
   const [tOffset, setTOffset] = useState(1);
   const [tBuffer, setTBuffer] = useState(3);
+  const [tEstH, setTEstH] = useState("");
+  const [tEstM, setTEstM] = useState("");
   const [typeSaving, setTypeSaving] = useState(false);
   const [typeError, setTypeError] = useState("");
   const [typeSearch, setTypeSearch] = useState("");
@@ -246,6 +266,13 @@ export default function TasksPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (viewParam === "queue") {
+      setView("queue");
+      router.replace("/tasks");
+    }
+  }, [viewParam]);
 
   useEffect(() => {
     if (!taskParam || loading) return;
@@ -305,6 +332,7 @@ export default function TasksPage() {
   const activeTeam = team.filter((t) => t.is_active !== false);
   const reviewers = team.filter((t) => t.is_active !== false && (t.role === "admin" || t.role === "reviewer" || t.is_reviewer));
   const titleOf = (t: TaskRow) => `${t.title}${t.period ? ` · ${t.period}` : ""}`;
+  const clientTextOf = (t: TaskRow) => (clientById[t.client_id] ? clientLabel(clientById[t.client_id]) : t.organisation || "Internal");
 
   const typeGroups = useMemo(() => {
     const groups: Record<string, TaskType[]> = {};
@@ -393,6 +421,7 @@ export default function TasksPage() {
   const isTaskAssignee = !!editingTask && editingTask.assigned_to === me;
   const canEditCoreDetails = editingTask ? isAdmin || isTaskReviewer : isAdmin;
   const canReview = isAdmin || isTaskReviewer;
+  const canManageThis = !!editingTask && (isAdmin || isTaskReviewer || editingTask.assigned_by === me);
 
   let availableStages: TaskStage[] = STAGES;
   if (editingTask && !canEditCoreDetails) {
@@ -413,6 +442,7 @@ export default function TasksPage() {
     setLogDate(today);
     setLogDesc("");
     setLogBillable(true);
+    setTransferMode(null);
     if (task) {
       setEditingTask(task);
       setTaskTypeId(task.task_type_id || "");
@@ -430,6 +460,9 @@ export default function TasksPage() {
       setRecurrence(task.recurrence || "None");
       setNotes(task.notes || "");
       setReviewComments(task.review_comments || "");
+      const [h, m] = splitMinutes(task.estimated_minutes);
+      setEstHours(h);
+      setEstMinutes(m);
       setNotifyClient(true);
       loadTaskTimeline(task.id);
     } else {
@@ -445,6 +478,7 @@ export default function TasksPage() {
     setEditingTask(null);
     setTaskTimeline([]);
     setTimeLogs([]);
+    setTransferMode(null);
     resetForm();
   }
 
@@ -464,6 +498,8 @@ export default function TasksPage() {
     setRecurrence("None");
     setNotes("");
     setReviewComments("");
+    setEstHours("");
+    setEstMinutes("");
     setNotifyClient(true);
   }
 
@@ -490,6 +526,11 @@ export default function TasksPage() {
       setCategory(t.category || "Other");
       setRecurrence(t.default_recurrence || "None");
       applyTypeDefaults(t, period);
+      if (!estHours && !estMinutes && t.default_estimate_minutes) {
+        const [h, m] = splitMinutes(t.default_estimate_minutes);
+        setEstHours(h);
+        setEstMinutes(m);
+      }
     }
   }
 
@@ -526,6 +567,7 @@ export default function TasksPage() {
     const nextStage = stageOverride || stage;
     const cleanTitle = title.trim();
     const fullTitle = `${cleanTitle}${period.trim() ? ` · ${period.trim()}` : ""}`;
+    const estimate = joinMinutes(estHours, estMinutes);
 
     if (!editingTask && !taskTypeId) return setFormError("Choose a task from the list.");
     if (!cleanTitle) return setFormError("Task title is required.");
@@ -550,6 +592,7 @@ export default function TasksPage() {
       priority,
       stage: nextStage,
       recurrence,
+      estimated_minutes: estimate,
       notes: notes.trim(),
       review_comments: reviewComments.trim(),
     };
@@ -590,7 +633,7 @@ export default function TasksPage() {
           dispatchEmail(
             assignee.email,
             `New Task Assigned: ${fullTitle}`,
-            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${fullTitle}".\n\nClient: ${clientText}\nInternal deadline: ${formatDate(dueDate)}${officialDueDate ? `\nStatutory deadline: ${formatDate(officialDueDate)}` : ""}\nPriority: ${priority}\n\nPlease log into the portal, mark it as 'In Progress', and execute.`
+            `Hello ${assignee.name},\n\nYou have been assigned a new task: "${fullTitle}".\n\nClient: ${clientText}\nInternal deadline: ${formatDate(dueDate)}${officialDueDate ? `\nStatutory deadline: ${formatDate(officialDueDate)}` : ""}${estimate ? `\nEstimated time: ${formatMinutes(estimate)}` : ""}\nPriority: ${priority}\n\nPlease log into the portal and start when ready.`
           )
         );
       }
@@ -669,6 +712,7 @@ export default function TasksPage() {
   /* ---------------- Time logs ---------------- */
 
   const loggedMinutes = timeLogs.reduce((s, l) => s + Number(l.hours || 0) * 60, 0);
+  const estimateNow = joinMinutes(estHours, estMinutes);
 
   async function addTimeLog(e: React.FormEvent) {
     e.preventDefault();
@@ -713,11 +757,13 @@ export default function TasksPage() {
   function resetTypeForm() {
     setTypeEditingId(null);
     setTName("");
-    setTCategory("GST");
+    setTCategory(CATEGORIES[0] || "Other");
     setTRecurrence("Monthly");
     setTDay("");
     setTOffset(1);
     setTBuffer(3);
+    setTEstH("");
+    setTEstM("");
     setTypeError("");
   }
 
@@ -729,6 +775,9 @@ export default function TasksPage() {
     setTDay(t.statutory_day ? String(t.statutory_day) : "");
     setTOffset(t.statutory_month_offset ?? 0);
     setTBuffer(t.internal_buffer_days ?? 3);
+    const [h, m] = splitMinutes(t.default_estimate_minutes);
+    setTEstH(h);
+    setTEstM(m);
     setTypeError("");
   }
 
@@ -747,6 +796,7 @@ export default function TasksPage() {
       statutory_day: day,
       statutory_month_offset: tOffset,
       internal_buffer_days: tBuffer,
+      default_estimate_minutes: joinMinutes(tEstH, tEstM),
     };
 
     setTypeSaving(true);
@@ -761,9 +811,10 @@ export default function TasksPage() {
     }
     logAuditEvent(typeEditingId ? "UPDATE_TASK_TYPE" : "CREATE_TASK_TYPE", "TASK_TYPES", typeEditingId || undefined, { name: payload.name });
     showToast("success", typeEditingId ? `"${payload.name}" updated.` : `"${payload.name}" added to the task list.`);
+    const wasEditing = !!typeEditingId;
     resetTypeForm();
     await loadTaskTypes();
-    if (typeEditingId) loadData(false);
+    if (wasEditing) loadData(false);
   }
 
   async function toggleTypeActive(t: TaskType) {
@@ -804,12 +855,24 @@ export default function TasksPage() {
     );
   }
 
+  function TimeCell({ t }: { t: TaskRow }) {
+    const logged = Number(t.time_spent_minutes || 0);
+    const est = Number(t.estimated_minutes || 0);
+    if (!logged && !est) return <span className="text-text-muted">—</span>;
+    const over = est > 0 && logged > est;
+    return (
+      <span className={over ? "font-semibold text-rose-600" : "text-text-muted"} title={est ? `Logged ${formatMinutes(logged)} of ${formatMinutes(est)} estimated` : undefined}>
+        {formatMinutes(logged)}
+        {est > 0 && <span className="text-text-muted"> / {formatMinutes(est)}</span>}
+      </span>
+    );
+  }
+
   function TaskCard({ t }: { t: TaskRow }) {
     const done = t.stage === "Approved";
     const internal = dueInfo(t.due_date, done);
     const statutory = dueInfo(t.official_due_date, done);
     const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
-    const c = clientById[t.client_id];
     return (
       <button
         type="button"
@@ -825,7 +888,7 @@ export default function TasksPage() {
           </p>
           <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
         </div>
-        <p className="mt-1 truncate text-[11px] text-text-muted">{c ? clientLabel(c) : t.organisation || "Internal"}</p>
+        <p className="mt-1 truncate text-[11px] text-text-muted">{clientTextOf(t)}</p>
         <div className="mt-2 space-y-0.5 text-[10px]">
           <p className={`font-semibold ${internal.cls}`}>
             Int: {t.due_date ? formatDate(t.due_date) : "—"}
@@ -835,6 +898,12 @@ export default function TasksPage() {
             Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
             {t.official_due_date && statutory.label && ` · ${statutory.label}`}
           </p>
+          {(t.estimated_minutes || t.time_spent_minutes) && (
+            <p>
+              <Timer className="mr-0.5 inline h-3 w-3 text-text-muted" />
+              <TimeCell t={t} />
+            </p>
+          )}
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           {t.recurrence && t.recurrence !== "None" ? (
@@ -867,26 +936,29 @@ export default function TasksPage() {
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
             <CheckSquare className="h-5 w-5 text-navy" /> Tasks & Compliance
           </h2>
-          <p className="mt-1 text-xs text-text-muted">
-            Internal and statutory deadlines, maker-checker review and recurring compliance in one board.
-          </p>
+          <p className="mt-1 text-xs text-text-muted">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
           <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 transition ${view === "list" ? "bg-surface text-navy shadow-sm" : "text-text-muted"}`}
-            >
-              <List className="h-3.5 w-3.5" /> List
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("board")}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 transition ${view === "board" ? "bg-surface text-navy shadow-sm" : "text-text-muted"}`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Board
-            </button>
+            {(
+              [
+                { key: "list", label: "List", icon: List },
+                { key: "board", label: "Board", icon: LayoutGrid },
+                { key: "queue", label: "Queue", icon: ListOrdered },
+              ] as const
+            ).map((v) => {
+              const Icon = v.icon;
+              return (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => setView(v.key)}
+                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 transition ${view === v.key ? "bg-surface text-navy shadow-sm" : "text-text-muted"}`}
+                >
+                  <Icon className="h-3.5 w-3.5" /> {v.label}
+                </button>
+              );
+            })}
           </div>
           {isAdmin && (
             <button
@@ -909,6 +981,8 @@ export default function TasksPage() {
               <Tags className="h-4 w-4 text-navy" /> Categories
             </button>
           )}
+          {/* {isAdmin && <ReminderSettingsButton />} */}
+          {isAdmin && <ReminderSettingsButton />}
           {isAdmin && (
             <button
               type="button"
@@ -920,6 +994,18 @@ export default function TasksPage() {
           )}
         </div>
       </div>
+
+      {/* Transfer requests waiting for me */}
+      <TransferRequestsBanner
+        me={me}
+        isAdmin={isAdmin}
+        team={team}
+        refreshKey={transferKey}
+        onOpenTask={(id) => {
+          const t = tasks.find((x) => x.id === id);
+          if (t) openModal(t);
+        }}
+      />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -992,91 +1078,107 @@ export default function TasksPage() {
         </button>
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar + content */}
       <div className="rounded-xl border border-border bg-surface shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
-              {(
-                [
-                  { key: "mine", label: "My Work" },
-                  { key: "review", label: "Review Queue" },
-                  { key: "all", label: isAdmin ? "All Tasks" : "All Mine" },
-                ] as const
-              ).map((s) => (
+        {view !== "queue" && (
+          <div className="flex flex-col gap-3 border-b border-border p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+                {(
+                  [
+                    { key: "mine", label: "My Work" },
+                    { key: "review", label: "Review Queue" },
+                    { key: "all", label: isAdmin ? "All Tasks" : "All Mine" },
+                  ] as const
+                ).map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setScope(s.key)}
+                    className={`rounded-md px-3 py-1.5 transition ${scope === s.key ? "bg-surface text-navy shadow-sm" : "text-text-muted hover:text-text-main"}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative w-full lg:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search task, period, organisation, client..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
+                />
+              </div>
+              <span className="text-[11px] text-text-muted lg:ml-auto">
+                Showing {filteredTasks.length} of {scopedTasks.length}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {view === "list" && (
+                <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                  <option value="">All stages</option>
+                  {STAGES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">All categories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[240px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">All clients</option>
+                {clientFilterOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{clientLabel(c)}</option>
+                ))}
+              </select>
+              {isAdmin && (
+                <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                  <option value="">All staff</option>
+                  {activeTeam.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+              <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
+                <option value="">One-time & recurring</option>
+                <option value="recurring">Recurring only</option>
+                <option value="onetime">One-time only</option>
+              </select>
+              {hasFilters && (
                 <button
-                  key={s.key}
                   type="button"
-                  onClick={() => setScope(s.key)}
-                  className={`rounded-md px-3 py-1.5 transition ${scope === s.key ? "bg-surface text-navy shadow-sm" : "text-text-muted hover:text-text-main"}`}
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt hover:text-text-main"
                 >
-                  {s.label}
+                  <X className="h-3.5 w-3.5" /> Clear filters
                 </button>
-              ))}
+              )}
             </div>
-            <div className="relative w-full lg:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-              <input
-                type="text"
-                placeholder="Search task, period, organisation, client..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-xs shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15"
-              />
-            </div>
-            <span className="text-[11px] text-text-muted lg:ml-auto">
-              Showing {filteredTasks.length} of {scopedTasks.length}
-            </span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {view === "list" && (
-              <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-                <option value="">All stages</option>
-                {STAGES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            )}
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-              <option value="">All categories</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[240px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-              <option value="">All clients</option>
-              {clientFilterOptions.map((c) => (
-                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
-              ))}
-            </select>
-            {isAdmin && (
-              <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-                <option value="">All staff</option>
-                {activeTeam.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            )}
-            <select value={filterRecurring} onChange={(e) => setFilterRecurring(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-              <option value="">One-time & recurring</option>
-              <option value="recurring">Recurring only</option>
-              <option value="onetime">One-time only</option>
-            </select>
-            {hasFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt hover:text-text-main"
-              >
-                <X className="h-3.5 w-3.5" /> Clear filters
-              </button>
-            )}
-          </div>
-        </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks...
+          </div>
+        ) : view === "queue" ? (
+          /* ---------- Queue view ---------- */
+          <div className="p-4">
+            <WorkQueue
+              tasks={tasks}
+              team={team}
+              me={me}
+              isAdmin={isAdmin}
+              clientText={(t) => clientTextOf(t as TaskRow)}
+              onOpen={(t) => openModal(t as TaskRow)}
+              onChanged={() => loadData(false)}
+              showToast={showToast}
+            />
           </div>
         ) : view === "board" ? (
           /* ---------- Board view ---------- */
@@ -1094,11 +1196,7 @@ export default function TasksPage() {
                       <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted">{col.length}</span>
                     </div>
                     <div className="max-h-[65vh] space-y-2 overflow-y-auto">
-                      {shown.length === 0 ? (
-                        <p className="px-1 py-4 text-center text-[11px] text-text-muted">No tasks</p>
-                      ) : (
-                        shown.map((t) => <TaskCard key={t.id} t={t} />)
-                      )}
+                      {shown.length === 0 ? <p className="px-1 py-4 text-center text-[11px] text-text-muted">No tasks</p> : shown.map((t) => <TaskCard key={t.id} t={t} />)}
                       {s === "Approved" && col.length > 20 && <p className="px-1 text-center text-[10px] text-text-muted">Showing latest 20</p>}
                     </div>
                   </div>
@@ -1123,7 +1221,7 @@ export default function TasksPage() {
                   <th>Organisation / Client</th>
                   <th>Assignee</th>
                   <th>Reviewer</th>
-                  <th className="text-right">Time</th>
+                  <th className="text-right">Time / Est.</th>
                   <th>Stage</th>
                 </tr>
               </thead>
@@ -1169,7 +1267,9 @@ export default function TasksPage() {
                       </td>
                       <td className="whitespace-nowrap">{nameOf(t.assigned_to) || <span className="font-semibold text-rose-500">Unassigned</span>}</td>
                       <td className="whitespace-nowrap">{nameOf(t.reviewer_id) || <span className="text-text-muted">—</span>}</td>
-                      <td className="whitespace-nowrap text-right text-text-muted">{t.time_spent_minutes ? formatMinutes(t.time_spent_minutes) : "—"}</td>
+                      <td className="whitespace-nowrap text-right">
+                        <TimeCell t={t} />
+                      </td>
                       <td>
                         <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[t.stage] || STAGE_STYLES.Assigned}`}>
                           {t.stage}
@@ -1190,8 +1290,8 @@ export default function TasksPage() {
           title={editingTask ? titleOf(editingTask) : "Add Task"}
           subtitle={
             editingTask
-              ? `${clientById[editingTask.client_id] ? clientLabel(clientById[editingTask.client_id]) : editingTask.organisation || "Internal"} · ${editingTask.category || "Other"}`
-              : "Choose a task from the list. Deadlines fill in automatically where a rule is set."
+              ? `${clientTextOf(editingTask)} · ${editingTask.category || "Other"}`
+              : "Choose a task from the list. Deadlines and the estimate fill in automatically where set."
           }
           onClose={closeModal}
           maxWidth="max-w-6xl"
@@ -1219,6 +1319,24 @@ export default function TasksPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                )}
+                {editingTask && editingTask.stage !== "Approved" && editingTask.assigned_to && canManageThis && (
+                  <button
+                    type="button"
+                    onClick={() => setTransferMode("direct")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-navy transition hover:bg-surface-alt"
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
+                  </button>
+                )}
+                {editingTask && editingTask.stage !== "Approved" && isTaskAssignee && !canManageThis && (
+                  <button
+                    type="button"
+                    onClick={() => setTransferMode("request")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-navy transition hover:bg-surface-alt"
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" /> Request transfer
                   </button>
                 )}
                 {editingTask && isTaskAssignee && ["Assigned", "Changes Required"].includes(editingTask.stage) && (
@@ -1307,12 +1425,7 @@ export default function TasksPage() {
                         </button>
                       )}
                     </div>
-                    <select
-                      disabled={!canEditCoreDetails}
-                      value={taskTypeId || (isLegacyTitle ? "__legacy" : "")}
-                      onChange={(e) => handleTypeChange(e.target.value)}
-                      className={inputClass}
-                    >
+                    <select disabled={!canEditCoreDetails} value={taskTypeId || (isLegacyTitle ? "__legacy" : "")} onChange={(e) => handleTypeChange(e.target.value)} className={inputClass}>
                       <option value="">— Choose a task —</option>
                       {isLegacyTitle && <option value="__legacy">{title} (not in the task list)</option>}
                       {typeGroups.map(([cat, list]) => (
@@ -1334,15 +1447,7 @@ export default function TasksPage() {
                   </div>
                   <div>
                     <label className={labelClass}>Period</label>
-                    <input
-                      disabled={!canEditCoreDetails}
-                      list="period-options"
-                      value={period}
-                      onChange={(e) => handlePeriodChange(e.target.value)}
-                      className={inputClass}
-                      placeholder="e.g. Sep 2026"
-                      maxLength={40}
-                    />
+                    <input disabled={!canEditCoreDetails} list="period-options" value={period} onChange={(e) => handlePeriodChange(e.target.value)} className={inputClass} placeholder="e.g. Sep 2026" maxLength={40} />
                     <datalist id="period-options">
                       {periodOptions.map((p) => (
                         <option key={p} value={p} />
@@ -1410,13 +1515,22 @@ export default function TasksPage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className={labelClass}>Priority</label>
-                    <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClass}>
-                      {PRIORITIES.map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={labelClass}>Priority</label>
+                      <select disabled={!canEditCoreDetails} value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClass}>
+                        {PRIORITIES.map((p) => (
+                          <option key={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Estimate</label>
+                      <div className="flex gap-1">
+                        <input disabled={!canEditCoreDetails} type="number" min={0} max={999} placeholder="h" value={estHours} onChange={(e) => setEstHours(e.target.value)} className={`${inputClass} px-2`} aria-label="Estimated hours" />
+                        <input disabled={!canEditCoreDetails} type="number" min={0} max={59} step={5} placeholder="m" value={estMinutes} onChange={(e) => setEstMinutes(e.target.value)} className={`${inputClass} px-2`} aria-label="Estimated minutes" />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -1442,6 +1556,13 @@ export default function TasksPage() {
                     </select>
                   </div>
                 </div>
+
+                {editingTask?.assigned_by && (
+                  <p className="text-[10px] text-text-muted">
+                    Assigned by {nameOf(editingTask.assigned_by) || "—"}
+                    {editingTask.assigned_at ? ` on ${formatDateTime(editingTask.assigned_at)}` : ""}
+                  </p>
+                )}
 
                 {recurrence !== "None" && (
                   <div className="flex items-center gap-2 rounded-lg border border-navy/20 bg-navy/5 p-2.5 text-xs text-navy">
@@ -1476,6 +1597,27 @@ export default function TasksPage() {
                 )}
               </form>
 
+              {/* Transfers */}
+              {editingTask && (
+                <TransferHistory
+                  key={`${editingTask.id}-${transferKey}`}
+                  taskId={editingTask.id}
+                  team={team}
+                  me={me}
+                  canManage={canManageThis}
+                  reviewerId={editingTask.reviewer_id}
+                  onChanged={(closeTask) => {
+                    setTransferKey((k) => k + 1);
+                    if (closeTask) {
+                      showToast("success", "Transfer approved. The new assignee has been notified.");
+                      setIsModalOpen(false);
+                      setEditingTask(null);
+                    }
+                    loadData(false);
+                  }}
+                />
+              )}
+
               {/* Time log */}
               {editingTask && (
                 <div className="space-y-3 border-t border-border pt-4">
@@ -1483,8 +1625,19 @@ export default function TasksPage() {
                     <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
                       <Timer className="h-4 w-4 text-navy" /> Time Logged
                     </h4>
-                    <span className="text-xs font-semibold text-navy">{formatMinutes(loggedMinutes)} total</span>
+                    <span className={`text-xs font-semibold ${estimateNow && loggedMinutes > estimateNow ? "text-rose-600" : "text-navy"}`}>
+                      {formatMinutes(loggedMinutes)}
+                      {estimateNow ? ` of ${formatMinutes(estimateNow)} estimated` : " total"}
+                    </span>
                   </div>
+                  {estimateNow ? (
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+                      <div
+                        className={`h-full rounded-full ${loggedMinutes > estimateNow ? "bg-rose-500" : "bg-navy"}`}
+                        style={{ width: `${Math.min(100, (loggedMinutes / estimateNow) * 100)}%` }}
+                      />
+                    </div>
+                  ) : null}
 
                   {(isTaskAssignee || canReview) && (
                     <form onSubmit={addTimeLog} className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-surface-alt p-2.5 sm:grid-cols-12">
@@ -1551,28 +1704,39 @@ export default function TasksPage() {
                   <div className="space-y-4">
                     {taskTimeline.map((log: any) => {
                       const isCreate = log.action === "CREATE_TASK";
+                      const m = log.metadata || {};
+                      const label = isCreate
+                        ? "Task created"
+                        : m.transfer_requested
+                        ? "Transfer requested"
+                        : m.transfer_declined
+                        ? "Transfer declined"
+                        : m.transfer_withdrawn
+                        ? "Transfer request withdrawn"
+                        : String(log.action || "").replace(/_/g, " ").toLowerCase();
                       return (
                         <div key={log.id} className="relative border-l-2 border-border pb-1 pl-4">
                           <div className={`absolute -left-[5px] top-1 h-2 w-2 rounded-full ${isCreate ? "bg-emerald-500" : "bg-navy"}`} />
                           <div className="mb-0.5 flex items-start justify-between gap-2">
-                            <span className="text-[11px] font-semibold text-text-main">
-                              {isCreate ? "Task created" : String(log.action || "").replace(/_/g, " ").toLowerCase()}
-                            </span>
+                            <span className="text-[11px] font-semibold text-text-main">{label}</span>
                             <span className="whitespace-nowrap text-[10px] text-text-muted">{formatDateTime(log.timestamp)}</span>
                           </div>
                           <p className="text-[11px] text-text-muted">
-                            by <span className="font-semibold">{log.metadata?.actor_name || "System"}</span>
+                            by <span className="font-semibold">{m.actor_name || "System"}</span>
                           </p>
-                          {log.metadata?.stage_changed_to && (
-                            <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[log.metadata.stage_changed_to] || ""}`}>
-                              → {log.metadata.stage_changed_to}
+                          {m.stage_changed_to && (
+                            <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[m.stage_changed_to] || ""}`}>
+                              → {m.stage_changed_to}
                             </span>
                           )}
-                          {log.metadata?.reassigned_to && <p className="mt-1 text-[10px] text-text-muted">Reassigned to {log.metadata.reassigned_to}</p>}
-                          {log.metadata?.feedback && <p className="mt-1 rounded bg-amber-50 p-1.5 text-[10px] text-amber-800">{log.metadata.feedback}</p>}
-                          {log.metadata?.time_logged && (
+                          {m.reassigned_to && <p className="mt-1 text-[10px] text-text-muted">Reassigned to {m.reassigned_to}</p>}
+                          {m.transfer_reason && <p className="mt-1 text-[10px] text-text-main">Reason: {m.transfer_reason}</p>}
+                          {m.handover && <p className="mt-1 whitespace-pre-wrap rounded bg-blue-50 p-1.5 text-[10px] text-blue-800">Handover: {m.handover}</p>}
+                          {m.decision_note && <p className="mt-1 text-[10px] italic text-text-muted">{m.decision_note}</p>}
+                          {m.feedback && <p className="mt-1 rounded bg-amber-50 p-1.5 text-[10px] text-amber-800">{m.feedback}</p>}
+                          {m.time_logged && (
                             <span className="mt-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                              Logged {log.metadata.time_logged}
+                              Logged {m.time_logged}
                             </span>
                           )}
                         </div>
@@ -1586,11 +1750,32 @@ export default function TasksPage() {
         </Modal>
       )}
 
+      {/* ================= Transfer dialog ================= */}
+      {transferMode && editingTask && (
+        <TransferDialog
+          mode={transferMode}
+          task={editingTask}
+          team={team}
+          onClose={() => setTransferMode(null)}
+          onDone={(message) => {
+            const wasDirect = transferMode === "direct";
+            setTransferMode(null);
+            setTransferKey((k) => k + 1);
+            showToast("success", message);
+            if (wasDirect) {
+              setIsModalOpen(false);
+              setEditingTask(null);
+            }
+            loadData(false);
+          }}
+        />
+      )}
+
       {/* ================= Task List Manager (admin) ================= */}
       {typesOpen && (
         <Modal
           title="Task List"
-          subtitle="Staff can only choose task titles from this list. Rules fill in deadlines automatically."
+          subtitle="Staff can only choose task titles from this list. Rules fill in deadlines and estimates automatically."
           onClose={() => !typeSaving && setTypesOpen(false)}
           maxWidth="max-w-5xl"
         >
@@ -1603,8 +1788,8 @@ export default function TasksPage() {
                   <span>{typeError}</span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-                <div className="col-span-2 sm:col-span-2">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="col-span-2">
                   <label className={labelClass}>Task Name *</label>
                   <input value={tName} onChange={(e) => setTName(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B Return" maxLength={120} />
                 </div>
@@ -1647,16 +1832,19 @@ export default function TasksPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className={labelClass}>Default Estimate</label>
+                  <div className="flex gap-1">
+                    <input type="number" min={0} max={999} placeholder="h" value={tEstH} onChange={(e) => setTEstH(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate hours" />
+                    <input type="number" min={0} max={59} step={5} placeholder="m" value={tEstM} onChange={(e) => setTEstM(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate minutes" />
+                  </div>
+                </div>
               </div>
               <p className="text-[10px] text-text-muted">
-                Example: GSTR-3B for period "Sep 2026" with day 20 of the next month gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
+                Example: GSTR-3B for period "Sep 2026", day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
               </p>
               <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={typeSaving}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
-                >
+                <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
                   {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                   {typeEditingId ? "Save Changes" : "Add to List"}
                 </button>
@@ -1687,6 +1875,7 @@ export default function TasksPage() {
                     <th>Category</th>
                     <th>Recurrence</th>
                     <th>Statutory Rule</th>
+                    <th>Estimate</th>
                     <th className="text-right">Tasks</th>
                     <th className="text-right">Actions</th>
                   </tr>
@@ -1694,7 +1883,7 @@ export default function TasksPage() {
                 <tbody>
                   {visibleTypes.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-6 text-center text-text-muted">No tasks match.</td>
+                      <td colSpan={7} className="py-6 text-center text-text-muted">No tasks match.</td>
                     </tr>
                   ) : (
                     visibleTypes.map((t) => (
@@ -1703,12 +1892,15 @@ export default function TasksPage() {
                           {t.name}
                           {!t.is_active && <span className="ml-1 text-[10px] font-normal text-text-muted">(archived)</span>}
                         </td>
-                        <td>{t.category}</td>
+                        <td>
+                          <CategoryBadge name={t.category} colorOf={colorOf} />
+                        </td>
                         <td>{t.default_recurrence === "None" ? "One-time" : t.default_recurrence}</td>
                         <td className="whitespace-nowrap">
                           {ruleText(t)}
                           {t.statutory_day ? <span className="text-text-muted"> · −{t.internal_buffer_days}d internal</span> : null}
                         </td>
+                        <td className="whitespace-nowrap">{t.default_estimate_minutes ? formatMinutes(t.default_estimate_minutes) : "—"}</td>
                         <td className="text-right">{taskCountByType[t.id] || 0}</td>
                         <td className="whitespace-nowrap text-right">
                           <div className="inline-flex gap-1">
@@ -1726,11 +1918,7 @@ export default function TasksPage() {
                             >
                               <GitMerge className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleTypeActive(t)}
-                              className="rounded-md px-2 py-1 text-[10px] font-semibold text-text-muted transition hover:bg-surface-alt"
-                            >
+                            <button type="button" onClick={() => toggleTypeActive(t)} className="rounded-md px-2 py-1 text-[10px] font-semibold text-text-muted transition hover:bg-surface-alt">
                               {t.is_active ? "Archive" : "Restore"}
                             </button>
                           </div>

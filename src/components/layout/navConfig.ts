@@ -18,6 +18,7 @@ import {
   Clock3,
   AlertTriangle,
   BarChart3,
+  Gauge,
 } from "lucide-react";
 
 /** Minimal, serialisable user object passed from the server layout to the client shell. */
@@ -38,6 +39,8 @@ export interface NavItem {
   icon: LucideIcon;
   moduleId: string;
   adminOnly?: boolean;
+  /** Visible to every active user (each sees only their own data on that page). */
+  everyone?: boolean;
 }
 
 export interface NavSection {
@@ -68,6 +71,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: "Tasks & Compliance", href: "/tasks", icon: CheckSquare, moduleId: "tasks" },
       { name: "Compliance Calendar", href: "/calendar", icon: Calendar, moduleId: "calendar" },
       { name: "Time Tracking", href: "/time-tracking", icon: Clock, moduleId: "time_tracking" },
+      { name: "Performance", href: "/performance", icon: Gauge, moduleId: "performance", everyone: true },
       { name: "Documents", href: "/documents", icon: Folder, moduleId: "documents" },
     ],
   },
@@ -96,6 +100,7 @@ export const REVIEWER_SUB_TABS = [
 export function canAccess(item: NavItem, user: SessionUser): boolean {
   if (item.href === "/") return true;
   if (item.adminOnly && !user.isAdmin) return false;
+  if (item.everyone) return true;
   if (!user.isAdmin) return user.moduleAccess.includes(item.moduleId);
   return true;
 }

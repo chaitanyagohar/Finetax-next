@@ -146,8 +146,6 @@ export default function SettingsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
   const [supabase] = useState(() => createClient());
-  // Editable categories (replaces the fixed list inside this page)
-  const { activeNames: CATEGORIES } = useTaskCategories();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
