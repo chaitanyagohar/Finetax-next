@@ -36,8 +36,8 @@ const RECURRENCES = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
 const CYCLES = ["Monthly", "Quarterly", "Half-Yearly", "Yearly"];
 const CYCLE_MONTHS: Record<string, number> = { Monthly: 1, Quarterly: 3, "Half-Yearly": 6, Yearly: 12 };
 
-type ServiceRow = { id?: string; title: string; category: string; days_due_offset: number; recurrence: string; default_assignee_id: string };
-const EMPTY_SERVICE: ServiceRow = { title: "", category: "GST", days_due_offset: 10, recurrence: "Monthly", default_assignee_id: "" };
+type ServiceRow = { id?: string; task_type_id: string; title: string; category: string; days_due_offset: number; recurrence: string; default_assignee_id: string };
+const EMPTY_SERVICE: ServiceRow = { task_type_id: "", title: "", category: "GST", days_due_offset: 10, recurrence: "Monthly", default_assignee_id: "" };
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -59,6 +59,8 @@ export default function PackagesPage() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
+  const [taskTypes, setTaskTypes] = useState<any[]>([]);
+  const [schedule, setSchedule] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -101,22 +103,30 @@ export default function PackagesPage() {
 
   async function loadData() {
     setLoading(true);
-    const [pRes, sRes, cRes, tRes] = await Promise.all([
+    const [pRes, sRes, cRes, tRes, ttRes] = await Promise.all([
       supabase.from("service_packages").select("*, package_services(*)").order("created_at", { ascending: false }),
       supabase.from("client_packages").select("*").order("start_date", { ascending: false }),
       supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, assigned_to, status").order("name", { ascending: true }),
       supabase.from("profiles").select("id, name, role, is_active, is_reviewer").order("name", { ascending: true }),
+      supabase.from("task_types").select("*").order("category", { ascending: true }).order("name", { ascending: true }),
     ]);
     if (pRes.error) showToast("error", "Could not load packages.");
     setPackages(pRes.data || []);
     setSubscriptions(sRes.data || []);
     setClients(cRes.data || []);
     setTeam(tRes.data || []);
+    setTaskTypes(ttRes.data || []);
     setLoading(false);
     setRefreshKey((k) => k + 1);
   }
 
   const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
+  const typeById = useMemo(() => Object.fromEntries(taskTypes.map((t) => [t.id, t])), [taskTypes]);
+  const typeGroups = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    taskTypes.filter((t) => t.is_active).forEach((t) => (groups[t.category || "Other"] = groups[t.category || "Other"] || []).push(t));
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [taskTypes]);
   const teamName = (id?: string) => team.find((t) => t.id === id)?.name || "";
   const activeTeam = team.filter((t) => t.is_active !== false);
   const reviewers = activeTeam.filter((t) => t.role === "admin" || t.role === "reviewer" || t.is_reviewer);
@@ -166,6 +176,7 @@ export default function PackagesPage() {
           days_due_offset: Number(s.days_due_offset ?? 10),
           recurrence: s.recurrence || "None",
           default_assignee_id: s.default_assignee_id || "",
+          task_type_id: s.task_type_id || "",
         }))
       );
     } else {
@@ -225,6 +236,7 @@ export default function PackagesPage() {
       days_due_offset: Number(s.days_due_offset) || 0,
       recurrence: s.recurrence,
       default_assignee_id: s.default_assignee_id || null,
+      task_type_id: s.task_type_id || null,
     }));
 
     setPkgSaving(true);
@@ -279,14 +291,30 @@ export default function PackagesPage() {
 
   const subscribedClientIds = selectedPkg ? new Set(activeSubsFor(selectedPkg.id).map((s) => s.client_id)) : new Set<string>();
   const selectedClient = clientById[selectedClientId];
+  useEffect(() => {
+    if (!selectedPkg || !startDate) {
+      setSchedule([]);
+      return;
+    }
+    supabase.rpc("package_schedule_preview", { p_package_id: selectedPkg.id, p_start: startDate }).then(({ data }) => setSchedule(data || []));
+  }, [selectedPkg, startDate]);
+
   const preview = selectedPkg
     ? (selectedPkg.package_services || [])
-        .slice()
-        .sort((a: any, b: any) => Number(a.days_due_offset) - Number(b.days_due_offset))
         .map((s: any) => {
+          const sch = schedule.find((x) => x.service_id === s.id);
           const assignee = s.default_assignee_id || selectedClient?.assigned_to || "";
-          return { ...s, due: addDays(startDate || localISODate(), Number(s.days_due_offset ?? 10)), assignee, reviewerDropped: !!reviewerId && reviewerId === assignee };
+          return {
+            ...s,
+            title: sch?.title || s.title,
+            period: sch?.period || "",
+            due: sch?.internal_date || addDays(startDate || localISODate(), Number(s.days_due_offset ?? 10)),
+            statutory: sch?.statutory_date || "",
+            assignee,
+            reviewerDropped: !!reviewerId && reviewerId === assignee,
+          };
         })
+        .sort((a: any, b: any) => String(a.due).localeCompare(String(b.due)))
     : [];
 
   async function handleOnboardClient() {
@@ -457,7 +485,8 @@ export default function PackagesPage() {
                                 {s.title} <span className="text-text-muted">· {s.category}</span>
                               </span>
                               <span className="shrink-0 text-[10px] text-text-muted">
-                                +{s.days_due_offset}d · {s.recurrence && s.recurrence !== "None" ? `↻ ${s.recurrence}` : "one-time"} · {teamName(s.default_assignee_id) || "Client's RM"}
+                                {s.task_type_id && typeById[s.task_type_id]?.statutory_day ? "statutory rule" : `+${s.days_due_offset}d`} ·{" "}
+                                {s.recurrence && s.recurrence !== "None" ? `↻ ${s.recurrence}` : "one-time"} · {teamName(s.default_assignee_id) || "Client's RM"}
                               </span>
                             </div>
                           ))
@@ -586,7 +615,25 @@ export default function PackagesPage() {
               </div>
               {serviceTemplates.map((srv, idx) => (
                 <div key={srv.id || `new-${idx}`} className="grid grid-cols-2 items-center gap-2 rounded-lg border border-border bg-surface-alt p-2 sm:grid-cols-12">
-                  <input value={srv.title} onChange={(e) => updateTemplateField(idx, "title", e.target.value)} placeholder="e.g. GSTR-1 filing" className={`${smallInput} col-span-2 sm:col-span-4`} />
+                  <div className="col-span-2 space-y-1 sm:col-span-4">
+                    <select value={srv.task_type_id} onChange={(e) => linkTaskType(idx, e.target.value)} className={smallInput}>
+                      <option value="">Custom (not in Task List)</option>
+                      {typeGroups.map(([cat, list]) => (
+                        <optgroup key={cat} label={cat}>
+                          {list.map((t: any) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    {!srv.task_type_id ? (
+                      <input value={srv.title} onChange={(e) => updateTemplateField(idx, "title", e.target.value)} placeholder="Custom task title" className={smallInput} />
+                    ) : typeById[srv.task_type_id]?.statutory_day ? (
+                      <p className="text-[10px] font-semibold text-emerald-700">Deadlines from the Task List rule (the +days field is ignored)</p>
+                    ) : (
+                      <p className="text-[10px] text-text-muted">No statutory rule on this entry; uses +days</p>
+                    )}
+                  </div>
                   <select value={srv.category} onChange={(e) => updateTemplateField(idx, "category", e.target.value)} className={`${smallInput} sm:col-span-2`}>
                     {(CATEGORIES.includes(srv.category) ? CATEGORIES : [srv.category, ...CATEGORIES]).map((c) => (
                       <option key={c}>{c}</option>
@@ -709,7 +756,9 @@ export default function PackagesPage() {
                 <thead>
                   <tr>
                     <th>Task</th>
-                    <th>Due</th>
+                    <th>Period</th>
+                    <th>Internal</th>
+                    <th>Statutory</th>
                     <th>Recurrence</th>
                     <th>Assigned to</th>
                   </tr>
@@ -718,7 +767,9 @@ export default function PackagesPage() {
                   {preview.map((p: any) => (
                     <tr key={p.id}>
                       <td className="font-medium text-text-main">{p.title}</td>
+                      <td className="whitespace-nowrap text-text-muted">{p.period || "—"}</td>
                       <td className="whitespace-nowrap">{formatDate(p.due)}</td>
+                      <td className="whitespace-nowrap font-semibold text-rose-700">{p.statutory ? formatDate(p.statutory) : "—"}</td>
                       <td>{p.recurrence && p.recurrence !== "None" ? `↻ ${p.recurrence}` : "One-time"}</td>
                       <td>
                         {teamName(p.assignee) || <span className="font-semibold text-rose-600">Unassigned</span>}

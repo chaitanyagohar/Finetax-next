@@ -179,6 +179,7 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
   const taskParam = searchParams.get("task");
   const viewParam = searchParams.get("view");
+  const staffParam = searchParams.get("staff");
 
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -266,6 +267,15 @@ export default function TasksPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (staffParam === "unassigned") {
+      setScope("all");
+      setView("list");
+      setFilterStaff("__none");
+      router.replace("/tasks");
+    }
+  }, [staffParam]);
 
   useEffect(() => {
     if (viewParam === "queue") {
@@ -394,7 +404,7 @@ export default function TasksPage() {
       if (filterStage && t.stage !== filterStage) return false;
       if (filterCategory && t.category !== filterCategory) return false;
       if (filterClient && t.client_id !== filterClient) return false;
-      if (filterStaff && String(t.assigned_to) !== filterStaff) return false;
+      if (filterStaff === "__none" ? !!t.assigned_to : !!filterStaff && String(t.assigned_to) !== filterStaff) return false;
       if (filterRecurring === "recurring" && (!t.recurrence || t.recurrence === "None")) return false;
       if (filterRecurring === "onetime" && t.recurrence && t.recurrence !== "None") return false;
       if (filterDue === "overdue" && !(t.stage !== "Approved" && t.due_date && t.due_date < today)) return false;
@@ -1139,6 +1149,7 @@ export default function TasksPage() {
               {isAdmin && (
                 <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
                   <option value="">All staff</option>
+                  <option value="__none">Unassigned</option>
                   {activeTeam.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}

@@ -1,21 +1,16 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
-import React from "react";
-import { renderToBuffer } from "@react-pdf/renderer";
-import QuotationTemplate from "./QuotationTemplate";
-import {
-  ApiError,
-  assertSameOrigin,
-  errorResponse,
-  getAdminClient,
-  requireModule,
-  writeAuditLog,
-} from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireModule, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { EMAIL_RE, escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { pdfFileName, renderQuotationPdf } from "@/lib/pdf/firmDocuments";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const inr = (n: unknown) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dmy = (iso?: string | null) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,89 +32,51 @@ export async function POST(request: NextRequest) {
     const quotationId = typeof body?.quotationId === "string" ? body.quotationId : "";
     const recipientEmail = typeof body?.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
 
-    if (!quotationId || !recipientEmail) {
-      throw new ApiError(400, "Quotation ID and recipient email are required.");
-    }
-    if (!UUID_RE.test(quotationId)) {
-      throw new ApiError(400, "Invalid quotation.");
-    }
-    if (!EMAIL_RE.test(recipientEmail)) {
-      throw new ApiError(400, "Please enter a valid recipient email address.");
-    }
+    if (!quotationId || !recipientEmail) throw new ApiError(400, "Quotation ID and recipient email are required.");
+    if (!UUID_RE.test(quotationId)) throw new ApiError(400, "Invalid quotation.");
+    if (!EMAIL_RE.test(recipientEmail)) throw new ApiError(400, "Please enter a valid recipient email address.");
 
-    // 2. Fetch Quotation & Firm Data
+    // 2. Quotation & firm data
     const supabase = getAdminClient();
+    const { data: quotation, error: quoteErr } = await supabase.from("quotations").select("*, clients!client_id(*)").eq("id", quotationId).single();
+    if (quoteErr || !quotation) throw new ApiError(404, "Quotation not found.");
 
-    const { data: quotation, error: quoteErr } = await supabase
-      .from("quotations")
-      .select("*, clients!client_id(name, email, address, gstin, pan)")
-      .eq("id", quotationId)
-      .single();
+    const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle();
 
-    if (quoteErr || !quotation) {
-      throw new ApiError(404, "Quotation not found.");
-    }
+    const client = quotation.clients;
+    const clientName = client?.name || quotation.recipient_name || quotation.organisation || "Valued Client";
+    const quoteNum = quotation.quote_number || quotation.quotation_number || "Quotation";
+    const firmName = firm?.firm_name || "Our firm";
+    const validUntil = quotation.valid_until || quotation.validUntil;
 
-    const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
+    // 3. PDF (same design as the preview)
+    const pdfBuffer = await renderQuotationPdf(quotation, client, firm);
 
-    const clientData = quotation.clients;
-    const clientName = clientData?.name
-      ? String(clientData.name)
-      : quotation?.recipient_name
-      ? String(quotation.recipient_name)
-      : quotation?.organisation
-      ? String(quotation.organisation)
-      : "Valued Client";
-
-    const quoteNum = quotation.quote_number || quotation.quotation_number || "QTN-000";
-    const firmName = firm?.firm_name || "Finetax";
-
-    // 3. Generate the PDF on the server
-    const pdfBuffer = await renderToBuffer(
-      React.createElement(QuotationTemplate, {
-        quotation,
-        client: clientData,
-        firm,
-      }) as any
-    );
-
-    // 4. Draft Email (all dynamic values escaped)
-    const emailSubject = `Quotation ${quoteNum} from ${firmName}`;
+    // 4. Email (all dynamic values escaped)
     const htmlBody = `
-      <div style="font-family: Arial, sans-serif; color: #1e293b; padding: 24px;">
+      <div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
         <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
-        <p>Please find attached your formal quotation <strong>${escapeHtml(quoteNum)}</strong> for proposed services.</p>
-        <p>You can securely view, download, or print the full document from the PDF attachment below.</p>
-        <br/>
+        <p>Thank you for your enquiry. Please find attached our quotation <strong>${escapeHtml(quoteNum)}</strong> for <strong>${inr(quotation.total)}</strong> (including GST).</p>
+        ${validUntil ? `<p>This quotation is valid until <strong>${dmy(validUntil)}</strong>.</p>` : ""}
+        <p>Please reply to this email if you have any questions or would like to go ahead.</p>
         <p>Best regards,<br/><strong>${escapeHtml(firmName)}</strong></p>
-      </div>
-    `;
+      </div>`;
     const textBody =
-      `Dear ${clientName},\n\n` +
-      `Please find attached your formal quotation ${quoteNum} for proposed services.\n\n` +
-      `Best regards,\n${firmName}`;
+      `Dear ${clientName},\n\nPlease find attached our quotation ${quoteNum} for ${inr(quotation.total)} (including GST).` +
+      (validUntil ? `\nValid until ${dmy(validUntil)}.` : "") +
+      `\n\nBest regards,\n${firmName}`;
 
-    // 5. Send directly via the shared mailer (no internal HTTP hop)
+    // 5. Send
     await sendFirmEmail({
       to: recipientEmail,
-      subject: emailSubject,
+      subject: `Quotation ${quoteNum} from ${firmName}`,
       html: htmlBody,
       text: textBody,
-      attachments: [
-        {
-          filename: `${quoteNum.replace(/\//g, "-")}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        },
-      ],
+      attachments: [{ filename: pdfFileName(quoteNum, "Quotation"), content: pdfBuffer, contentType: "application/pdf" }],
     });
 
-    // 6. Update DB Status
-    const { error: updateError } = await supabase
-      .from("quotations")
-      .update({ email_sent_at: new Date().toISOString() })
-      .eq("id", quotationId);
-
+    // 6. Mark as emailed
+    const { error: updateError } = await supabase.from("quotations").update({ email_sent_at: new Date().toISOString() }).eq("id", quotationId);
     if (updateError) {
       console.error("Supabase Update Error:", updateError.message);
       throw new ApiError(500, "The email was sent, but the quotation status could not be updated.");
@@ -130,12 +87,7 @@ export async function POST(request: NextRequest) {
       action: "SEND_QUOTATION_EMAIL",
       entity: "QUOTATIONS",
       entity_id: quotationId,
-      metadata: {
-        recipientEmail,
-        quotationNumber: quoteNum,
-        actor_name: caller.name,
-        user_id: caller.userId,
-      },
+      metadata: { recipientEmail, quotationNumber: quoteNum, actor_name: caller.name, user_id: caller.userId },
     });
 
     return NextResponse.json({ success: true, message: "Quotation email sent successfully with PDF attachment!" });

@@ -80,6 +80,7 @@ const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   billing_ready: { icon: ClipboardList, style: "bg-amber-50 text-amber-600" },
   proposal_accepted: { icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600" },
   proposal_declined: { icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
+  tasks_unassigned: { icon: AlertCircle, style: "bg-amber-50 text-amber-600" },
 };
 
 function timeAgo(iso: string): string {

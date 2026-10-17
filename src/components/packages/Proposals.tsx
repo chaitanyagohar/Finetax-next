@@ -390,7 +390,11 @@ export default function ProposalsPanel({
     if (error) return setAccError(error.message);
     const r = data as any;
     logAuditEvent("ACCEPT_PROPOSAL", "PROPOSALS", acceptFor.id, { number: acceptFor.number, accepted_by: accName, tasks: r?.tasks_created });
-    showToast("success", `Accepted. Client onboarded with ${r?.tasks_created ?? 0} tasks${r?.unassigned ? ` (${r.unassigned} unassigned)` : ""}. Monthly billing is on.`);
+    showToast(
+      "success",
+      `Accepted. Client onboarded with ${r?.tasks_created ?? 0} tasks${r?.unassigned ? ` (${r.unassigned} unassigned)` : ""}. Monthly billing is on.` +
+        (r?.start_moved_from ? ` Start date moved from ${formatDate(r.start_moved_from)} to ${formatDate(r.start_date)}.` : "")
+    );
     setAcceptFor(null);
     load();
     onChanged();
