@@ -24,6 +24,8 @@ const MODULE_PATHS: { base: string; module: string }[] = [
 // Routes for reviewers and administrators
 const REVIEWER_PATHS = ["/reviewer-queue"];
 
+// Support Inbox: support agents only
+const SUPPORT_PATHS = ["/support"];
 // Same default as the root layout, for people with no modules saved
 const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
 
@@ -95,11 +97,12 @@ export async function proxy(request: NextRequest) {
     const adminPath = ADMIN_ONLY_PATHS.some((base) => matchesPath(pathname, base));
     const reviewerPath = REVIEWER_PATHS.some((base) => matchesPath(pathname, base));
     const modulePath = MODULE_PATHS.find((m) => matchesPath(pathname, m.base));
+    const supportPath = SUPPORT_PATHS.some((base) => matchesPath(pathname, base));
 
-    if (adminPath || reviewerPath || modulePath) {
+    if (adminPath || reviewerPath || modulePath || supportPath) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, is_active, is_reviewer, module_access")
+        .select("role, is_active, is_reviewer, module_access, is_support_agent")
         .eq("id", user.id)
         .single();
 
@@ -107,7 +110,9 @@ export async function proxy(request: NextRequest) {
       const isAdmin = active && profile!.role === "admin";
       let allowed = false;
 
-      if (adminPath) {
+      if (supportPath) {
+        allowed = active && !!profile!.is_support_agent;
+      } else if (adminPath) {
         allowed = isAdmin;
       } else if (reviewerPath) {
         allowed = isAdmin || (active && (profile!.role === "reviewer" || !!profile!.is_reviewer));

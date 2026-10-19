@@ -4,8 +4,11 @@
  * Uses only built-in PDF fonts and a locally generated UPI QR code (no outside calls).
  */
 import React from "react";
-import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import QRCode from "qrcode";
+
+// Never split words with hyphens (keeps names and addresses intact)
+Font.registerHyphenationCallback((word) => [word]);
 
 type Rec = Record<string, any> | null | undefined;
 
@@ -193,7 +196,7 @@ function Header({ firm, badge, title, number, issued }: { firm: Rec; badge: stri
   return (
     <View style={s.header} fixed>
       <View style={s.company}>
-        <Text style={s.brand}>{firmName.toUpperCase()}</Text>
+        <Text style={[s.brand, firmName.length > 24 ? { fontSize: 15 } : {}]}>{firmName.toUpperCase()}</Text>
         <View style={s.accent} />
         {firm?.address ? <Text style={s.companyText}>{str(firm.address)}</Text> : null}
         <Text style={s.companyMeta}>

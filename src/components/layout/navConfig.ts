@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   BarChart3,
   Gauge,
+  LifeBuoy,
+  Headphones,
 } from "lucide-react";
 
 /** Minimal, serialisable user object passed from the server layout to the client shell. */
@@ -31,6 +33,7 @@ export interface SessionUser {
   isAdmin: boolean;
   isReviewer: boolean;
   moduleAccess: string[];
+  isSupportAgent?: boolean;
 }
 
 export interface NavItem {
@@ -41,6 +44,8 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Visible to every active user (each sees only their own data on that page). */
   everyone?: boolean;
+    /** Visible only to support agents. */
+  supportOnly?: boolean;
 }
 
 export interface NavSection {
@@ -80,6 +85,13 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [{ name: "Invoices", href: "/invoices", icon: Receipt, moduleId: "invoices" }],
   },
   {
+    label: "Support",
+    items: [
+      { name: "Help & Support", href: "/help", icon: LifeBuoy, moduleId: "help", everyone: true },
+      { name: "Support Inbox", href: "/support", icon: Headphones, moduleId: "support", supportOnly: true },
+    ],
+  },
+  {
     label: "Administration",
     items: [
       { name: "Team Management", href: "/team", icon: UserCheck, adminOnly: true, moduleId: "team" },
@@ -99,6 +111,7 @@ export const REVIEWER_SUB_TABS = [
 /** UI-level visibility only. Real enforcement must happen in Supabase RLS + middleware. */
 export function canAccess(item: NavItem, user: SessionUser): boolean {
   if (item.href === "/") return true;
+  if (item.supportOnly) return !!user.isSupportAgent;
   if (item.adminOnly && !user.isAdmin) return false;
   if (item.everyone) return true;
   if (!user.isAdmin) return user.moduleAccess.includes(item.moduleId);

@@ -86,6 +86,7 @@ export default async function RootLayout({
     designation: profile?.designation ?? null,
     isAdmin,
     isReviewer: isAdmin || role === "reviewer" || !!profile?.is_reviewer,
+    isSupportAgent: !!profile?.is_support_agent,
     moduleAccess: Array.isArray(profile?.module_access) ? profile.module_access : DEFAULT_STAFF_MODULES,
   };
 

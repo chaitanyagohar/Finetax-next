@@ -31,6 +31,8 @@ const LOOK: Record<string, { icon: LucideIcon; tone: string; label: string }> = 
   statutory_risk: { icon: AlertCircle, tone: "bg-rose-700 text-white", label: "Statutory deadline" },
   transfer_request: { icon: BellRing, tone: "bg-navy text-white", label: "Transfer request" },
   tasks_unassigned: { icon: AlertCircle, tone: "bg-amber-600 text-white", label: "Unassigned tasks" },
+  support_reply: { icon: BellRing, tone: "bg-emerald-600 text-white", label: "Support replied" },
+  support_request: { icon: BellRing, tone: "bg-violet-600 text-white", label: "Support request" },
 };
 
 /** "Remind me later" choices. */

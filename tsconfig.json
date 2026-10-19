@@ -38,7 +38,7 @@
     "next.config.mjs",
     "src/components/layout/Topbar.tsx",
     "src/app/audit-page"
-  ],
+, "src/app/api/support/ticket"  ],
   "exclude": [
     "node_modules"
   ]

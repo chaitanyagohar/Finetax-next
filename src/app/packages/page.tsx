@@ -197,8 +197,15 @@ export default function PackagesPage() {
     setIsPkgModalOpen(true);
   }
 
-  function updateTemplateField(index: number, field: keyof ServiceRow, value: any) {
-    setServiceTemplates((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+
+  /** Link a service to a Task List entry (title, category and recurrence follow the entry). */
+  function linkTaskType(index: number, typeId: string) {
+    const t = typeById[typeId];
+    setServiceTemplates((rows) =>
+      rows.map((r, i) =>
+        i !== index ? r : t ? { ...r, task_type_id: typeId, title: t.name, category: t.category || r.category, recurrence: t.default_recurrence || r.recurrence } : { ...r, task_type_id: "" }
+      )
+    );
   }
 
   async function handleSavePackage(e: React.FormEvent) {

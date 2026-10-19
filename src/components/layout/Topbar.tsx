@@ -28,6 +28,7 @@ import { getInitials, localISODate } from "@/lib/format";
 import { getPageTitle, getVisibleSections, REVIEWER_SUB_TABS, type SessionUser } from "./navConfig";
 import { useLogout } from "./useLogout";
 import WorkSession from "@/components/time/WorkSession";
+import { HelpLauncher } from "@/components/help/HelpCenter";
 
 interface TopbarProps {
   user: SessionUser;
@@ -81,6 +82,10 @@ const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   proposal_accepted: { icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600" },
   proposal_declined: { icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
   tasks_unassigned: { icon: AlertCircle, style: "bg-amber-50 text-amber-600" },
+  support_reply: { icon: Bell, style: "bg-emerald-50 text-emerald-600" },
+  support_request: { icon: AlertCircle, style: "bg-violet-50 text-violet-600" },
+  support_message: { icon: Bell, style: "bg-violet-50 text-violet-600" },
+  support_feedback: { icon: Bell, style: "bg-slate-100 text-slate-600" },
 };
 
 function timeAgo(iso: string): string {
@@ -475,6 +480,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
       </header>
 
       <WorkSession userId={user.id} />
+      <HelpLauncher />
 
       {/* New-notification toast */}
       {toast && (

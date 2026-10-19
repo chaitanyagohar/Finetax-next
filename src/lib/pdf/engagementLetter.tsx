@@ -1,7 +1,9 @@
 /** Engagement letter / service contract PDF (server-side). */
 import React from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+
+Font.registerHyphenationCallback((word) => [word]);
 
 type Rec = Record<string, any> | null | undefined;
 
@@ -70,7 +72,7 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <View style={{ width: "60%" }}>
-            <Text style={s.brand}>{firmName.toUpperCase()}</Text>
+            <Text style={[s.brand, firmName.length > 24 ? { fontSize: 14 } : {}]}>{firmName.toUpperCase()}</Text>
             {firm?.address ? <Text style={s.hText}>{str(firm.address)}</Text> : null}
             <Text style={s.hText}>
               {[firm?.gstin ? `GSTIN: ${str(firm.gstin)}` : "", terms?.firm_registration_no ? `FRN: ${str(terms.firm_registration_no)}` : "", firm?.email ? str(firm.email) : ""]
