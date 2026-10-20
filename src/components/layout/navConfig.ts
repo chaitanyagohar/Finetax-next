@@ -21,6 +21,7 @@ import {
   Gauge,
   LifeBuoy,
   Headphones,
+  MessagesSquare,
 } from "lucide-react";
 
 /** Minimal, serialisable user object passed from the server layout to the client shell. */
@@ -59,7 +60,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard, moduleId: "dashboard" },
       { name: "Unified Inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard" },
-    ],
+      { name: "Team Chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true },
+      ],
   },
   {
     label: "Clients & Sales",

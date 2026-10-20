@@ -86,6 +86,9 @@ const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   support_request: { icon: AlertCircle, style: "bg-violet-50 text-violet-600" },
   support_message: { icon: Bell, style: "bg-violet-50 text-violet-600" },
   support_feedback: { icon: Bell, style: "bg-slate-100 text-slate-600" },
+  chat_mention: { icon: Bell, style: "bg-rose-50 text-rose-600" },
+  chat_dm: { icon: Bell, style: "bg-blue-50 text-blue-600" },
+  chat_task: { icon: Bell, style: "bg-violet-50 text-violet-600" },
 };
 
 function timeAgo(iso: string): string {

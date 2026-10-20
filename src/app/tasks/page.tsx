@@ -37,6 +37,7 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
 import WorkQueue from "@/components/tasks/WorkQueue";
+import ChatConversation from "@/components/chat/ChatConversation";
 import ReminderSettingsButton from "@/components/tasks/ReminderSettings";
 import { TransferDialog, TransferHistory, TransferRequestsBanner } from "@/components/tasks/TaskTransfer";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1627,6 +1628,20 @@ export default function TasksPage() {
                     loadData(false);
                   }}
                 />
+              )}
+
+              {/* Discussion */}
+              {editingTask && (
+                <div className="space-y-2 border-t border-border pt-4">
+                  <h4 className="text-xs font-bold text-text-main">Discussion</h4>
+                  <div className="h-80 overflow-hidden rounded-lg border border-border">
+                    <ChatConversation
+                      taskId={editingTask.id}
+                      people={team.map((t) => ({ id: t.id, name: t.name, is_active: t.is_active !== false }))}
+                      placeholder="Ask a question or share an update… (@ to mention)"
+                    />
+                  </div>
+                </div>
               )}
 
               {/* Time log */}
