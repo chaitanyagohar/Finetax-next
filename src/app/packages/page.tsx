@@ -198,6 +198,10 @@ export default function PackagesPage() {
   }
 
 
+  function updateTemplateField(index: number, field: keyof ServiceRow, value: any) {
+    setServiceTemplates((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+  }
+
   /** Link a service to a Task List entry (title, category and recurrence follow the entry). */
   function linkTaskType(index: number, typeId: string) {
     const t = typeById[typeId];
