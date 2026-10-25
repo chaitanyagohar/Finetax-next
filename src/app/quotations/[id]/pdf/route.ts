@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const [{ data: quotation }, { data: firm }] = await Promise.all([
     supabase.from("quotations").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
-    supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
+    supabase.from("firm_settings").select("*").maybeSingle(),
   ]);
   if (!quotation) return new NextResponse("Quotation not found, or you don't have access to it.", { status: 404 });
 

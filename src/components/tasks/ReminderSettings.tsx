@@ -51,7 +51,6 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
     supabase
       .from("reminder_settings")
       .select("*")
-      .eq("id", 1)
       .maybeSingle()
       .then(({ data }) => {
         if (data) setS({ ...data, work_start: String(data.work_start).slice(0, 5), work_end: String(data.work_end).slice(0, 5) } as Settings);
@@ -70,7 +69,7 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
     const { error: err } = await supabase
       .from("reminder_settings")
       .update({ ...s, updated_at: new Date().toISOString() })
-      .eq("id", 1);
+      .not("org_id", "is", null); // The database limits this to your firm's row
     setSaving(false);
     if (err) return setError(err.message);
     logAuditEvent("UPDATE_REMINDER_SETTINGS", "SETTINGS", undefined, s as any);

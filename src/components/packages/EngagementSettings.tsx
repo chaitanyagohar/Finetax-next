@@ -32,7 +32,6 @@ function EngagementSettingsModal({ onClose }: { onClose: () => void }) {
     supabase
       .from("engagement_settings")
       .select("*")
-      .eq("id", 1)
       .maybeSingle()
       .then(({ data }) => setT(data || {}));
   }, []);
@@ -50,7 +49,8 @@ function EngagementSettingsModal({ onClose }: { onClose: () => void }) {
       standard_terms: String(t.standard_terms || "").trim() || null,
       updated_at: new Date().toISOString(),
     };
-    const { error: err } = await supabase.from("engagement_settings").update(payload).eq("id", 1);
+    // The database limits this to your firm's row
+    const { error: err } = await supabase.from("engagement_settings").update(payload).not("org_id", "is", null);
     setSaving(false);
     if (err) return setError(err.message);
     logAuditEvent("UPDATE_ENGAGEMENT_TERMS", "SETTINGS", undefined, { signatory: payload.signatory_name });

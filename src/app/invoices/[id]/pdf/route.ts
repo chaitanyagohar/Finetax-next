@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // Read with the user's own session, so database access rules apply
   const [{ data: invoice }, { data: firm }] = await Promise.all([
     supabase.from("invoices").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
-    supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
+    supabase.from("firm_settings").select("*").maybeSingle(),
   ]);
   if (!invoice) return new NextResponse("Invoice not found, or you don't have access to it.", { status: 404 });
 

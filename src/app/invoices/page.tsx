@@ -177,7 +177,6 @@ export default function InvoicesPage() {
       supabase
         .from("firm_settings")
         .select("firm_name, gstin, default_gst_rate, payment_terms, bank_name, bank_account_no, bank_ifsc, upi_id")
-        .eq("id", 1)
         .maybeSingle(),
       supabase
         .from("invoices")

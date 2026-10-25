@@ -1,0 +1,162 @@
+﻿
+  src\app\settings\page.tsx:173:
+  src\app\settings\page.tsx:174:  async function loadSettings() {
+  src\app\settings\page.tsx:175:    setLoading(true);
+> src\app\settings\page.tsx:176:    const { data: settings, error } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
+  src\app\settings\page.tsx:177:    if (error) showToast("error", "Could not load firm settings.");
+  src\app\settings\page.tsx:178:    if (settings) {
+  src\app\settings\page.tsx:179:      const loaded: Settings = {
+  src\app\performance\page.tsx:114:
+  src\app\performance\page.tsx:115:  useEffect(() => {
+  src\app\performance\page.tsx:116:    supabase
+> src\app\performance\page.tsx:117:      .from("kpi_settings")
+  src\app\performance\page.tsx:118:      .select("*")
+> src\app\performance\page.tsx:119:      .eq("id", 1)
+  src\app\performance\page.tsx:120:      .maybeSingle()
+  src\app\performance\page.tsx:121:      .then(({ data }) => data && setWeights(data as any));
+  src\app\performance\page.tsx:122:  }, []);
+  src\app\performance\page.tsx:511:      working_days_per_week: Number(w.working_days_per_week),
+  src\app\performance\page.tsx:512:      updated_at: new Date().toISOString(),
+  src\app\performance\page.tsx:513:    };
+> src\app\performance\page.tsx:514:    const { error: err } = await supabase.from("kpi_settings").update(payload).eq("id", 1);
+  src\app\performance\page.tsx:515:    setSaving(false);
+  src\app\performance\page.tsx:516:    if (err) return setError(err.message);
+  src\app\performance\page.tsx:517:    logAuditEvent("UPDATE_KPI_WEIGHTS", "SETTINGS", undefined, payload);
+  src\app\invoices\[id]\pdf\route.ts:27:  // Read with the user's own session, so database access rules apply
+  src\app\invoices\[id]\pdf\route.ts:28:  const [{ data: invoice }, { data: firm }] = await Promise.all([
+  src\app\invoices\[id]\pdf\route.ts:29:    supabase.from("invoices").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
+> src\app\invoices\[id]\pdf\route.ts:30:    supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
+  src\app\invoices\[id]\pdf\route.ts:31:  ]);
+  src\app\invoices\[id]\pdf\route.ts:32:  if (!invoice) return new NextResponse("Invoice not found, or you don't have access to it.", { status: 404 });
+  src\app\invoices\[id]\pdf\route.ts:33:
+  src\app\invoices\page.tsx:175:
+  src\app\invoices\page.tsx:176:    const [settingsRes, invRes, clientRes, teamRes] = await Promise.all([
+  src\app\invoices\page.tsx:177:      supabase
+> src\app\invoices\page.tsx:178:        .from("firm_settings")
+  src\app\invoices\page.tsx:179:        .select("firm_name, gstin, default_gst_rate, payment_terms, bank_name, bank_account_no, bank_ifsc, upi_id")
+> src\app\invoices\page.tsx:180:        .eq("id", 1)
+  src\app\invoices\page.tsx:181:        .maybeSingle(),
+  src\app\invoices\page.tsx:182:      supabase
+  src\app\invoices\page.tsx:183:        .from("invoices")
+  src\app\quotations\[id]\pdf\route.ts:26:
+  src\app\quotations\[id]\pdf\route.ts:27:  const [{ data: quotation }, { data: firm }] = await Promise.all([
+  src\app\quotations\[id]\pdf\route.ts:28:    supabase.from("quotations").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
+> src\app\quotations\[id]\pdf\route.ts:29:    supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
+  src\app\quotations\[id]\pdf\route.ts:30:  ]);
+  src\app\quotations\[id]\pdf\route.ts:31:  if (!quotation) return new NextResponse("Quotation not found, or you don't have access to it.", { status: 
+404 });
+  src\app\quotations\[id]\pdf\route.ts:32:
+  src\app\quotations\page.tsx:162:        .select("id, name, email, phone, organization_name, company, status, converted_client_id")
+  src\app\quotations\page.tsx:163:        .order("created_at", { ascending: false }),
+  src\app\quotations\page.tsx:164:      supabase
+> src\app\quotations\page.tsx:165:        .from("firm_settings")
+  src\app\quotations\page.tsx:166:        .select("firm_name, bank_name, bank_account_no, bank_ifsc, upi_id, default_gst_rate, payment_terms")
+> src\app\quotations\page.tsx:167:        .eq("id", 1)
+  src\app\quotations\page.tsx:168:        .maybeSingle(),
+  src\app\quotations\page.tsx:169:      supabase.from("invoices").select("id, invoice_number, quotation_id").not("quotation_id", "is", null),
+  src\app\quotations\page.tsx:170:    ]);
+  src\app\audit-page\page.tsx:22:  "DEACTIVATE_TEAM_MEMBER",
+  src\app\audit-page\page.tsx:23:];
+  src\app\audit-page\page.tsx:24:
+> src\app\audit-page\page.tsx:25:const COMMON_AREAS = ["TASKS", "LEADS", "LEAD_DISCUSSION", "CLIENTS", "QUOTATIONS", "INVOICES", "DISCUSSIONS", 
+"TIME_LOGS", "PROFILES", "profiles", "SETTINGS", "EMAIL_ACCOUNTS", "email_messages", "COMPLIANCE_EVENTS"];
+  src\app\audit-page\page.tsx:26:
+  src\app\audit-page\page.tsx:27:function addDays(iso: string, days: number): string {
+  src\app\audit-page\page.tsx:28:  const [y, m, d] = iso.split("-").map(Number);
+  src\app\inbox\page.tsx:165:
+  src\app\inbox\page.tsx:166:  async function loadAccounts() {
+  src\app\inbox\page.tsx:167:    const { data } = await supabase
+> src\app\inbox\page.tsx:168:      .from("email_accounts")
+  src\app\inbox\page.tsx:169:      .select("id, email_address, display_name, smtp_host, smtp_port, imap_host, imap_port, is_active, smtp_secret_id, 
+created_at")
+  src\app\inbox\page.tsx:170:      .order("created_at", { ascending: true });
+  src\app\inbox\page.tsx:171:    const list = data || [];
+  src\app\inbox\page.tsx:484:
+  src\app\inbox\page.tsx:485:    setAccountSaving(true);
+  src\app\inbox\page.tsx:486:    const { data, error } = await supabase
+> src\app\inbox\page.tsx:487:      .from("email_accounts")
+  src\app\inbox\page.tsx:488:      .insert([
+  src\app\inbox\page.tsx:489:        {
+  src\app\inbox\page.tsx:490:          email_address: email,
+  src\app\inbox\page.tsx:503:
+  src\app\inbox\page.tsx:504:    if (error || !data) return setAccountError(error?.message || "Could not connect this account.");
+  src\app\inbox\page.tsx:505:
+> src\app\inbox\page.tsx:506:    logAuditEvent("CONNECT_EMAIL_ACCOUNT", "EMAIL_ACCOUNTS", data.id, { email });
+  src\app\inbox\page.tsx:507:    setNewEmail("");
+  src\app\inbox\page.tsx:508:    setNewName("");
+  src\app\inbox\page.tsx:509:    setSmtpPass("");
+  src\app\inbox\page.tsx:533:  async function savePassword() {
+  src\app\inbox\page.tsx:534:    if (!passwordTarget || !newPassword) return;
+  src\app\inbox\page.tsx:535:    setActionBusy(true);
+> src\app\inbox\page.tsx:536:    const { error } = await supabase.from("email_accounts").update({ smtp_pass: newPassword }).eq("id", 
+passwordTarget.id);
+  src\app\inbox\page.tsx:537:    setActionBusy(false);
+  src\app\inbox\page.tsx:538:    if (error) return showToast("error", error.message);
+> src\app\inbox\page.tsx:539:    logAuditEvent("UPDATE_EMAIL_PASSWORD", "EMAIL_ACCOUNTS", passwordTarget.id, { email: passwordTarget.email_address });
+  src\app\inbox\page.tsx:540:    const id = passwordTarget.id;
+  src\app\inbox\page.tsx:541:    setPasswordTarget(null);
+  src\app\inbox\page.tsx:542:    setNewPassword("");
+  src\app\inbox\page.tsx:546:  }
+  src\app\inbox\page.tsx:547:
+  src\app\inbox\page.tsx:548:  async function toggleAccountActive(acc: any) {
+> src\app\inbox\page.tsx:549:    const { error } = await supabase.from("email_accounts").update({ is_active: acc.is_active === false }).eq("id", 
+acc.id);
+  src\app\inbox\page.tsx:550:    if (error) return showToast("error", error.message);
+> src\app\inbox\page.tsx:551:    logAuditEvent(acc.is_active === false ? "ENABLE_EMAIL_ACCOUNT" : "DISABLE_EMAIL_ACCOUNT", "EMAIL_ACCOUNTS", acc.id, { 
+email: acc.email_address });
+  src\app\inbox\page.tsx:552:    loadAccounts();
+  src\app\inbox\page.tsx:553:  }
+  src\app\inbox\page.tsx:554:
+  src\app\inbox\page.tsx:557:    if (!acc) return;
+  src\app\inbox\page.tsx:558:    setActionBusy(true);
+  src\app\inbox\page.tsx:559:    const { error: msgErr } = await supabase.from("email_messages").delete().eq("account_id", acc.id);
+> src\app\inbox\page.tsx:560:    const { error } = msgErr ? { error: msgErr } : await supabase.from("email_accounts").delete().eq("id", acc.id);
+  src\app\inbox\page.tsx:561:    setActionBusy(false);
+  src\app\inbox\page.tsx:562:    setConfirm(null);
+  src\app\inbox\page.tsx:563:    if (error) return showToast("error", error.message);
+> src\app\inbox\page.tsx:564:    logAuditEvent("DELETE_EMAIL_ACCOUNT", "EMAIL_ACCOUNTS", acc.id, { email: acc.email_address });
+  src\app\inbox\page.tsx:565:    if (selectedAccountId === acc.id) setSelectedAccountId("all");
+  src\app\inbox\page.tsx:566:    showToast("success", `${acc.email_address} removed with its synced messages.`);
+  src\app\inbox\page.tsx:567:    loadAccounts();
+  src\components\packages\EngagementSettings.tsx:30:
+  src\components\packages\EngagementSettings.tsx:31:  useEffect(() => {
+  src\components\packages\EngagementSettings.tsx:32:    supabase
+> src\components\packages\EngagementSettings.tsx:33:      .from("engagement_settings")
+  src\components\packages\EngagementSettings.tsx:34:      .select("*")
+> src\components\packages\EngagementSettings.tsx:35:      .eq("id", 1)
+  src\components\packages\EngagementSettings.tsx:36:      .maybeSingle()
+  src\components\packages\EngagementSettings.tsx:37:      .then(({ data }) => setT(data || {}));
+  src\components\packages\EngagementSettings.tsx:38:  }, []);
+  src\components\packages\EngagementSettings.tsx:50:      standard_terms: String(t.standard_terms || "").trim() || null,
+  src\components\packages\EngagementSettings.tsx:51:      updated_at: new Date().toISOString(),
+  src\components\packages\EngagementSettings.tsx:52:    };
+> src\components\packages\EngagementSettings.tsx:53:    // The database limits this to your firm's row
+    const { error: err } = await supabase.from("engagement_settings").update(payload).not("org_id", "is", null);
+  src\components\packages\EngagementSettings.tsx:54:    setSaving(false);
+  src\components\packages\EngagementSettings.tsx:55:    if (err) return setError(err.message);
+  src\components\packages\EngagementSettings.tsx:56:    logAuditEvent("UPDATE_ENGAGEMENT_TERMS", "SETTINGS", undefined, { signatory: 
+payload.signatory_name });
+  src\components\tasks\ReminderSettings.tsx:49:
+  src\components\tasks\ReminderSettings.tsx:50:  useEffect(() => {
+  src\components\tasks\ReminderSettings.tsx:51:    supabase
+> src\components\tasks\ReminderSettings.tsx:52:      .from("reminder_settings")
+  src\components\tasks\ReminderSettings.tsx:53:      .select("*")
+> src\components\tasks\ReminderSettings.tsx:54:      .eq("id", 1)
+  src\components\tasks\ReminderSettings.tsx:55:      .maybeSingle()
+  src\components\tasks\ReminderSettings.tsx:56:      .then(({ data }) => {
+  src\components\tasks\ReminderSettings.tsx:57:        if (data) setS({ ...data, work_start: String(data.work_start).slice(0, 5), work_end: 
+String(data.work_end).slice(0, 5) } as Settings);
+  src\components\tasks\ReminderSettings.tsx:68:    if (s.work_start >= s.work_end) return setError("Working hours must end after they start.");
+  src\components\tasks\ReminderSettings.tsx:69:    setSaving(true);
+  src\components\tasks\ReminderSettings.tsx:70:    const { error: err } = await supabase
+> src\components\tasks\ReminderSettings.tsx:71:      .from("reminder_settings")
+  src\components\tasks\ReminderSettings.tsx:72:      .update({ ...s, updated_at: new Date().toISOString() })
+> src\components\tasks\ReminderSettings.tsx:73:      .eq("id", 1);
+  src\components\tasks\ReminderSettings.tsx:74:    setSaving(false);
+  src\components\tasks\ReminderSettings.tsx:75:    if (err) return setError(err.message);
+> src\components\tasks\ReminderSettings.tsx:76:    logAuditEvent("UPDATE_REMINDER_SETTINGS", "SETTINGS", undefined, s as any);
+  src\components\tasks\ReminderSettings.tsx:77:    setNotice("Reminder settings saved.");
+  src\components\tasks\ReminderSettings.tsx:78:    window.setTimeout(() => setNotice(""), 3000);
+  src\components\tasks\ReminderSettings.tsx:79:  }
+
+

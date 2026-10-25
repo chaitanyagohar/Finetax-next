@@ -173,7 +173,7 @@ export default function SettingsPage() {
 
   async function loadSettings() {
     setLoading(true);
-    const { data: settings, error } = await supabase.from("firm_settings").select("*").eq("id", 1).single();
+    const { data: settings, error } = await supabase.from("firm_settings").select("*").maybeSingle();
     if (error) showToast("error", "Could not load firm settings.");
     if (settings) {
       const loaded: Settings = {

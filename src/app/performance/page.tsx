@@ -116,7 +116,6 @@ export default function PerformancePage() {
     supabase
       .from("kpi_settings")
       .select("*")
-      .eq("id", 1)
       .maybeSingle()
       .then(({ data }) => data && setWeights(data as any));
   }, []);
@@ -511,7 +510,8 @@ function WeightsModal({ initial, onClose, onSaved }: { initial: any; onClose: ()
       working_days_per_week: Number(w.working_days_per_week),
       updated_at: new Date().toISOString(),
     };
-    const { error: err } = await supabase.from("kpi_settings").update(payload).eq("id", 1);
+    // The database limits this to your firm's row
+    const { error: err } = await supabase.from("kpi_settings").update(payload).not("org_id", "is", null);
     setSaving(false);
     if (err) return setError(err.message);
     logAuditEvent("UPDATE_KPI_WEIGHTS", "SETTINGS", undefined, payload);

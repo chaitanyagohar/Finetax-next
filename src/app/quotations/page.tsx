@@ -164,7 +164,6 @@ export default function QuotationsPage() {
       supabase
         .from("firm_settings")
         .select("firm_name, bank_name, bank_account_no, bank_ifsc, upi_id, default_gst_rate, payment_terms")
-        .eq("id", 1)
         .maybeSingle(),
       supabase.from("invoices").select("id, invoice_number, quotation_id").not("quotation_id", "is", null),
     ]);
