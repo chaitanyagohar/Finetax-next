@@ -63,63 +63,64 @@ export async function POST(request: NextRequest) {
 
     const supabase = getAdminClient();
 
-    // 3. Find the corresponding email account (exact, case-insensitive match)
+    // 3. Every firm that connected this address gets its own copy
     const { data: accounts } = await supabase
       .from("email_accounts")
-      .select("id")
-      .ilike("email_address", escapeLike(toAddress))
-      .limit(1);
+      .select("id, org_id")
+      .ilike("email_address", escapeLike(toAddress));
 
-    const account = accounts?.[0];
-    if (!account) {
+    if (!accounts || accounts.length === 0) {
       console.warn(`[webhook] Incoming email to unknown address: ${toAddress}`);
       return NextResponse.json({ success: true, message: "Ignored: unknown recipient" });
     }
 
-    // 4. Skip duplicates
-    const messageId = parsed.messageId || `${Date.now()}-${account.id}`;
-    const { data: existing } = await supabase
-      .from("email_messages")
-      .select("id")
-      .eq("message_id", messageId)
-      .limit(1);
+    let saved = 0;
+    for (const account of accounts) {
+      const messageId = parsed.messageId || `${Date.now()}-${account.id}`;
 
-    if (existing && existing.length > 0) {
-      return NextResponse.json({ success: true, message: "Duplicate ignored." });
+      // 4. Skip duplicates (within this firm)
+      const { data: existing } = await supabase
+        .from("email_messages")
+        .select("id")
+        .eq("org_id", account.org_id)
+        .eq("message_id", messageId)
+        .limit(1);
+      if (existing && existing.length > 0) continue;
+
+      // 5. Match the sender to one of THIS firm's clients (wildcards escaped)
+      const { data: clients } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("org_id", account.org_id)
+        .ilike("email", `%${escapeLike(fromAddress)}%`)
+        .limit(1);
+
+      // 6. Save to that firm's Unified Inbox
+      const { error: insertErr } = await supabase.from("email_messages").insert([
+        {
+          org_id: account.org_id,
+          account_id: account.id,
+          client_id: clients?.[0]?.id || null,
+          direction: "inbound",
+          from_address: fromAddress,
+          to_address: toAddress,
+          subject: parsed.subject || "(No Subject)",
+          body_text: parsed.text || "",
+          body_html: parsed.html || "",
+          message_id: messageId,
+          is_read: false,
+          received_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (insertErr) {
+        console.error("[webhook] Insert error:", insertErr.message);
+        continue;
+      }
+      saved++;
     }
 
-    // 5. Check if client exists matching sender email (wildcards escaped)
-    const { data: clients } = await supabase
-      .from("clients")
-      .select("id")
-      .ilike("email", `%${escapeLike(fromAddress)}%`)
-      .limit(1);
-
-    const client = clients?.[0];
-
-    // 6. Save to Unified Inbox
-    const { error: insertErr } = await supabase.from("email_messages").insert([
-      {
-        account_id: account.id,
-        client_id: client?.id || null,
-        direction: "inbound",
-        from_address: fromAddress,
-        to_address: toAddress,
-        subject: parsed.subject || "(No Subject)",
-        body_text: parsed.text || "",
-        body_html: parsed.html || "",
-        message_id: messageId,
-        is_read: false,
-        received_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (insertErr) {
-      console.error("[webhook] Insert error:", insertErr.message);
-      return NextResponse.json({ error: "Could not save email." }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, message: "Email processed and saved." });
+    return NextResponse.json({ success: true, message: saved ? "Email processed and saved." : "Duplicate ignored." });
   } catch (error) {
     console.error("[webhook] Error:", error);
     return NextResponse.json({ error: "Processing failed." }, { status: 500 });

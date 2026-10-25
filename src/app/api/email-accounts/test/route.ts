@@ -22,7 +22,12 @@ export async function POST(request: NextRequest) {
     if (!UUID_RE.test(accountId)) throw new ApiError(400, "Invalid account.");
 
     const admin = getAdminClient();
-    const { data: account } = await admin.from("email_accounts").select("*").eq("id", accountId).single();
+    const { data: account } = await admin
+      .from("email_accounts")
+      .select("*")
+      .eq("id", accountId)
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (!account) throw new ApiError(404, "Account not found.");
 
     const password = await getAccountPassword(admin, account);

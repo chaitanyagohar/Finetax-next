@@ -36,6 +36,8 @@ export interface SendFirmEmailInput {
   text?: string;
   attachments?: MailAttachment[];
   accountId?: string | null;
+  /** The firm sending the email. Will become required once every caller passes it. */
+  orgId?: string | null;
 }
 
 export interface SendFirmEmailResult {
@@ -104,6 +106,15 @@ export function createSmtpTransport(account: any, password: string) {
   });
 }
 
+/** TRANSITIONAL: callers that don't pass orgId yet are treated as the original firm (Finetax). */
+async function resolveOrgId(supabase: SupabaseClient, orgId?: string | null): Promise<string> {
+  if (orgId) return orgId;
+  const { data } = await supabase.from("platform_config").select("legacy_org_id").eq("id", true).maybeSingle();
+  if (!data?.legacy_org_id) throw new ApiError(500, "Firm could not be identified for this email.");
+  console.warn("[mailer] sendFirmEmail called without orgId; using the original firm.");
+  return data.legacy_org_id as string;
+}
+
 export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirmEmailResult> {
   // 1. Validate
   const recipients = parseRecipients(input.to);
@@ -128,18 +139,21 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
   }
 
   const supabase = getAdminClient();
+  const orgId = await resolveOrgId(supabase, input.orgId);
 
-  // 2. Resolve the sending account (fallback: first active inbox)
+  // 2. Resolve the sending account: always one of THIS firm's mailboxes
   let accountId = input.accountId || null;
   if (!accountId) {
     const { data: defaultAccount } = await supabase
       .from("email_accounts")
       .select("id")
+      .eq("org_id", orgId)
       .eq("is_active", true)
+      .order("created_at", { ascending: true })
       .limit(1)
-      .single();
+      .maybeSingle();
     if (!defaultAccount) {
-      throw new ApiError(400, "No connected email accounts found.");
+      throw new ApiError(400, "No connected email accounts found. Connect one under Inbox → Connected Accounts.");
     }
     accountId = defaultAccount.id;
   }
@@ -148,7 +162,8 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
     .from("email_accounts")
     .select("*")
     .eq("id", accountId)
-    .single();
+    .eq("org_id", orgId)
+    .maybeSingle();
 
   if (accErr || !account) {
     throw new ApiError(400, "Invalid email account.");
@@ -192,6 +207,7 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
   try {
     const { error: dbError } = await supabase.from("email_messages").insert([
       {
+        org_id: account.org_id,
         account_id: account.id,
         direction: "outbound",
         from_address: fromString,

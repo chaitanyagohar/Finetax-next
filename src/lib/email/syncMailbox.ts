@@ -79,6 +79,7 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
             if (!msg.source) continue;
             const parsed = await simpleParser(msg.source);
             rows.push({
+              org_id: account.org_id,
               account_id: account.id,
               direction: "inbound",
               from_address: extractAddress(parsed.from, "unknown@sender.com"),
@@ -106,7 +107,11 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
     // Skip anything already saved
     let newRows: any[] = [];
     if (rows.length > 0) {
-      const { data: existing } = await admin.from("email_messages").select("message_id").in("message_id", rows.map((r) => r.message_id));
+      const { data: existing } = await admin
+        .from("email_messages")
+        .select("message_id")
+        .eq("org_id", account.org_id)
+        .in("message_id", rows.map((r) => r.message_id));
       const existingIds = new Set((existing || []).map((e: any) => e.message_id));
       const seen = new Set<string>();
       newRows = rows.filter((r) => {
@@ -119,7 +124,7 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
     // Link senders to clients by email, then save
     if (newRows.length > 0) {
       const senders = Array.from(new Set(newRows.map((r) => r.from_address)));
-      const { data: matched } = await admin.from("clients").select("id, email").in("email", senders);
+      const { data: matched } = await admin.from("clients").select("id, email").eq("org_id", account.org_id).in("email", senders);
       const clientByEmail = new Map((matched || []).map((c: any) => [String(c.email).toLowerCase(), c.id]));
       newRows.forEach((r) => (r.client_id = clientByEmail.get(r.from_address) || null));
 

@@ -12,7 +12,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
-    await requireUser();
+    const caller = await requireUser();
 
     const body = await request.json().catch(() => ({}));
     const accountId = typeof body?.accountId === "string" ? body.accountId : "";
@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = getAdminClient();
-    const { data: account } = await admin.from("email_accounts").select("*").eq("id", accountId).single();
+    const { data: account } = await admin
+      .from("email_accounts")
+      .select("*")
+      .eq("id", accountId)
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (!account) throw new ApiError(400, "Account not found.");
     if (account.is_active === false) throw new ApiError(400, "This email account is disabled.");
 

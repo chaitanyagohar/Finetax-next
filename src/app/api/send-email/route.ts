@@ -77,17 +77,27 @@ export async function POST(request: NextRequest) {
 
       // 1. Render system invoices / quotations as real PDF attachments
       if (invoiceIds.length || quotationIds.length) {
-        const { data: firm } = await admin.from("firm_settings").select("*").eq("id", 1).single();
+        const { data: firm } = await admin.from("firm_settings").select("*").eq("org_id", caller.orgId).maybeSingle();
 
         for (const id of invoiceIds) {
-          const { data: invoice } = await admin.from("invoices").select("*, clients!client_id(*)").eq("id", id).single();
+          const { data: invoice } = await admin
+            .from("invoices")
+            .select("*, clients!client_id(*)")
+            .eq("id", id)
+            .eq("org_id", caller.orgId)
+            .maybeSingle();
           if (!invoice) throw new ApiError(404, "One of the selected invoices was not found.");
           const pdf = await renderInvoicePdf(invoice, invoice.clients, firm);
           attachments.push({ filename: pdfFileName(invoice.invoice_number, "Invoice"), content: pdf, contentType: "application/pdf" });
         }
 
         for (const id of quotationIds) {
-          const { data: quotation } = await admin.from("quotations").select("*, clients!client_id(*)").eq("id", id).single();
+          const { data: quotation } = await admin
+            .from("quotations")
+            .select("*, clients!client_id(*)")
+            .eq("id", id)
+            .eq("org_id", caller.orgId)
+            .maybeSingle();
           if (!quotation) throw new ApiError(404, "One of the selected quotations was not found.");
           const pdf = await renderQuotationPdf(quotation, quotation.clients, firm);
           attachments.push({ filename: pdfFileName(quotation.quote_number || quotation.quotation_number, "Quotation"), content: pdf, contentType: "application/pdf" });
@@ -96,7 +106,12 @@ export async function POST(request: NextRequest) {
 
       // 2. Attach the real files from the private document vault
       for (const id of documentIds) {
-        const { data: doc } = await admin.from("documents").select("title, file_name, storage_path, bucket, mime_type").eq("id", id).single();
+        const { data: doc } = await admin
+          .from("documents")
+          .select("title, file_name, storage_path, bucket, mime_type")
+          .eq("id", id)
+          .eq("org_id", caller.orgId)
+          .maybeSingle();
         if (!doc?.storage_path) throw new ApiError(404, "One of the selected documents has no stored file.");
         const { data: blob, error: dlErr } = await admin.storage.from(doc.bucket || "firm-documents").download(doc.storage_path);
         if (dlErr || !blob) throw new ApiError(404, `Could not read "${doc.title}" from the vault.`);
@@ -115,6 +130,7 @@ export async function POST(request: NextRequest) {
       text: body,
       attachments,
       accountId,
+      orgId: caller.orgId,
     });
 
     // 4. Audit trail
