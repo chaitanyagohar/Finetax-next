@@ -79,6 +79,21 @@ export async function POST(request: NextRequest) {
       throw new ApiError(400, "Could not create the staff profile. No account was created.");
     }
 
+    // Add them to the admin's firm
+    const { error: memErr } = await supabaseAdmin.from("memberships").insert({
+      org_id: caller.orgId,
+      user_id: authData.user.id,
+      role: cleanRole,
+      invited_by: caller.userId,
+    });
+    if (memErr) {
+      console.error("[team] Membership error:", memErr.message);
+      await supabaseAdmin.from("profiles").delete().eq("id", authData.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      throw new ApiError(400, "Could not add this person to your firm. No account was created.");
+    }
+    await supabaseAdmin.from("user_active_org").upsert({ user_id: authData.user.id, org_id: caller.orgId });
+
     await writeAuditLog({
       entity: "profiles",
       entity_id: authData.user.id,

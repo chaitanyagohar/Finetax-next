@@ -100,24 +100,30 @@ export async function proxy(request: NextRequest) {
     const supportPath = SUPPORT_PATHS.some((base) => matchesPath(pathname, base));
 
     if (adminPath || reviewerPath || modulePath || supportPath) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, is_active, is_reviewer, module_access, is_support_agent")
-        .eq("id", user.id)
-        .single();
+      // Role and modules in the user's CURRENT firm
+      const { data: accessData } = await supabase.rpc("my_access");
+      const access = accessData as {
+        org_id?: string;
+        role?: string | null;
+        is_reviewer?: boolean | null;
+        is_support_agent?: boolean | null;
+        module_access?: unknown;
+      } | null;
 
-      const active = !!profile && profile.is_active !== false;
-      const isAdmin = active && profile!.role === "admin";
+      const active = !!access?.org_id;
+      const isAdmin = active && access!.role === "admin";
       let allowed = false;
 
       if (supportPath) {
-        allowed = active && !!profile!.is_support_agent;
+        allowed = active && !!access!.is_support_agent;
       } else if (adminPath) {
         allowed = isAdmin;
       } else if (reviewerPath) {
-        allowed = isAdmin || (active && (profile!.role === "reviewer" || !!profile!.is_reviewer));
+        allowed = isAdmin || (active && (access!.role === "reviewer" || !!access!.is_reviewer));
       } else if (modulePath) {
-        const modules: string[] = Array.isArray(profile?.module_access) ? profile!.module_access : DEFAULT_STAFF_MODULES;
+        const modules: string[] = Array.isArray(access?.module_access)
+          ? (access!.module_access as string[])
+          : DEFAULT_STAFF_MODULES;
         allowed = isAdmin || (active && modules.includes(modulePath.module));
       }
 

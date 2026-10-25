@@ -78,6 +78,17 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
 
+    // 1b. The person must belong to the admin's firm
+    const { data: memberships } = await admin.from("memberships").select("org_id, role, is_active").eq("user_id", userId);
+    const myFirmMembership = (memberships || []).find((m: any) => m.org_id === caller.orgId);
+    if (!myFirmMembership) {
+      throw new ApiError(404, "User not found.");
+    }
+    const inOtherFirms = (memberships || []).some((m: any) => m.org_id !== caller.orgId);
+    if (inOtherFirms && action !== "send_reset_link") {
+      throw new ApiError(403, "This person also belongs to another firm, so their login can only be changed by Duesk support.");
+    }
+
     // 2. Load the target user
     const { data: targetData, error: targetErr } = await admin.auth.admin.getUserById(userId);
     const target = targetData?.user;
@@ -147,12 +158,13 @@ export async function POST(request: NextRequest) {
         throw new ApiError(400, "You can't delete your own account.");
       }
 
-      if (profile?.role === "admin") {
+      if (myFirmMembership.role === "admin") {
         const { count } = await admin
-          .from("profiles")
-          .select("id", { count: "exact", head: true })
+          .from("memberships")
+          .select("user_id", { count: "exact", head: true })
+          .eq("org_id", caller.orgId)
           .eq("role", "admin")
-          .or("is_active.is.null,is_active.eq.true");
+          .eq("is_active", true);
         if ((count || 0) <= 1) {
           throw new ApiError(400, "You can't delete the last active administrator.");
         }

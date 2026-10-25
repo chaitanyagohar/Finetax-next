@@ -27,6 +27,16 @@ export const viewport: Viewport = {
 
 const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
 
+type AccessRow = {
+  org_id: string;
+  org_name: string;
+  role: string | null;
+  is_reviewer: boolean | null;
+  is_support_agent: boolean | null;
+  module_access: unknown;
+  designation: string | null;
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -35,7 +45,9 @@ export default async function RootLayout({
   const supabase = await createClient();
 
   // getUser() validates the session with Supabase Auth (safe for authorization)
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // If no user is logged in, ONLY render the login page children
   if (!user) {
@@ -46,15 +58,15 @@ export default async function RootLayout({
     );
   }
 
-  // Fetch profile once on the server and share it with the whole client shell
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  // Profile (name/email) + access in the current firm, fetched once on the server
+  const [{ data: profile }, { data: accessData }] = await Promise.all([
+    supabase.from("profiles").select("name, email, designation, is_active").eq("id", user.id).maybeSingle(),
+    supabase.rpc("my_access"),
+  ]);
+  const access = accessData as AccessRow | null;
 
-  // Block deactivated accounts
-  if (profile && profile.is_active === false) {
+  // Block deactivated accounts and people with no active firm
+  if ((profile && profile.is_active === false) || !access?.org_id) {
     return (
       <html lang="en" className={inter.variable}>
         <body className="m-0 bg-background p-0 text-text-main antialiased">
@@ -62,7 +74,7 @@ export default async function RootLayout({
             <div className="w-full max-w-md rounded-xl border border-border bg-surface p-8 text-center shadow-lg">
               <h1 className="text-lg font-bold text-navy">Account Deactivated</h1>
               <p className="mt-2 text-sm text-text-muted">
-                Your access to Finetax Manager has been disabled. Please contact your firm administrator.
+                Your access has been disabled, or you are not part of an active firm. Please contact your firm administrator.
               </p>
               <div className="mt-6 flex justify-center">
                 <SignOutButton />
@@ -74,7 +86,7 @@ export default async function RootLayout({
     );
   }
 
-  const role: string = profile?.role || "staff";
+  const role: string = access.role || "staff";
   const isAdmin = role === "admin";
 
   // Only pass the minimum required fields to the browser
@@ -83,11 +95,13 @@ export default async function RootLayout({
     name: profile?.name || user.email?.split("@")[0] || "Staff Member",
     email: profile?.email || user.email || "",
     role,
-    designation: profile?.designation ?? null,
+    designation: access.designation ?? profile?.designation ?? null,
     isAdmin,
-    isReviewer: isAdmin || role === "reviewer" || !!profile?.is_reviewer,
-    isSupportAgent: !!profile?.is_support_agent,
-    moduleAccess: Array.isArray(profile?.module_access) ? profile.module_access : DEFAULT_STAFF_MODULES,
+    isReviewer: isAdmin || role === "reviewer" || !!access.is_reviewer,
+    isSupportAgent: !!access.is_support_agent,
+    moduleAccess: Array.isArray(access.module_access) ? (access.module_access as string[]) : DEFAULT_STAFF_MODULES,
+    orgId: access.org_id,
+    orgName: access.org_name,
   };
 
   return (

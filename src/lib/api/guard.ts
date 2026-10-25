@@ -25,10 +25,26 @@ export interface AuthContext {
   role: string;
   isAdmin: boolean;
   isReviewer: boolean;
+  isSupportAgent: boolean;
+  isPlatformAdmin: boolean;
   moduleAccess: string[];
+  /** The firm the caller is working in. Every admin-client query MUST filter by this. */
+  orgId: string;
+  orgName: string;
 }
 
-/** Service-role client. Bypasses RLS — use only AFTER an auth check. */
+type AccessRow = {
+  org_id: string;
+  org_name: string;
+  role: string | null;
+  is_reviewer: boolean | null;
+  is_support_agent: boolean | null;
+  module_access: unknown;
+  designation: string | null;
+  is_platform_admin: boolean | null;
+};
+
+/** Service-role client. Bypasses RLS — use only AFTER an auth check, and always filter by orgId. */
 export function getAdminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -66,17 +82,30 @@ export function getSiteUrl(request: Request): string {
   return new URL(request.url).origin;
 }
 
-/** Verifies the session cookie with Supabase Auth and loads the caller's profile. */
+/** Verifies the session, then loads the caller's role and modules in their CURRENT firm. */
 export async function requireUser(): Promise<AuthContext> {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
   if (error || !user) {
     throw new ApiError(401, "Not authenticated.");
   }
 
+  const { data: access, error: accessErr } = await supabase.rpc("my_access");
+  if (accessErr) {
+    console.error("[guard] my_access failed:", accessErr.message);
+    throw new ApiError(500, "Could not load your access.");
+  }
+  const a = access as AccessRow | null;
+  if (!a?.org_id) {
+    throw new ApiError(403, "This account is not active in any firm.");
+  }
+
   const admin = getAdminClient();
-  const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("name, is_active").eq("id", user.id).maybeSingle();
 
   if (!profile) {
     throw new ApiError(403, "Profile not found.");
@@ -85,7 +114,7 @@ export async function requireUser(): Promise<AuthContext> {
     throw new ApiError(403, "This account is deactivated.");
   }
 
-  const role: string = profile.role || "staff";
+  const role = a.role || "staff";
   const isAdmin = role === "admin";
 
   return {
@@ -94,12 +123,16 @@ export async function requireUser(): Promise<AuthContext> {
     name: profile.name || user.email?.split("@")[0] || "Staff Member",
     role,
     isAdmin,
-    isReviewer: isAdmin || role === "reviewer" || !!profile.is_reviewer,
-    moduleAccess: Array.isArray(profile.module_access) ? profile.module_access : DEFAULT_STAFF_MODULES,
+    isReviewer: isAdmin || role === "reviewer" || !!a.is_reviewer,
+    isSupportAgent: !!a.is_support_agent,
+    isPlatformAdmin: !!a.is_platform_admin,
+    moduleAccess: Array.isArray(a.module_access) ? (a.module_access as string[]) : DEFAULT_STAFF_MODULES,
+    orgId: a.org_id,
+    orgName: a.org_name,
   };
 }
 
-/** Same as requireUser(), but the caller must be an active administrator. */
+/** Same as requireUser(), but the caller must be an active administrator of their firm. */
 export async function requireAdmin(): Promise<AuthContext> {
   const ctx = await requireUser();
   if (!ctx.isAdmin) {
@@ -116,6 +149,15 @@ export async function requireModule(...moduleIds: string[]): Promise<AuthContext
   throw new ApiError(403, "You do not have access to this module.");
 }
 
+/** Oddlambda owner console only. */
+export async function requirePlatformAdmin(): Promise<AuthContext> {
+  const ctx = await requireUser();
+  if (!ctx.isPlatformAdmin) {
+    throw new ApiError(403, "Platform administrator access required.");
+  }
+  return ctx;
+}
+
 /** Converts any thrown error into a safe JSON response (no internal details leaked). */
 export function errorResponse(err: unknown) {
   if (err instanceof ApiError) {
@@ -127,8 +169,8 @@ export function errorResponse(err: unknown) {
 
 /**
  * Non-blocking audit trail entry. Never fails the main request.
- * Pass `actor` (the AuthContext from requireUser/requireModule) so the entry
- * records who performed the action, in the same format as src/lib/audit.ts.
+ * Pass `actor` (from requireUser/requireModule) so the entry records who did it and in which firm.
+ * System jobs without an actor should pass `orgId`.
  */
 export async function writeAuditLog(entry: {
   entity: string;
@@ -136,10 +178,13 @@ export async function writeAuditLog(entry: {
   action: string;
   metadata?: Record<string, unknown>;
   actor?: AuthContext | null;
+  orgId?: string | null;
 }) {
   try {
     const admin = getAdminClient();
+    const orgId = entry.orgId ?? entry.actor?.orgId ?? null;
     const { error } = await admin.from("audit_logs").insert({
+      ...(orgId ? { org_id: orgId } : {}),
       user_id: entry.actor?.userId ?? null,
       entity: entry.entity,
       entity_id: entry.entity_id ?? null,

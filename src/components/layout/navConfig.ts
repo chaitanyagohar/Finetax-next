@@ -35,6 +35,9 @@ export interface SessionUser {
   isReviewer: boolean;
   moduleAccess: string[];
   isSupportAgent?: boolean;
+  /** Current firm */
+  orgId: string;
+  orgName: string;
 }
 
 export interface NavItem {

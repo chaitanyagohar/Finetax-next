@@ -235,6 +235,7 @@ export default function DocumentsPage() {
 
     if (selectedFiles.length === 0) return setFormError("Choose at least one file to upload.");
     if (selectedFiles.length === 1 && !title.trim()) return setFormError("Title is required.");
+    if (!currentUser?.orgId) return setFormError("Your firm could not be identified. Please sign in again.");
 
     setUploading(true);
     let done = 0;
@@ -242,7 +243,7 @@ export default function DocumentsPage() {
 
     for (const file of selectedFiles) {
       setUploadProgress(`Uploading ${done + 1} of ${selectedFiles.length}: ${file.name}`);
-      const path = `${clientId || "internal"}/${new Date().getFullYear()}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+      const path = `${currentUser!.orgId}/${clientId || "internal"}/${new Date().getFullYear()}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
 
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
         contentType: file.type || undefined,

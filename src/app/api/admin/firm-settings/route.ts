@@ -102,7 +102,11 @@ export async function POST(request: NextRequest) {
 
     // 2. Compare with what is stored
     const admin = getAdminClient();
-    const { data: current, error: loadErr } = await admin.from("firm_settings").select("*").eq("id", 1).single();
+    const { data: current, error: loadErr } = await admin
+      .from("firm_settings")
+      .select("*")
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (loadErr || !current) throw new ApiError(500, "Could not load the current settings.");
 
     const norm = (v: unknown) => (v === null || v === undefined ? "" : String(v));
@@ -123,7 +127,7 @@ export async function POST(request: NextRequest) {
       update[k] = next[k] === "" ? null : next[k];
     });
 
-    const { error: updateErr } = await admin.from("firm_settings").update(update).eq("id", 1);
+    const { error: updateErr } = await admin.from("firm_settings").update(update).eq("org_id", caller.orgId);
     if (updateErr) {
       console.error("[firm-settings] update error:", updateErr.message);
       throw new ApiError(400, updateErr.message);
@@ -144,12 +148,17 @@ export async function POST(request: NextRequest) {
     // 5. Alert every other admin when payment details change
     if (sensitiveChanged.length > 0) {
       try {
-        const { data: admins } = await admin
-          .from("profiles")
-          .select("email")
+        const { data: adminMembers } = await admin
+          .from("memberships")
+          .select("user_id")
+          .eq("org_id", caller.orgId)
           .eq("role", "admin")
-          .neq("id", caller.userId)
-          .or("is_active.is.null,is_active.eq.true");
+          .eq("is_active", true)
+          .neq("user_id", caller.userId);
+        const adminIds = (adminMembers || []).map((m: any) => m.user_id);
+        const { data: admins } = adminIds.length
+          ? await admin.from("profiles").select("email").in("id", adminIds)
+          : { data: [] as any[] };
 
         const recipients = (admins || []).map((a: any) => a.email).filter(Boolean);
         if (recipients.length > 0) {

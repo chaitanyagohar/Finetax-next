@@ -87,3 +87,10 @@ Scheduled jobs: pg_cron 'finetax-reminders' (*/15); pg_cron 'finetax-email-sync'
 - Cron: `select jobname, schedule, active from cron.job;` and `cron.job_run_details`; pg_net responses: `net._http_response`.
 - Email sync: `select email_address, last_synced_at, last_sync_error from email_accounts;`
 - Who can see what: `select name, role, module_access, is_support_agent from profiles;`
+
+
+## Team chat (added 20 Oct 2026, migration 029)
+- Tables: chat_channels (kind channel|dm|task, name, description, is_private, task_id, created_by, last_message_at, archived_at), chat_members, chat_messages (body, mentions uuid[], attachments jsonb [{path,name,size,type}], edited_at, deleted_at = soft delete).
+- RPCs: chat_create_channel, chat_open_dm, chat_open_task_thread, chat_join, chat_leave, chat_add_members, chat_archive, chat_edit_message, chat_delete_message, chat_mark_read, chat_unread, chat_can_access(_text). Triggers chat_messages_before/after_insert; profiles_join_general auto-adds new users to #general.
+- Files: src/app/chat/page.tsx, src/components/chat/{ChatComposer,ChatConversation,ChatMessageView}.tsx, src/lib/chat.ts (types ChatMessage/ChatChannel/ChatPerson/ChatAttachment, dayLabel, timeLabel, fileSize, CHAT_FILE_TYPES). Tasks page has a task-thread entry; Topbar + navConfig updated for chat.
+- Support: /api/support/agent/route.ts updated 20 Oct (no schema change).

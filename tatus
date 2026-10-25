@@ -1,0 +1,41 @@
+--- 051083c 2026-10-20 sa
+A	src/app/chat/page.tsx
+M	src/app/tasks/page.tsx
+A	src/components/chat/ChatComposer.tsx
+A	src/components/chat/ChatConversation.tsx
+A	src/components/chat/ChatMessageView.tsx
+M	src/components/layout/Topbar.tsx
+M	src/components/layout/navConfig.ts
+A	src/lib/chat.ts
+
+--- c90d9df 2026-10-20 er
+M	src/app/api/support/agent/route.ts
+M	src/app/packages/page.tsx
+
+--- 67ab260 2026-10-20 ads
+A	PROJECT_CONTEXT.md
+A	src/app/api/support/agent/route.ts
+A	src/app/api/support/feedback/route.ts
+A	src/app/api/support/message/route.ts
+A	src/app/api/support/ticket/route.ts
+M	src/app/api/sync-emails/route.ts
+A	src/app/help/page.tsx
+M	src/app/layout.tsx
+M	src/app/packages/page.tsx
+A	src/app/support/page.tsx
+A	src/components/help/HelpCenter.tsx
+A	src/components/help/KnowledgeBaseManager.tsx
+A	src/components/help/RichText.tsx
+M	src/components/layout/Topbar.tsx
+M	src/components/layout/navConfig.ts
+M	src/components/notifications/ImportantNotifications.tsx
+A	src/lib/api/cron/sync-emails/route.ts
+A	src/lib/email/syncMailbox.ts
+A	src/lib/help/articles.ts
+A	src/lib/help/supportServer.ts
+A	src/lib/help/troubleshooter.ts
+A	src/lib/help/troubleshooting.ts
+M	src/lib/pdf/engagementLetter.tsx
+M	src/lib/pdf/firmDocuments.tsx
+M	src/proxy.ts
+M	tsconfig.json
