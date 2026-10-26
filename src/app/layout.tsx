@@ -14,10 +14,10 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Finetax Manager",
-    template: "%s · Finetax Manager",
+    default: "Duesk",
+    template: "%s · Duesk",
   },
-  description: "CA Firm Finetax Management System",
+  description: "Practice management for CA firms · Duesk by Oddlambda",
   robots: { index: false, follow: false }, // Internal system — never index
 };
 
@@ -30,11 +30,13 @@ const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
 type AccessRow = {
   org_id: string;
   org_name: string;
+  org_slug?: string | null;
   role: string | null;
   is_reviewer: boolean | null;
   is_support_agent: boolean | null;
   module_access: unknown;
   designation: string | null;
+  is_platform_owner?: boolean | null;
 };
 
 export default async function RootLayout({
@@ -102,6 +104,8 @@ export default async function RootLayout({
     moduleAccess: Array.isArray(access.module_access) ? (access.module_access as string[]) : DEFAULT_STAFF_MODULES,
     orgId: access.org_id,
     orgName: access.org_name,
+    isPlatformOwner: !!access.is_platform_owner,
+    isPlatformHome: access.org_slug === "oddlambda",
   };
 
   return (

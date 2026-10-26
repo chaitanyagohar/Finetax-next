@@ -52,6 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const pdf = await renderEngagementLetter(bundle);
         const firmName = bundle.firm?.firm_name || "Our firm";
         await sendFirmEmail({
+          orgId: bundle.proposal.org_id,
           to,
           subject: `Engagement confirmed: ${bundle.pkg?.name || "Professional services"} (${bundle.proposal.number})`,
           html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">

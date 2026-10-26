@@ -6,26 +6,48 @@ import { NextResponse, type NextRequest } from "next/server";
 import { assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { issueAndEmailInvoice, sendPaymentReminders } from "@/lib/billing/invoiceMailer";
 
-async function runBilling() {
+/**
+ * Creates due subscription bills for every firm (the database does this firm by firm),
+ * auto-sends the ones marked auto-send, then sends payment reminders.
+ * onlyOrgId limits reminders and the returned summary to one firm (the admin button).
+ */
+async function runBilling(onlyOrgId?: string) {
   const admin = getAdminClient();
   const { data, error } = await admin.rpc("generate_subscription_bills", { p_run_date: null });
   if (error) throw new Error(error.message);
 
   const created: { invoice_id: string; auto_send: boolean }[] = (data as any)?.created || [];
-  const results: string[] = [];
+
+  // Which firm each new bill belongs to
+  const ids = created.map((c) => c.invoice_id);
+  const { data: owners } = ids.length
+    ? await admin.from("invoices").select("id, org_id").in("id", ids)
+    : { data: [] as { id: string; org_id: string }[] };
+  const orgOf = new Map((owners || []).map((o: any) => [o.id, o.org_id as string]));
+  const mine = (invoiceId: string) => !onlyOrgId || orgOf.get(invoiceId) === onlyOrgId;
+
+  // Auto-send every new auto-send bill (any firm), otherwise it would stay a draft
+  const results: { invoiceId: string; message: string }[] = [];
   for (const c of created.filter((x) => x.auto_send)) {
     try {
       const r = await issueAndEmailInvoice(admin, c.invoice_id);
-      results.push(r.message);
+      results.push({ invoiceId: c.invoice_id, message: r.message });
     } catch (e: any) {
-      results.push(`Auto-send failed: ${e?.message || e}`);
+      results.push({ invoiceId: c.invoice_id, message: `Auto-send failed: ${e?.message || e}` });
     }
   }
-  const reminders = await sendPaymentReminders(admin);
-  return { bills_created: created.length, drafts: (data as any)?.drafts || 0, auto_sent: results, reminders_sent: reminders };
+
+  const reminders = await sendPaymentReminders(admin, onlyOrgId);
+
+  return {
+    bills_created: created.filter((c) => mine(c.invoice_id)).length,
+    drafts: created.filter((c) => !c.auto_send && mine(c.invoice_id)).length,
+    auto_sent: results.filter((r) => mine(r.invoiceId)).map((r) => r.message),
+    reminders_sent: reminders,
+  };
 }
 
-/** Daily scheduled job (Vercel Cron sends the CRON_SECRET). */
+/** Daily scheduled job (Vercel Cron sends the CRON_SECRET): every firm. */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
@@ -39,12 +61,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** "Run billing now" button (administrators). */
+/** "Run billing now" button (administrators): results and reminders for their own firm only. */
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const caller = await requireAdmin();
-    const result = await runBilling();
+    const result = await runBilling(caller.orgId);
     await writeAuditLog({ actor: caller, action: "RUN_SUBSCRIPTION_BILLING", entity: "INVOICES", entity_id: null, metadata: result });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {

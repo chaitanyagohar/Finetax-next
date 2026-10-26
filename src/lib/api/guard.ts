@@ -27,6 +27,8 @@ export interface AuthContext {
   isReviewer: boolean;
   isSupportAgent: boolean;
   isPlatformAdmin: boolean;
+  /** Duesk owner (Owner Console). */
+  isPlatformOwner: boolean;
   moduleAccess: string[];
   /** The firm the caller is working in. Every admin-client query MUST filter by this. */
   orgId: string;
@@ -36,12 +38,14 @@ export interface AuthContext {
 type AccessRow = {
   org_id: string;
   org_name: string;
+  org_slug?: string | null;
   role: string | null;
   is_reviewer: boolean | null;
   is_support_agent: boolean | null;
   module_access: unknown;
   designation: string | null;
   is_platform_admin: boolean | null;
+  is_platform_owner: boolean | null;
 };
 
 /** Service-role client. Bypasses RLS — use only AFTER an auth check, and always filter by orgId. */
@@ -126,6 +130,7 @@ export async function requireUser(): Promise<AuthContext> {
     isReviewer: isAdmin || role === "reviewer" || !!a.is_reviewer,
     isSupportAgent: !!a.is_support_agent,
     isPlatformAdmin: !!a.is_platform_admin,
+    isPlatformOwner: !!a.is_platform_owner,
     moduleAccess: Array.isArray(a.module_access) ? (a.module_access as string[]) : DEFAULT_STAFF_MODULES,
     orgId: a.org_id,
     orgName: a.org_name,
@@ -154,6 +159,15 @@ export async function requirePlatformAdmin(): Promise<AuthContext> {
   const ctx = await requireUser();
   if (!ctx.isPlatformAdmin) {
     throw new ApiError(403, "Platform administrator access required.");
+  }
+  return ctx;
+}
+
+/** Duesk owner only (Owner Console). */
+export async function requirePlatformOwner(): Promise<AuthContext> {
+  const ctx = await requireUser();
+  if (!ctx.isPlatformOwner) {
+    throw new ApiError(403, "Owner access required.");
   }
   return ctx;
 }

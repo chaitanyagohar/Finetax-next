@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const invoiceId = typeof body?.invoiceId === "string" ? body.invoiceId : "";
     if (!UUID_RE.test(invoiceId)) throw new ApiError(400, "Invalid invoice.");
 
-    const result = await issueAndEmailInvoice(getAdminClient(), invoiceId);
+    const result = await issueAndEmailInvoice(getAdminClient(), invoiceId, caller.orgId);
     await writeAuditLog({ actor: caller, action: "ISSUE_SUBSCRIPTION_BILL", entity: "INVOICES", entity_id: invoiceId, metadata: result });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {

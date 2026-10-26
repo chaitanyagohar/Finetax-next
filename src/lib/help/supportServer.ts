@@ -1,6 +1,7 @@
-/** Shared helpers for the support routes. SERVER ONLY. */
+/** Shared helpers for the support routes. SERVER ONLY. Support is a central Duesk service. */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+
 export type SupportContext = {
   name: string;
   role: string;
@@ -11,24 +12,26 @@ export type SupportContext = {
   now: string;
 };
 
-const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
+/** The parts of the signed-in user (AuthContext) the support assistant needs. */
+type Caller = { name: string; role: string; isAdmin: boolean; isReviewer: boolean; moduleAccess: string[] };
 
-export async function loadProfile(admin: SupabaseClient, userId: string) {
-  const { data } = await admin.from("profiles").select("id, name, email, role, is_reviewer, is_active, is_support_agent, module_access").eq("id", userId).maybeSingle();
-  return data;
-}
-
-export function contextFor(profile: any, pagePath: string): SupportContext {
-  const role = profile?.role || "staff";
+/** Snapshot of who asked, from their membership in the current firm. */
+export function contextFor(caller: Caller, pagePath: string): SupportContext {
   return {
-    name: profile?.name || "Team member",
-    role,
-    isAdmin: role === "admin",
-    isReviewer: role === "admin" || role === "reviewer" || !!profile?.is_reviewer,
-    modules: Array.isArray(profile?.module_access) ? profile.module_access : DEFAULT_STAFF_MODULES,
+    name: caller.name || "Team member",
+    role: caller.role || "staff",
+    isAdmin: caller.isAdmin,
+    isReviewer: caller.isReviewer,
+    modules: caller.moduleAccess,
     pagePath: String(pagePath || "").slice(0, 200),
     now: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }),
   };
+}
+
+/** True if this person is on the Duesk support team. */
+export async function isPlatformSupport(admin: SupabaseClient, userId: string): Promise<boolean> {
+  const { data } = await admin.from("platform_admins").select("user_id").eq("user_id", userId).maybeSingle();
+  return !!data;
 }
 
 /** Only images the user uploaded into their own folder. */
@@ -40,7 +43,7 @@ export function sanitizeAttachments(raw: unknown, userId: string) {
     .filter((a) => a.path.startsWith(`${userId}/`) && !a.path.includes("..") && /\.(png|jpe?g|webp|gif)$/i.test(a.path));
 }
 
-/** Move a conversation to the human support queue and tell the user. */
+/** Move a conversation to the human support queue and email the Duesk support team. */
 export async function escalateTicket(
   admin: SupabaseClient,
   ticket: any,
@@ -66,6 +69,7 @@ export async function escalateTicket(
     .from("support_messages")
     .insert([
       {
+        org_id: ticket.org_id,
         ticket_id: ticket.id,
         role: "system",
         body: "You're now connected to the support team. A person will reply in this chat, and you'll get a notification when they do.",
@@ -74,25 +78,40 @@ export async function escalateTicket(
     .select("*")
     .single();
 
-  // Email support agents (best effort)
+  // Email the Duesk support team from the platform mailbox (best effort)
   try {
-    const { data: agents } = await admin.from("profiles").select("email, name").eq("is_support_agent", true).or("is_active.is.null,is_active.eq.true");
-    const { data: user } = await admin.from("profiles").select("name").eq("id", ticket.user_id).maybeSingle();
-    const link = `${origin}/support?ticket=${ticket.id}`;
-    for (const a of agents || []) {
-      if (!a.email) continue;
-      await sendFirmEmail({
-        to: a.email,
-        subject: `Support request ${updated?.number || ticket.number} from ${user?.name || "a team member"}${info.priority === "urgent" ? " [URGENT]" : ""}`,
-        html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6">
-          <p><strong>${escapeHtml(user?.name || "A team member")}</strong> needs help.</p>
-          <p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">${escapeHtml(info.summary)}</p>
-          <p><a href="${link}">Open the conversation</a></p></div>`,
-        text: `${user?.name || "A team member"} needs help: ${info.summary}\n\n${link}`,
-      });
+    const [{ data: cfg }, { data: staff }, { data: user }, { data: firm }] = await Promise.all([
+      admin.from("platform_config").select("support_org_id").eq("id", true).maybeSingle(),
+      admin.from("platform_admins").select("user_id"),
+      admin.from("profiles").select("name").eq("id", ticket.user_id).maybeSingle(),
+      admin.from("organizations").select("name").eq("id", ticket.org_id).maybeSingle(),
+    ]);
+
+    const senderOrg = cfg?.support_org_id as string | undefined;
+    const staffIds = (staff || []).map((s: any) => s.user_id);
+    const { data: agents } = staffIds.length
+      ? await admin.from("profiles").select("email").in("id", staffIds)
+      : { data: [] as any[] };
+
+    if (senderOrg) {
+      const link = `${origin}/support?ticket=${ticket.id}`;
+      const who = `${user?.name || "A team member"}${firm?.name ? ` (${firm.name})` : ""}`;
+      for (const a of agents || []) {
+        if (!a.email) continue;
+        await sendFirmEmail({
+          orgId: senderOrg,
+          to: a.email,
+          subject: `Support request ${updated?.number || ticket.number} from ${who}${info.priority === "urgent" ? " [URGENT]" : ""}`,
+          html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6">
+            <p><strong>${escapeHtml(who)}</strong> needs help.</p>
+            <p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">${escapeHtml(info.summary)}</p>
+            <p><a href="${link}">Open the conversation</a></p></div>`,
+          text: `${who} needs help: ${info.summary}\n\n${link}`,
+        });
+      }
     }
   } catch (e) {
-    console.error("[support] agent email failed:", e);
+    console.error("[support] support-team email failed:", e);
   }
 
   return { ticket: updated || ticket, message };

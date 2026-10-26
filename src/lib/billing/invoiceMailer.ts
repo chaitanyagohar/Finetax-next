@@ -26,8 +26,18 @@ function paymentBlock(firm: any, balance: number): string {
   return `<p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">${lines.join("<br/>")}</p>`;
 }
 
-export async function issueAndEmailInvoice(admin: SupabaseClient, invoiceId: string): Promise<{ sent: boolean; message: string }> {
-  const { data: inv } = await admin.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId).single();
+/**
+ * Issue a draft bill (if needed) and email it from the bill's own firm.
+ * Pass expectOrgId when an admin triggers this, so they can only act on their own firm's bills.
+ */
+export async function issueAndEmailInvoice(
+  admin: SupabaseClient,
+  invoiceId: string,
+  expectOrgId?: string | null
+): Promise<{ sent: boolean; message: string }> {
+  let query = admin.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId);
+  if (expectOrgId) query = query.eq("org_id", expectOrgId);
+  const { data: inv } = await query.maybeSingle();
   if (!inv) return { sent: false, message: "Invoice not found." };
   if (inv.status === "Cancelled") return { sent: false, message: `${inv.invoice_number} is cancelled.` };
 
@@ -41,7 +51,7 @@ export async function issueAndEmailInvoice(admin: SupabaseClient, invoiceId: str
   if (!to) return { sent: false, message: `${inv.invoice_number} issued, but the client has no email address. Send it from Invoices or WhatsApp.` };
 
   const [{ data: firm }, { data: sub }] = await Promise.all([
-    admin.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
+    admin.from("firm_settings").select("*").eq("org_id", inv.org_id).maybeSingle(),
     inv.client_package_id
       ? admin.from("client_packages").select("late_fee_percent, late_fee_min").eq("id", inv.client_package_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -57,6 +67,7 @@ export async function issueAndEmailInvoice(admin: SupabaseClient, invoiceId: str
       : "";
 
   await sendFirmEmail({
+    orgId: inv.org_id,
     to,
     subject: `Invoice ${inv.invoice_number}${period} · due ${dmy(inv.due_date)}`,
     html: emailShell(
@@ -75,24 +86,39 @@ export async function issueAndEmailInvoice(admin: SupabaseClient, invoiceId: str
   return { sent: true, message: `${inv.invoice_number} emailed to ${to}.` };
 }
 
-/** Before-due, due-today and 3-days-overdue reminders for subscription bills (each sent once). */
-export async function sendPaymentReminders(admin: SupabaseClient): Promise<number> {
+/**
+ * Before-due, due-today and 3-days-overdue reminders for subscription bills (each sent once).
+ * Pass onlyOrgId to limit the run to one firm (the "Run billing now" button).
+ */
+export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: string | null): Promise<number> {
   const today = istToday();
   const rules = [
     { kind: "due_in_2", due: addDays(today, 2), subject: "Payment reminder: due in 2 days", lead: "This is a friendly reminder that the invoice below is due in 2 days." },
     { kind: "due_today", due: today, subject: "Payment due today", lead: "The invoice below is due for payment today." },
     { kind: "overdue_3", due: addDays(today, -3), subject: "Payment overdue", lead: "Our records show the invoice below is now overdue." },
   ];
-  const { data: firm } = await admin.from("firm_settings").select("*").eq("id", 1).maybeSingle();
+
+  // Each firm's own settings (bank details, name), loaded once per firm
+  const firmCache = new Map<string, any>();
+  async function firmFor(orgId: string) {
+    if (!firmCache.has(orgId)) {
+      const { data } = await admin.from("firm_settings").select("*").eq("org_id", orgId).maybeSingle();
+      firmCache.set(orgId, data);
+    }
+    return firmCache.get(orgId);
+  }
+
   let sent = 0;
 
   for (const rule of rules) {
-    const { data: invoices } = await admin
+    let query = admin
       .from("invoices")
       .select("*, clients!client_id(*)")
       .not("client_package_id", "is", null)
       .in("status", ["Sent", "Partially Paid"])
       .eq("due_date", rule.due);
+    if (onlyOrgId) query = query.eq("org_id", onlyOrgId);
+    const { data: invoices } = await query;
 
     for (const inv of invoices || []) {
       const balance = Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
@@ -101,7 +127,9 @@ export async function sendPaymentReminders(admin: SupabaseClient): Promise<numbe
       if (error) continue; // already sent
 
       try {
+        const firm = await firmFor(inv.org_id);
         await sendFirmEmail({
+          orgId: inv.org_id,
           to: inv.clients.email,
           subject: `${rule.subject} · ${inv.invoice_number}`,
           html: emailShell(

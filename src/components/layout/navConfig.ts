@@ -22,6 +22,7 @@ import {
   LifeBuoy,
   Headphones,
   MessagesSquare,
+  Building2,
 } from "lucide-react";
 
 /** Minimal, serialisable user object passed from the server layout to the client shell. */
@@ -35,6 +36,10 @@ export interface SessionUser {
   isReviewer: boolean;
   moduleAccess: string[];
   isSupportAgent?: boolean;
+  /** Duesk owner */
+  isPlatformOwner?: boolean;
+  /** Signed in to the Duesk staff workspace (Oddlambda), not a CA firm */
+  isPlatformHome?: boolean;
   /** Current firm */
   orgId: string;
   orgName: string;
@@ -48,8 +53,12 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Visible to every active user (each sees only their own data on that page). */
   everyone?: boolean;
-    /** Visible only to support agents. */
+  /** Visible only to support agents. */
   supportOnly?: boolean;
+  /** Visible only to the Duesk owner. */
+  ownerOnly?: boolean;
+  /** Shown in the Duesk staff workspace. */
+  platform?: boolean;
 }
 
 export interface NavSection {
@@ -63,8 +72,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard, moduleId: "dashboard" },
       { name: "Unified Inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard" },
-      { name: "Team Chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true },
-      ],
+      { name: "Team Chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true, platform: true },
+    ],
   },
   {
     label: "Clients & Sales",
@@ -93,8 +102,12 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Support",
     items: [
       { name: "Help & Support", href: "/help", icon: LifeBuoy, moduleId: "help", everyone: true },
-      { name: "Support Inbox", href: "/support", icon: Headphones, moduleId: "support", supportOnly: true },
+      { name: "Support Inbox", href: "/support", icon: Headphones, moduleId: "support", supportOnly: true, platform: true },
     ],
+  },
+  {
+    label: "Duesk",
+    items: [{ name: "Owner Console", href: "/owner", icon: Building2, moduleId: "owner", ownerOnly: true, platform: true }],
   },
   {
     label: "Administration",
@@ -116,6 +129,7 @@ export const REVIEWER_SUB_TABS = [
 /** UI-level visibility only. Real enforcement must happen in Supabase RLS + middleware. */
 export function canAccess(item: NavItem, user: SessionUser): boolean {
   if (item.href === "/") return true;
+  if (item.ownerOnly) return !!user.isPlatformOwner;
   if (item.supportOnly) return !!user.isSupportAgent;
   if (item.adminOnly && !user.isAdmin) return false;
   if (item.everyone) return true;
@@ -126,7 +140,8 @@ export function canAccess(item: NavItem, user: SessionUser): boolean {
 export function getVisibleSections(user: SessionUser): NavSection[] {
   return NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => canAccess(item, user)),
+    // In the Duesk staff workspace, only console pages are shown
+    items: section.items.filter((item) => (!user.isPlatformHome || item.platform) && canAccess(item, user)),
   })).filter((section) => section.items.length > 0);
 }
 
@@ -142,5 +157,12 @@ export function getPageTitle(pathname: string): string {
       if (isPathActive(pathname, item.href)) return item.name;
     }
   }
-  return "Finetax Manager";
+  return "Duesk";
+}
+
+/** Role shown under the user's name (sidebar footer and top-right menu). */
+export function roleLabelFor(user: SessionUser): string {
+  if (user.isPlatformHome) return user.isPlatformOwner ? "Duesk Owner" : "Duesk Support";
+  if (user.isAdmin) return "Administrator";
+  return user.isReviewer ? "Staff + Reviewer" : "Execution Staff";
 }

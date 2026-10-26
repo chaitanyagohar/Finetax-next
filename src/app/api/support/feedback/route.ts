@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { contextFor, loadProfile } from "@/lib/help/supportServer";
+import { contextFor } from "@/lib/help/supportServer";
 
 const TYPES: Record<string, string> = { idea: "Feature idea", bug: "Bug report", praise: "Praise", other: "Feedback" };
 
@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
     const pagePath = String(body?.pagePath || "").slice(0, 200);
 
     const admin = getAdminClient();
-    const profile = await loadProfile(admin, caller.userId);
 
     const { data: ticket, error } = await admin
       .from("support_tickets")
       .insert([
         {
+          org_id: caller.orgId,
           user_id: caller.userId,
           kind: "feedback",
           category: type === "idea" ? "feature_request" : type === "bug" ? "bug" : "other",
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
           status: "waiting",
           page_path: pagePath || null,
           user_agent: (request.headers.get("user-agent") || "").slice(0, 300),
-          context: contextFor(profile, pagePath),
+          context: contextFor(caller, pagePath),
           rating: rating >= 1 && rating <= 5 ? rating : null,
         },
       ])
@@ -42,7 +42,9 @@ export async function POST(request: NextRequest) {
       .single();
     if (error || !ticket) throw new ApiError(500, "Could not send feedback.");
 
-    await admin.from("support_messages").insert([{ ticket_id: ticket.id, sender_id: caller.userId, role: "user", body: message }]);
+    await admin
+      .from("support_messages")
+      .insert([{ org_id: caller.orgId, ticket_id: ticket.id, sender_id: caller.userId, role: "user", body: message }]);
     return NextResponse.json({ success: true, number: ticket.number });
   } catch (err) {
     return errorResponse(err);

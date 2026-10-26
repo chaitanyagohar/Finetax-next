@@ -36,8 +36,8 @@ export interface SendFirmEmailInput {
   text?: string;
   attachments?: MailAttachment[];
   accountId?: string | null;
-  /** The firm sending the email. Will become required once every caller passes it. */
-  orgId?: string | null;
+  /** The firm sending the email. Required: the email is sent from that firm's own mailbox. */
+  orgId: string;
 }
 
 export interface SendFirmEmailResult {
@@ -106,14 +106,7 @@ export function createSmtpTransport(account: any, password: string) {
   });
 }
 
-/** TRANSITIONAL: callers that don't pass orgId yet are treated as the original firm (Finetax). */
-async function resolveOrgId(supabase: SupabaseClient, orgId?: string | null): Promise<string> {
-  if (orgId) return orgId;
-  const { data } = await supabase.from("platform_config").select("legacy_org_id").eq("id", true).maybeSingle();
-  if (!data?.legacy_org_id) throw new ApiError(500, "Firm could not be identified for this email.");
-  console.warn("[mailer] sendFirmEmail called without orgId; using the original firm.");
-  return data.legacy_org_id as string;
-}
+
 
 export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirmEmailResult> {
   // 1. Validate
@@ -139,7 +132,8 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
   }
 
   const supabase = getAdminClient();
-  const orgId = await resolveOrgId(supabase, input.orgId);
+  const orgId = input.orgId;
+  if (!orgId) throw new ApiError(500, "Firm could not be identified for this email.");
 
   // 2. Resolve the sending account: always one of THIS firm's mailboxes
   let accountId = input.accountId || null;

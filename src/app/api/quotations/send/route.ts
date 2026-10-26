@@ -38,10 +38,15 @@ export async function POST(request: NextRequest) {
 
     // 2. Quotation & firm data
     const supabase = getAdminClient();
-    const { data: quotation, error: quoteErr } = await supabase.from("quotations").select("*, clients!client_id(*)").eq("id", quotationId).single();
+    const { data: quotation, error: quoteErr } = await supabase
+      .from("quotations")
+      .select("*, clients!client_id(*)")
+      .eq("id", quotationId)
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (quoteErr || !quotation) throw new ApiError(404, "Quotation not found.");
 
-    const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle();
+    const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", caller.orgId).maybeSingle();
 
     const client = quotation.clients;
     const clientName = client?.name || quotation.recipient_name || quotation.organisation || "Valued Client";
@@ -68,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Send
     await sendFirmEmail({
+      orgId: caller.orgId,
       to: recipientEmail,
       subject: `Quotation ${quoteNum} from ${firmName}`,
       html: htmlBody,
@@ -84,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     // 7. Audit trail
     await writeAuditLog({
+      actor: caller,
       action: "SEND_QUOTATION_EMAIL",
       entity: "QUOTATIONS",
       entity_id: quotationId,

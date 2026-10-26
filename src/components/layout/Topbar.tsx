@@ -25,7 +25,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getInitials, localISODate } from "@/lib/format";
-import { getPageTitle, getVisibleSections, REVIEWER_SUB_TABS, type SessionUser } from "./navConfig";
+import { getPageTitle, getVisibleSections, REVIEWER_SUB_TABS, roleLabelFor, type SessionUser } from "./navConfig";
 import { useLogout } from "./useLogout";
 import WorkSession from "@/components/time/WorkSession";
 import { HelpLauncher } from "@/components/help/HelpCenter";
@@ -122,7 +122,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
 
-  const roleLabel = user.isAdmin ? "Administrator" : user.isReviewer ? "Staff + Reviewer" : "Execution Staff";
+  const roleLabel = roleLabelFor(user);
 
   /* ---------- Action-item counts (count-only queries, throttled to 60s) ---------- */
   const loadCounts = useCallback(
@@ -259,7 +259,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   /* ---------- Quick navigation palette (Ctrl/Cmd + K) ---------- */
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const items: PaletteItem[] = getVisibleSections(user).flatMap((s) => s.items.map((i) => ({ name: i.name, href: i.href, icon: i.icon, group: s.label })));
-    if (user.isReviewer) {
+    if (user.isReviewer && !user.isPlatformHome) {
       REVIEWER_SUB_TABS.forEach((t) => items.push({ name: t.name, href: t.href, icon: t.icon, group: "Review Tasks" }));
     }
     return items;
@@ -310,7 +310,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   }
 
   /* ---------- Action items ---------- */
-  const actionItems = [
+  const actionItems = user.isPlatformHome ? [] : [
     { key: "overdue", label: user.isAdmin ? "Overdue (firm)" : "Overdue", count: counts?.overdue || 0, href: "/tasks", icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
     { key: "changes", label: "Changes required", count: counts?.changes || 0, href: "/tasks", icon: RotateCcw, style: "bg-amber-50 text-amber-600" },
     ...(user.isReviewer
@@ -382,7 +382,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
                 </div>
 
                 {/* Action items */}
-                <div className="flex gap-1.5 border-b border-border px-3 py-2">
+                <div className={actionItems.length ? "flex gap-1.5 border-b border-border px-3 py-2" : "hidden"}>
                   {actionItems.map((a) => {
                     const Icon = a.icon;
                     return (
@@ -482,8 +482,9 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
         </div>
       </header>
 
-      <WorkSession userId={user.id} />
-      <HelpLauncher />
+      {/* Firm tools: not part of the Duesk staff console */}
+      {!user.isPlatformHome && <WorkSession userId={user.id} />}
+      {!user.isPlatformHome && <HelpLauncher />}
 
       {/* New-notification toast */}
       {toast && (

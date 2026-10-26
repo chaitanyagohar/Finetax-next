@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { contextFor, escalateTicket, loadProfile, sanitizeAttachments } from "@/lib/help/supportServer";
+import { contextFor, escalateTicket, sanitizeAttachments } from "@/lib/help/supportServer";
 import { buildSummary, bumpStat, findProblem, loadProblems, present, rank, type Option } from "@/lib/help/troubleshooter";
 import type { Problem } from "@/lib/help/troubleshooting";
 
@@ -27,14 +27,18 @@ export async function POST(request: NextRequest) {
     const pagePath = String(body?.pagePath || "").slice(0, 200);
 
     const admin = getAdminClient();
-    const profile = await loadProfile(admin, caller.userId);
     const now = new Date().toISOString();
 
     // Existing conversation (must be yours) or a new one
     let ticket: any;
     if (body?.ticketId) {
       if (!UUID_RE.test(String(body.ticketId))) throw new ApiError(400, "Invalid conversation.");
-      const { data } = await admin.from("support_tickets").select("*").eq("id", body.ticketId).maybeSingle();
+      const { data } = await admin
+        .from("support_tickets")
+        .select("*")
+        .eq("id", body.ticketId)
+        .eq("org_id", caller.orgId)
+        .maybeSingle();
       if (!data || data.user_id !== caller.userId) throw new ApiError(404, "Conversation not found.");
       ticket = data;
     } else {
@@ -42,13 +46,14 @@ export async function POST(request: NextRequest) {
         .from("support_tickets")
         .insert([
           {
+            org_id: caller.orgId,
             user_id: caller.userId,
             kind: "help",
             subject: (text || "Screenshot").split("\n")[0].slice(0, 90),
             status: "ai",
             page_path: pagePath || null,
             user_agent: (request.headers.get("user-agent") || "").slice(0, 300),
-            context: contextFor(profile, pagePath),
+            context: contextFor(caller, pagePath),
           },
         ])
         .select("*")
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest) {
     // The automatic assistant answers until a person takes over
     if (ticket.status === "ai") {
       const problems = await loadProblems(admin);
-      const ctx = { isAdmin: profile?.role === "admin", pagePath: pagePath || ticket.page_path || "" };
+      const ctx = { isAdmin: caller.isAdmin, pagePath: pagePath || ticket.page_path || "" };
       const flow: { misses: number; tried: string[]; alternatives: string[]; current: string | null } = {
         misses: 0,
         tried: [],

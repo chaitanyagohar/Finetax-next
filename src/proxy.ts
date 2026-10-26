@@ -24,13 +24,31 @@ const MODULE_PATHS: { base: string; module: string }[] = [
 // Routes for reviewers and administrators
 const REVIEWER_PATHS = ["/reviewer-queue"];
 
-// Support Inbox: support agents only
+// Support Inbox: Duesk support team
 const SUPPORT_PATHS = ["/support"];
+
+// Owner Console: Duesk owner only
+const OWNER_PATHS = ["/owner"];
+
+// The Duesk staff workspace (Oddlambda) only has these pages
+const PLATFORM_ORG_SLUG = "oddlambda";
+const PLATFORM_PATHS = ["/owner", "/support", "/chat", "/reset-password"];
+
 // Same default as the root layout, for people with no modules saved
 const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
 
 // Set by /auth/confirm after a verified password-reset link
 const RECOVERY_COOKIE = "ft_pw_recovery";
+
+type Access = {
+  org_id?: string;
+  org_slug?: string | null;
+  role?: string | null;
+  is_reviewer?: boolean | null;
+  is_support_agent?: boolean | null;
+  is_platform_owner?: boolean | null;
+  module_access?: unknown;
+} | null;
 
 function matchesPath(pathname: string, base: string) {
   return pathname === base || pathname.startsWith(base + "/");
@@ -59,9 +77,9 @@ export async function proxy(request: NextRequest) {
     return redirect;
   }
 
-  function toDashboard() {
+  function redirectToPath(path: string) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = path;
     url.search = "";
     return redirectTo(url);
   }
@@ -85,36 +103,47 @@ export async function proxy(request: NextRequest) {
   }
 
   // RULE 2: Already logged in? Skip the login page.
-  if (user && isLoginPage) return toDashboard();
+  if (user && isLoginPage) return redirectToPath("/");
 
   // RULE 3: /reset-password only works right after a verified reset link
   if (user && matchesPath(pathname, "/reset-password")) {
-    if (request.cookies.get(RECOVERY_COOKIE)?.value !== user.id) return toDashboard();
+    if (request.cookies.get(RECOVERY_COOKIE)?.value !== user.id) return redirectToPath("/");
   }
 
-  // RULE 4: Admin-only, reviewer-only and module pages are checked on the server
-  if (user) {
+  // RULE 4: Role, module and workspace checks (current firm)
+  if (user && !isPublic) {
+    const { data: accessData } = await supabase.rpc("my_access");
+    const access = accessData as Access;
+    const active = !!access?.org_id;
+
+    // Duesk staff workspace: keep owner/support on their console pages
+    const platformHome = active && access!.org_slug === PLATFORM_ORG_SLUG;
+    const platformLanding = platformHome
+      ? access!.is_platform_owner
+        ? "/owner"
+        : access!.is_support_agent
+          ? "/support"
+          : null
+      : null;
+    const homePath = platformLanding || "/";
+
+    if (platformLanding && !PLATFORM_PATHS.some((base) => matchesPath(pathname, base))) {
+      return redirectToPath(platformLanding);
+    }
+
     const adminPath = ADMIN_ONLY_PATHS.some((base) => matchesPath(pathname, base));
     const reviewerPath = REVIEWER_PATHS.some((base) => matchesPath(pathname, base));
     const modulePath = MODULE_PATHS.find((m) => matchesPath(pathname, m.base));
     const supportPath = SUPPORT_PATHS.some((base) => matchesPath(pathname, base));
+    const ownerPath = OWNER_PATHS.some((base) => matchesPath(pathname, base));
 
-    if (adminPath || reviewerPath || modulePath || supportPath) {
-      // Role and modules in the user's CURRENT firm
-      const { data: accessData } = await supabase.rpc("my_access");
-      const access = accessData as {
-        org_id?: string;
-        role?: string | null;
-        is_reviewer?: boolean | null;
-        is_support_agent?: boolean | null;
-        module_access?: unknown;
-      } | null;
-
-      const active = !!access?.org_id;
+    if (adminPath || reviewerPath || modulePath || supportPath || ownerPath) {
       const isAdmin = active && access!.role === "admin";
       let allowed = false;
 
-      if (supportPath) {
+      if (ownerPath) {
+        allowed = active && !!access!.is_platform_owner;
+      } else if (supportPath) {
         allowed = active && !!access!.is_support_agent;
       } else if (adminPath) {
         allowed = isAdmin;
@@ -127,7 +156,7 @@ export async function proxy(request: NextRequest) {
         allowed = isAdmin || (active && modules.includes(modulePath.module));
       }
 
-      if (!allowed) return toDashboard();
+      if (!allowed && pathname !== homePath) return redirectToPath(homePath);
     }
   }
 

@@ -243,14 +243,17 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
 }
 
 /** Load everything an engagement letter needs (works with a user session or the admin client). */
-export async function loadProposalBundle(db: SupabaseClient, id: string) {
-  const { data: proposal } = await db.from("proposals").select("*").eq("id", id).maybeSingle();
+export async function loadProposalBundle(db: SupabaseClient, id: string, orgId?: string | null) {
+  let query = db.from("proposals").select("*").eq("id", id);
+  if (orgId) query = query.eq("org_id", orgId);
+  const { data: proposal } = await query.maybeSingle();
   if (!proposal) return null;
+  // Letterhead and terms always come from the proposal's own firm
   const [{ data: client }, { data: pkg }, { data: firm }, { data: terms }] = await Promise.all([
     db.from("clients").select("*").eq("id", proposal.client_id).maybeSingle(),
     db.from("service_packages").select("*").eq("id", proposal.package_id).maybeSingle(),
-    db.from("firm_settings").select("*").eq("id", 1).maybeSingle(),
-    db.from("engagement_settings").select("*").eq("id", 1).maybeSingle(),
+    db.from("firm_settings").select("*").eq("org_id", proposal.org_id).maybeSingle(),
+    db.from("engagement_settings").select("*").eq("org_id", proposal.org_id).maybeSingle(),
   ]);
   return { proposal, client, pkg, firm, terms };
 }

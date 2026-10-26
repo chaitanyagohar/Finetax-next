@@ -38,11 +38,16 @@ export async function POST(request: NextRequest) {
 
     // 2. Invoice & firm data
     const supabase = getAdminClient();
-    const { data: invoice, error: invErr } = await supabase.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId).single();
+        const { data: invoice, error: invErr } = await supabase
+      .from("invoices")
+      .select("*, clients!client_id(*)")
+      .eq("id", invoiceId)
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (invErr || !invoice) throw new ApiError(404, "Invoice not found.");
     if (invoice.status === "Cancelled") throw new ApiError(400, "This invoice is cancelled and can't be emailed.");
 
-    const { data: firm } = await supabase.from("firm_settings").select("*").eq("id", 1).maybeSingle();
+    const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", caller.orgId).maybeSingle();
 
     const client = invoice.clients;
     const clientName = client?.name || invoice.organisation || "Valued Client";
@@ -77,6 +82,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Send
     await sendFirmEmail({
+      orgId: caller.orgId,
       to: recipientEmail,
       subject: `Tax Invoice ${invNum} from ${firmName}`,
       html: htmlBody,
@@ -93,6 +99,7 @@ export async function POST(request: NextRequest) {
 
     // 7. Audit trail
     await writeAuditLog({
+      actor: caller,
       action: "SEND_INVOICE_EMAIL",
       entity: "INVOICES",
       entity_id: invoiceId,

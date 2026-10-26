@@ -23,7 +23,12 @@ export async function POST(request: NextRequest) {
     if (!UUID_RE.test(ticketId)) throw new ApiError(400, "Invalid conversation.");
 
     const admin = getAdminClient();
-    const { data: ticket } = await admin.from("support_tickets").select("*").eq("id", ticketId).maybeSingle();
+    const { data: ticket } = await admin
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .eq("org_id", caller.orgId)
+      .maybeSingle();
     if (!ticket || ticket.user_id !== caller.userId) throw new ApiError(404, "Conversation not found.");
     const now = new Date().toISOString();
 
