@@ -1,29 +1,25 @@
 /**
- * Lightweight in-memory rate limiter (per server process).
- * Suitable for a single-server office deployment. Resets on restart.
+ * Rate limiter shared by every server instance (stored in the database).
+ * SERVER ONLY. Always `await` it.
+ * If the database check itself fails, the request is allowed (and the error logged),
+ * so a temporary database hiccup never locks people out.
  */
-type Bucket = { count: number; resetAt: number };
+import { getAdminClient } from "@/lib/api/guard";
 
-const buckets = new Map<string, Bucket>();
-
-export function checkRateLimit(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-
-  // Occasional cleanup so the map never grows unbounded
-  if (buckets.size > 5000) {
-    for (const [k, b] of buckets) {
-      if (now > b.resetAt) buckets.delete(k);
+export async function checkRateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {
+  try {
+    const { data, error } = await getAdminClient().rpc("hit_rate_limit", {
+      p_key: String(key).slice(0, 200),
+      p_limit: limit,
+      p_window_seconds: Math.max(1, Math.ceil(windowMs / 1000)),
+    });
+    if (error) {
+      console.error("[rateLimit] check failed:", error.message);
+      return true;
     }
-  }
-
-  const bucket = buckets.get(key);
-  if (!bucket || now > bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
+    return data === true;
+  } catch (e) {
+    console.error("[rateLimit] check failed:", e);
     return true;
   }
-
-  if (bucket.count >= limit) return false;
-
-  bucket.count++;
-  return true;
 }

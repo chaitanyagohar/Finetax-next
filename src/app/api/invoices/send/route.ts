@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     assertSameOrigin(request);
     const caller = await requireModule("invoices");
 
-    if (!checkRateLimit(`send-email:${caller.userId}`, 30, 10 * 60 * 1000)) {
+    if (!(await checkRateLimit(`send-email:${caller.userId}`, 30, 10 * 60 * 1000))) {
       throw new ApiError(429, "Too many emails sent in a short time. Please wait a few minutes.");
     }
 

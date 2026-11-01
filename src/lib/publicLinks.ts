@@ -11,9 +11,10 @@ function siteUrl(): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Dedicated signing secret for public links (never the service-role key). */
 function secret(): string {
-  const s = process.env.PUBLIC_LINK_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!s) throw new Error("PUBLIC_LINK_SECRET is not configured.");
+  const s = process.env.PUBLIC_LINK_SECRET;
+  if (!s || s.length < 32) throw new Error("PUBLIC_LINK_SECRET is missing or shorter than 32 characters.");
   return s;
 }
 

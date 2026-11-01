@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
     assertSameOrigin(request);
     const caller = await requireAdmin();
 
-    if (!checkRateLimit(`email-test:${caller.userId}`, 10, 10 * 60 * 1000)) {
-      throw new ApiError(429, "Too many connection tests. Please wait a few minutes.");
+    if (!(await checkRateLimit(`email-test:${caller.userId}`, 10, 10 * 60 * 1000))) {
+          throw new ApiError(429, "Too many connection tests. Please wait a few minutes.");
     }
 
     const body = await request.json().catch(() => ({}));

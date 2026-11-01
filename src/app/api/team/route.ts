@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       entity: "profiles",
       entity_id: authData.user.id,
       action: "user_created",
+      actor: caller,
       metadata: { created_by: caller.userId, created_by_email: caller.email, email: cleanEmail, role: cleanRole, via: "api/team" },
     });
 

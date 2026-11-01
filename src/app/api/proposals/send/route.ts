@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const caller = await requireAdmin();
-    if (!checkRateLimit(`proposal-send:${caller.userId}`, 20, 10 * 60 * 1000)) throw new ApiError(429, "Too many emails. Please wait a few minutes.");
+    if (!(await checkRateLimit(`proposal-send:${caller.userId}`, 20, 10 * 60 * 1000))) throw new ApiError(429, "Too many emails. Please wait a few minutes.");
 
     const body = await request.json().catch(() => ({}));
     const proposalId = typeof body?.proposalId === "string" ? body.proposalId : "";
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     const bundle = await loadProposalBundle(admin, proposalId);
     if (!bundle) throw new ApiError(404, "Proposal not found.");
     const { proposal, client, pkg, firm } = bundle;
+    if (!proposal.org_id || proposal.org_id !== caller.orgId) throw new ApiError(404, "Proposal not found.");
     if (["Accepted", "Declined", "Withdrawn"].includes(proposal.status)) throw new ApiError(400, `This proposal is already ${proposal.status.toLowerCase()}.`);
 
     const to = String(body?.to || proposal.recipient_email || client?.email || "").trim().toLowerCase();
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     const validity = proposal.expires_at ? ` This proposal is valid until ${escapeHtml(String(proposal.expires_at).split("-").reverse().join("/"))}.` : "";
 
     await sendFirmEmail({
+      orgId: caller.orgId,
       to,
       subject: `Engagement letter ${proposal.number}: ${pkg?.name || "Professional services"}`,
       html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
@@ -56,7 +58,8 @@ export async function POST(request: NextRequest) {
     await admin
       .from("proposals")
       .update({ status: proposal.status === "Draft" ? "Sent" : proposal.status, sent_at: new Date().toISOString(), recipient_email: to })
-      .eq("id", proposalId);
+      .eq("id", proposalId)
+      .eq("org_id", caller.orgId);
 
     await writeAuditLog({ actor: caller, action: "SEND_PROPOSAL", entity: "PROPOSALS", entity_id: proposalId, metadata: { number: proposal.number, to } });
     return NextResponse.json({ success: true, message: `Engagement letter ${proposal.number} emailed to ${to}.` });

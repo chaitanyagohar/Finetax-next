@@ -1,0 +1,28 @@
+﻿src\app\audit-page\page.tsx:96  .from("audit_logs")
+src\app\client-discussions\page.tsx:126  supabase.from("discussions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+src\app\client-discussions\page.tsx:268  const { error } = await supabase.from("discussions").update(payload).eq("id", editingItem.id);
+src\app\client-discussions\page.tsx:273  const { data, error } = await supabase.from("discussions").insert([payload]).select().single();
+src\app\client-discussions\page.tsx:293  const { error } = await supabase.from("discussions").update({ follow_up_completed: true }).eq("id", d.id);
+src\app\client-discussions\page.tsx:304  const { error } = await supabase.from("discussions").delete().eq("id", editingItem.id);
+src\app\documents\page.tsx:121  supabase.from("documents").select("*").order("created_at", { ascending: false }),
+src\app\documents\page.tsx:224  .from("documents")
+src\app\documents\page.tsx:259  .from("documents")
+src\app\documents\page.tsx:403  const { error: dbErr } = await supabase.from("documents").delete().eq("id", doc.id);
+src\app\inbox\page.tsx:168  .from("email_accounts")
+src\app\inbox\page.tsx:189  supabase.from("documents").select("id, title, file_url"),
+src\app\inbox\page.tsx:204  .from("email_messages")
+src\app\inbox\page.tsx:228  let q = supabase.from("email_messages").select("id", { count: "exact", head: true }).eq("direction", "inbound").eq("is_read", false);
+src\app\inbox\page.tsx:295  const { error } = await supabase.from("email_messages").update({ is_read: value }).eq("id", msg.id);
+src\app\inbox\page.tsx:306  const { error } = await supabase.from("email_messages").delete().eq("id", msg.id);
+src\app\inbox\page.tsx:317  const { error } = await supabase.from("email_messages").update({ client_id: clientId || null }).eq("id", msg.id);
+src\app\inbox\page.tsx:326  const { error } = await supabase.from("discussions").insert([
+src\app\inbox\page.tsx:487  .from("email_accounts")
+src\app\inbox\page.tsx:536  const { error } = await supabase.from("email_accounts").update({ smtp_pass: newPassword }).eq("id", passwordTarget.id);
+src\app\inbox\page.tsx:549  const { error } = await supabase.from("email_accounts").update({ is_active: acc.is_active === false }).eq("id", acc.id);
+src\app\inbox\page.tsx:559  const { error: msgErr } = await supabase.from("email_messages").delete().eq("account_id", acc.id);
+src\app\inbox\page.tsx:560  const { error } = msgErr ? { error: msgErr } : await supabase.from("email_accounts").delete().eq("id", acc.id);
+src\app\leads\page.tsx:220  .from("audit_logs")
+src\app\reviewer-queue\page.tsx:125  supabase.from("audit_logs").select("id, entity_id, action, metadata, timestamp").eq("entity", "TASKS").gte("timestamp", since).order("timestamp", { ascending: true }),
+src\app\tasks\page.tsx:331  supabase.from("audit_logs").select("*").eq("entity", "TASKS").eq("entity_id", taskId).order("timestamp", { ascending: false }),
+src\app\page.tsx:408  supabase.from("discussions").select("id, client_id, summary, date, follow_up_date, follow_up_completed"),
+src\lib\audit.ts:26  await supabase.from("audit_logs").insert([

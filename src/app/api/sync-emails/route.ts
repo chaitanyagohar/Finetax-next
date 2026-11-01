@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     if (!UUID_RE.test(accountId)) throw new ApiError(400, "Invalid account.");
 
     // One manual sync per account every 20 seconds
-    if (!checkRateLimit(`sync:${accountId}`, 1, 20000)) {
+    if (!(await checkRateLimit(`sync:${accountId}`, 1, 20000))) {
       return NextResponse.json({ success: true, count: 0, skipped: true });
     }
 

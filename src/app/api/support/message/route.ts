@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const caller = await requireUser();
-    if (!checkRateLimit(`support-msg:${caller.userId}`, 40, 10 * 60 * 1000)) {
+    if (!(await checkRateLimit(`support-msg:${caller.userId}`, 40, 10 * 60 * 1000))) {
       throw new ApiError(429, "You're sending messages very quickly. Please wait a minute.");
     }
 

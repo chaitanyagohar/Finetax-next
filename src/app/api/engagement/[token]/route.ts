@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!id) throw new ApiError(404, "This link isn't valid.");
 
     const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || request.headers.get("x-real-ip") || "";
-    if (!checkRateLimit(`engagement:${ip || "unknown"}:${id}`, 8, 10 * 60 * 1000)) {
+    if (!(await checkRateLimit(`engagement:${ip || "unknown"}:${id}`, 8, 10 * 60 * 1000))) {
       throw new ApiError(429, "Too many attempts. Please wait a few minutes and try again.");
     }
 

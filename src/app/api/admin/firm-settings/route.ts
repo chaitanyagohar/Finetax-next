@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     assertSameOrigin(request);
     const caller = await requireAdmin();
 
-    if (!checkRateLimit(`firm-settings:${caller.userId}`, 20, 15 * 60 * 1000)) {
+      if (!(await checkRateLimit(`firm-settings:${caller.userId}`, 20, 15 * 60 * 1000))) {
       throw new ApiError(429, "Too many attempts. Please wait a few minutes.");
     }
 

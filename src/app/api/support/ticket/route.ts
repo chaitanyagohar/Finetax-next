@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const caller = await requireUser();
-    if (!checkRateLimit(`support-ticket:${caller.userId}`, 20, 10 * 60 * 1000)) {
+    if (!(await checkRateLimit(`support-ticket:${caller.userId}`, 20, 10 * 60 * 1000))) {
       throw new ApiError(429, "Please wait a moment and try again.");
     }
 
