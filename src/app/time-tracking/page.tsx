@@ -479,7 +479,7 @@ export default function TimeTrackingPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `finetax_timesheet_${rangeFrom}_to_${rangeTo}.csv`;
+    link.download = `timesheet_${rangeFrom}_to_${rangeTo}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

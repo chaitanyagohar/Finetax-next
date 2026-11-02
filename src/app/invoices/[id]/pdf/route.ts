@@ -25,11 +25,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   // Read with the user's own session, so database access rules apply
-  const [{ data: invoice }, { data: firm }] = await Promise.all([
-    supabase.from("invoices").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
-    supabase.from("firm_settings").select("*").maybeSingle(),
-  ]);
+  const { data: invoice } = await supabase.from("invoices").select("*, clients!client_id(*)").eq("id", id).maybeSingle();
   if (!invoice) return new NextResponse("Invoice not found, or you don't have access to it.", { status: 404 });
+
+  // Letterhead, GSTIN and bank details always come from the invoice's own firm
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", invoice.org_id).maybeSingle();
 
   try {
     const pdf = await renderInvoicePdf(invoice, invoice.clients, firm);

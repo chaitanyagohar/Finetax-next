@@ -364,7 +364,7 @@ export default function DocumentsPage() {
     setEmailDoc(doc);
     setEmailTo(client?.email || "");
     setEmailSubject(`Document: ${doc.title}`);
-    setEmailBody(`Dear ${client?.name || "Client"},\n\nPlease find attached "${doc.title}".\n\nBest regards,\n${currentUser?.name || "Finetax Team"}`);
+       setEmailBody(`Dear ${client?.name || "Client"},\n\nPlease find attached "${doc.title}".\n\nBest regards,\n${currentUser?.name || "Our team"}` + (currentUser?.orgName ? `\n${currentUser.orgName}` : ""));
     setEmailError("");
   }
 

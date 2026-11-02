@@ -45,7 +45,7 @@ const MODULE_OPTIONS = [
   { id: "documents", short: "Documents", label: "Document Vault", desc: "Client document uploads and file organization" },
   { id: "team", short: "Team", label: "Team Management", desc: "Manage staff accounts and operational roles" },
   { id: "packages", short: "Packages", label: "Service Package Workflows", desc: "Retainer onboarding and recurring sub-tasks" },
-  { id: "settings", short: "Settings", label: "Firm Settings & Roles", desc: "Finetax configuration and system role controls" },
+  { id: "settings", short: "Settings", label: "Firm Settings & Roles", desc: "Firm configuration and system role controls" },
 ];
 
 const MODULE_SHORT: Record<string, string> = Object.fromEntries(MODULE_OPTIONS.map((m) => [m.id, m.short]));

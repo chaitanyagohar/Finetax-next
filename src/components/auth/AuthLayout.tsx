@@ -19,7 +19,7 @@ export default function AuthLayout({
 
         <div className="relative flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-lg font-bold">F</div>
-          <span className="text-lg font-bold tracking-tight">Finetax Manager</span>
+          <span className="text-lg font-bold tracking-tight">Duesk</span>
         </div>
 
         <div className="relative max-w-md space-y-6">

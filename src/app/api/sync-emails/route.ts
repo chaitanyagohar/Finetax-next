@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { MailboxConnectError, syncMailbox } from "@/lib/email/syncMailbox";
 

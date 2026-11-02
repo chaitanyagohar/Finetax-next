@@ -24,11 +24,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.redirect(new URL(`/login?redirect=${encodeURIComponent(request.nextUrl.pathname)}`, request.url));
   }
 
-  const [{ data: quotation }, { data: firm }] = await Promise.all([
-    supabase.from("quotations").select("*, clients!client_id(*)").eq("id", id).maybeSingle(),
-    supabase.from("firm_settings").select("*").maybeSingle(),
-  ]);
+  const { data: quotation } = await supabase.from("quotations").select("*, clients!client_id(*)").eq("id", id).maybeSingle();
   if (!quotation) return new NextResponse("Quotation not found, or you don't have access to it.", { status: 404 });
+
+  // Letterhead always comes from the quotation's own firm
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", quotation.org_id).maybeSingle();
 
   try {
     const pdf = await renderQuotationPdf(quotation, quotation.clients, firm);

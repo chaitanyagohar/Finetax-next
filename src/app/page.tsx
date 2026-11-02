@@ -681,7 +681,7 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
             {" · "}
             {isAdmin
-              ? "Finetax Dashboard: financials, pipeline, compliance and team capacity at a glance."
+              ? "Firm dashboard: financials, pipeline, compliance and team capacity at a glance."
               : "Here is your active work schedule."}
           </p>
         </div>

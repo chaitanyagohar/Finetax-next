@@ -371,7 +371,7 @@ export default function UnifiedInboxPage() {
     });
   }
 
-  const signature = accountById[composeFromId]?.display_name || "Finetax Team";
+  const signature = accountById[composeFromId]?.display_name || currentUser?.orgName || "Our team";
   const TEMPLATES = [
     {
       label: "Acknowledgement",
@@ -1234,7 +1234,7 @@ export default function UnifiedInboxPage() {
       {confirm?.kind === "deleteMessage" && (
         <ConfirmDialog
           title="Delete this email?"
-          message={`"${confirm.target.subject || "(No Subject)"}" will be removed from Finetax Manager. It stays in the actual mailbox.`}
+          message={`"${confirm.target.subject || "(No Subject)"}" will be removed from Duesk. It stays in the actual mailbox.`}
           confirmLabel="Delete email"
           tone="danger"
           loading={actionBusy}
@@ -1245,7 +1245,7 @@ export default function UnifiedInboxPage() {
       {confirm?.kind === "deleteAccount" && (
         <ConfirmDialog
           title="Remove this email account?"
-          message={`${confirm.target.email_address} will be disconnected and all its synced messages removed from Finetax Manager. Its encrypted password is destroyed. Consider "Disable" instead to keep history.`}
+          message={`${confirm.target.email_address} will be disconnected and all its synced synced messages removed from Duesk. Its encrypted password is destroyed. Consider "Disable" instead to keep history.`}
           confirmLabel="Remove account"
           tone="danger"
           loading={actionBusy}

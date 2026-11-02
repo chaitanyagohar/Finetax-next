@@ -644,7 +644,7 @@ export default function ClientsPage() {
       "Active",
       "Imported from legacy system",
     ];
-    downloadFile([headers.map(csvCell).join(","), sample.map(csvCell).join(",")].join("\r\n"), "finetax_client_import_template.csv");
+    downloadFile([headers.map(csvCell).join(","), sample.map(csvCell).join(",")].join("\r\n"), "client_import_template.csv");
   }
 
   function exportClients() {
@@ -668,7 +668,7 @@ export default function ClientsPage() {
         .map(csvCell)
         .join(",")
     );
-    downloadFile([headers.map(csvCell).join(","), ...lines].join("\r\n"), `finetax_clients_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadFile([headers.map(csvCell).join(","), ...lines].join("\r\n"), `clients_${new Date().toISOString().slice(0, 10)}.csv`);
     logAuditEvent("EXPORT_CLIENTS", "CLIENTS", undefined, { count: filteredClients.length });
   }
 

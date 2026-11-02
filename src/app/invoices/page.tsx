@@ -498,7 +498,7 @@ export default function InvoicesPage() {
       `${due ? ` (due ${formatDate(due)})` : ""}.\n\n` +
       `${firmSettings?.upi_id ? `UPI: ${firmSettings.upi_id}\n` : ""}` +
       `${firmSettings?.bank_account_no ? `A/C: ${firmSettings.bank_account_no} · IFSC: ${firmSettings.bank_ifsc || ""}\n` : ""}` +
-      `\nPlease ignore if already paid.\n\nRegards,\n${firmSettings?.firm_name || "Finetax"}`;
+      `\nPlease ignore if already paid.\n\nRegards,\n${firmSettings?.firm_name || "Our team"}`;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 

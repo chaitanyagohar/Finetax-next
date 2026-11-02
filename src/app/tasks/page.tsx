@@ -653,7 +653,7 @@ export default function TasksPage() {
           dispatchEmail(
             selectedClient.email,
             `Service Request Initiated: ${fullTitle}`,
-            `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${fullTitle}". Our team will notify you upon completion.\n\nBest regards,\nFinetax Team`
+            `Dear ${selectedClient.name},\n\nWe have initiated work on your request: "${fullTitle}". Our team will notify you upon completion.\n\nBest regards,\n${currentUser?.orgName || "Our team"}`
           )
         );
       }
@@ -678,7 +678,7 @@ export default function TasksPage() {
           dispatchEmail(
             selectedClient.email,
             `Task Completed: ${fullTitle}`,
-            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${fullTitle}" has been completed and verified.\n\nBest regards,\nFinetax Team`
+            `Dear ${selectedClient.name},\n\nWe are pleased to inform you that your task "${fullTitle}" has been completed and verified.\n\nBest regards,\n${currentUser?.orgName || "Our team"}`
           )
         );
       }

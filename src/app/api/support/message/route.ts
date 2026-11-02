@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { contextFor, escalateTicket, sanitizeAttachments } from "@/lib/help/supportServer";
 import { buildSummary, bumpStat, findProblem, loadProblems, present, rank, type Option } from "@/lib/help/troubleshooter";
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const created: any[] = [];
     const { data: userMsg, error: msgErr } = await admin
       .from("support_messages")
-      .insert([{ ticket_id: ticket.id, sender_id: caller.userId, role: "user", body: text, attachments }])
+      .insert([{ org_id: ticket.org_id, ticket_id: ticket.id, sender_id: caller.userId, role: "user", body: text, attachments }])
       .select("*")
       .single();
     if (msgErr || !userMsg) throw new ApiError(500, "Could not send the message.");
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       if (reply) {
         const { data: botMsg } = await admin
           .from("support_messages")
-          .insert([{ ticket_id: ticket.id, role: "assistant", body: reply.body, meta: { options: reply.options } }])
+          .insert([{ org_id: ticket.org_id, ticket_id: ticket.id, role: "assistant", body: reply.body, meta: { options: reply.options } }])
           .select("*")
           .single();
         if (botMsg) created.push(botMsg);
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       if (escalate) {
         const { data: history } = await admin.from("support_messages").select("role, body").eq("ticket_id", ticket.id).order("created_at", { ascending: true }).limit(80);
         const summary = buildSummary(ticket.subject, history || [], flow, problems, ctx.pagePath);
-        const r = await escalateTicket(admin, ticket, { summary, category: ticket.category || "other" }, request.nextUrl.origin);
+        const r = await escalateTicket(admin, ticket, { summary, category: ticket.category || "other" }, getSiteUrl(request));
         ticket = r.ticket;
         if (r.message) created.push(r.message);
       }

@@ -148,7 +148,7 @@ export default function AuditLogsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `finetax_audit_log_${fromDate}_to_${toDate}.csv`;
+    link.download = `audit_log_${fromDate}_to_${toDate}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

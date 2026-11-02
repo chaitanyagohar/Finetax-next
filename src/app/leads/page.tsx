@@ -514,7 +514,7 @@ export default function LeadsPage() {
       formData.append("subject", `New Lead Assigned: ${leadName}`);
       formData.append(
         "body",
-        `Hello ${assignee.name},\n\nYou have been assigned a new lead/enquiry in the Finetax Manager portal:\n\nClient/Prospect Name: ${leadName}\nService Requested: ${service}\nPhone: ${phone || "N/A"}\nEmail: ${email || "N/A"}\nFollow-Up Date: ${followUpDate ? formatDate(followUpDate) : "N/A"}\n\nPlease check your portal to initiate contact.`
+        `Hello ${assignee.name},\n\nYou have been assigned a new lead/enquiry in Duesk:\n\nClient/Prospect Name: ${leadName}\nService Requested: ${service}\nPhone: ${phone || "N/A"}\nEmail: ${email || "N/A"}\nFollow-Up Date: ${followUpDate ? formatDate(followUpDate) : "N/A"}\n\nPlease check your portal to initiate contact.`
       );
       await fetch("/api/send-email", { method: "POST", body: formData });
     } catch (err) {
@@ -582,7 +582,7 @@ export default function LeadsPage() {
       return;
     }
     const list = activeChecklist.map((d) => `- ${d}`).join("\n");
-    const text = `Hello ${name.trim() || "there"},\n\nThank you for connecting with Finetax.\n\nFor processing your request regarding *${currentServiceForChecklist}*, please provide the following documents/details:\n\n${list}\n\nRegards,\nFinetax Team`;
+    const text = `Hello ${name.trim() || "there"},\n\nThank you for connecting with ${currentUser?.orgName || "us"}.\n\nFor processing your request regarding *${currentServiceForChecklist}*, please provide the following documents/details:\n\n${list}\n\nRegards,\n${currentUser?.orgName || "Our team"}`;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 
@@ -591,7 +591,7 @@ export default function LeadsPage() {
     setActionBusy(true);
 
     const list = activeChecklist.map((d) => `• ${d}`).join("\n");
-    const body = `Hello ${name.trim() || "there"},\n\nThank you for connecting with Finetax.\n\nFor processing your request regarding ${currentServiceForChecklist}, please provide the following documents/details:\n\n${list}\n\nPlease reply to this email with the attachments.\n\nRegards,\nFinetax Team`;
+    const body = `Hello ${name.trim() || "there"},\n\nThank you for connecting with ${currentUser?.orgName || "us"}.\n\nFor processing your request regarding ${currentServiceForChecklist}, please provide the following documents/details:\n\n${list}\n\nPlease reply to this email with the attachments.\n\nRegards,\n${currentUser?.orgName || "Our team"}`;
 
     try {
       const formData = new FormData();

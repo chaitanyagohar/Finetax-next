@@ -293,7 +293,7 @@ export default function ReviewerQueuePage() {
           `[Task Review] ${inspectTask.title}: ${newStage}`,
           `Hello ${assignee.name},\n\nYour submitted task "${inspectTask.title}" has been ${
             newStage === "Approved" ? "approved" : "returned for changes"
-          } by ${currentUser?.name || "your reviewer"}.\n\n${feedback ? `Feedback: ${feedback}\n\n` : ""}Please log into the Finetax Manager portal for details.`
+          } by ${currentUser?.name || "your reviewer"}.\n\n${feedback ? `Feedback: ${feedback}\n\n` : ""}Please log in to Duesk for details.`
         )
       );
     }
@@ -302,7 +302,7 @@ export default function ReviewerQueuePage() {
         dispatchEmail(
           client.email,
           `Task Completed: ${inspectTask.title}`,
-          `Dear ${client.name},\n\nWe are pleased to inform you that your task "${inspectTask.title}" has been completed and verified by our team.\n\nBest regards,\nFinetax Team`
+          `Dear ${client.name},\n\nWe are pleased to inform you that your task "${inspectTask.title}" has been completed and verified by our team.\n\nBest regards,\n${currentUser?.orgName || "Our team"}`
         )
       );
     }

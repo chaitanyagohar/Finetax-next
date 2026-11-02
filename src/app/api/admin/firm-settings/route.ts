@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
               <p>The payment details printed on your invoices were changed by <strong>${escapeHtml(caller.name)}</strong> (${escapeHtml(caller.email || "")})
               on ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}.</p>
               <ul>${rows}</ul>
-              <p>If you did not expect this change, sign in to Finetax Manager immediately and review Firm Settings.</p></div>`,
+              <p>If you did not expect this change, sign in to Duesk immediately and review Firm Settings.</p></div>`,
             text: `Firm payment details were changed by ${caller.name}. Fields: ${sensitiveChanged.join(", ")}. Review Firm Settings if unexpected.`,
           });
         }

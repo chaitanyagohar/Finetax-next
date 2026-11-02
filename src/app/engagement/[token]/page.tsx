@@ -58,7 +58,7 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
   const [{ data: client }, { data: pkg }, { data: firm }] = await Promise.all([
     admin.from("clients").select("name, organization_name").eq("id", p.client_id).maybeSingle(),
     admin.from("service_packages").select("name").eq("id", p.package_id).maybeSingle(),
-    admin.from("firm_settings").select("firm_name, email, phone").eq("id", 1).maybeSingle(),
+    admin.from("firm_settings").select("firm_name, email, phone").eq("org_id", p.org_id).maybeSingle(),
   ]);
 
   if (p.status === "Sent") await admin.rpc("mark_proposal_viewed", { p_id: id });

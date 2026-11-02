@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { escalateTicket } from "@/lib/help/supportServer";
 import { buildSummary, loadProblems } from "@/lib/help/troubleshooter";
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           .limit(80);
         const problems = await loadProblems(admin);
         const summary = buildSummary(ticket.subject, history || [], ticket.context?.flow, problems, ticket.page_path || "");
-        const r = await escalateTicket(admin, ticket, { summary, category: ticket.category || "other" }, request.nextUrl.origin);
+        const r = await escalateTicket(admin, ticket, { summary, category: ticket.category || "other" }, getSiteUrl(request));
         return NextResponse.json({ success: true, ticket: r.ticket, messages: r.message ? [r.message] : [] });
       }
 
