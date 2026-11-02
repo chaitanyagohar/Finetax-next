@@ -67,7 +67,11 @@ export async function POST(request: NextRequest) {
     const { data: accounts } = await supabase
       .from("email_accounts")
       .select("id, org_id")
-      .ilike("email_address", escapeLike(toAddress));
+      .ilike("email_address", escapeLike(toAddress))
+      .or("is_active.is.null,is_active.eq.true")
+      // Only mailboxes this firm has proven it owns (last IMAP login succeeded)
+      .not("last_synced_at", "is", null)
+      .is("last_sync_error", null);
 
     if (!accounts || accounts.length === 0) {
       console.warn(`[webhook] Incoming email to unknown address: ${toAddress}`);
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
         .from("clients")
         .select("id")
         .eq("org_id", account.org_id)
-        .ilike("email", `%${escapeLike(fromAddress)}%`)
+        .ilike("email", escapeLike(fromAddress))
         .limit(1);
 
       // 6. Save to that firm's Unified Inbox

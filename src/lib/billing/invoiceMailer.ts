@@ -123,7 +123,7 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
     for (const inv of invoices || []) {
       const balance = Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
       if (balance <= 0.009 || !inv.clients?.email) continue;
-      const { error } = await admin.from("invoice_reminders").insert([{ invoice_id: inv.id, kind: rule.kind }]);
+      const { error } = await admin.from("invoice_reminders").insert([{ org_id: inv.org_id, invoice_id: inv.id, kind: rule.kind }]);
       if (error) continue; // already sent
 
       try {

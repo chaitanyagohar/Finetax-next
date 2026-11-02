@@ -94,3 +94,13 @@ Scheduled jobs: pg_cron 'finetax-reminders' (*/15); pg_cron 'finetax-email-sync'
 - RPCs: chat_create_channel, chat_open_dm, chat_open_task_thread, chat_join, chat_leave, chat_add_members, chat_archive, chat_edit_message, chat_delete_message, chat_mark_read, chat_unread, chat_can_access(_text). Triggers chat_messages_before/after_insert; profiles_join_general auto-adds new users to #general.
 - Files: src/app/chat/page.tsx, src/components/chat/{ChatComposer,ChatConversation,ChatMessageView}.tsx, src/lib/chat.ts (types ChatMessage/ChatChannel/ChatPerson/ChatAttachment, dayLabel, timeLabel, fileSize, CHAT_FILE_TYPES). Tasks page has a task-thread entry; Topbar + navConfig updated for chat.
 - Support: /api/support/agent/route.ts updated 20 Oct (no schema change).
+
+
+## 11. Roadmap after multi-tenancy (agreed 02 Nov 2026)
+1. Bulk import (clients/services/fees from Excel, PAN/GSTIN validation) + ready-made compliance setups.
+2. Razorpay payments + receivables ageing + statement of account.
+3. Client portal with document checklists + auto document requests.
+4. DSC register, credentials vault (Vault-encrypted, view-logged), notice tracker.
+5. Client profitability report (fee vs time × cost).
+6. WhatsApp automation (Business API is paid — decide who bears cost).
+Also: leave/attendance, Tally export, export-all-data, security sheet, check Supabase region (India/DPDP).
