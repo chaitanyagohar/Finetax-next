@@ -69,9 +69,8 @@ export async function POST(request: NextRequest) {
       .select("id, org_id")
       .ilike("email_address", escapeLike(toAddress))
       .or("is_active.is.null,is_active.eq.true")
-      // Only mailboxes this firm has proven it owns (last IMAP login succeeded)
-      .not("last_synced_at", "is", null)
-      .is("last_sync_error", null);
+      // Only mailboxes this firm has proven it owns (a login has succeeded at least once)
+      .not("verified_at", "is", null);
 
     if (!accounts || accounts.length === 0) {
       console.warn(`[webhook] Incoming email to unknown address: ${toAddress}`);

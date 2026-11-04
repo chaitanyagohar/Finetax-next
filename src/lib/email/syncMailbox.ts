@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { simpleParser } from "mailparser";
 import { ImapFlow } from "imapflow";
 import { getAccountPassword, imapSettingsFor } from "@/lib/email/mailer";
+import { assertPublicMailHost } from "@/lib/email/mailHost";
 
 const MAX_PER_RUN = 100; // larger backlogs continue on the next run
 const FIRST_SYNC_DAYS = 14; // how far back the very first sync looks
@@ -24,6 +25,7 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
   try {
     const password = await getAccountPassword(admin, account);
     const imap = imapSettingsFor(account);
+    await assertPublicMailHost(imap.host, imap.port, "imap");
 
     const client = new ImapFlow({
       host: imap.host,
@@ -137,7 +139,13 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
 
     await admin
       .from("email_accounts")
-      .update({ last_uid: maxUid || null, uid_validity: uidValidity, last_synced_at: new Date().toISOString(), last_sync_error: null })
+      .update({
+        last_uid: maxUid || null,
+        uid_validity: uidValidity,
+        last_synced_at: new Date().toISOString(),
+        last_sync_error: null,
+        verified_at: account.verified_at || new Date().toISOString(),
+      })
       .eq("id", account.id);
 
     return { count: newRows.length, more };

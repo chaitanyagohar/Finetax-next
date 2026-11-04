@@ -206,7 +206,9 @@ export default function UnifiedInboxPage() {
       .eq("direction", activeTab === "sent" ? "outbound" : "inbound");
     if (selectedAccountId !== "all") query = query.eq("account_id", selectedAccountId);
     if (debouncedSearch) {
-      query = query.or(`subject.ilike.%${debouncedSearch}%,from_address.ilike.%${debouncedSearch}%,to_address.ilike.%${debouncedSearch}%`);
+      // Commas, brackets and quotes would change the filter itself; LIKE wildcards are escaped
+    const term = debouncedSearch.replace(/[,()"]/g, " ").replace(/[\\%_]/g, (m) => "\\" + m).trim();
+    if (term) query = query.or(`subject.ilike.%${term}%,from_address.ilike.%${term}%,to_address.ilike.%${term}%`);
     }
     return query;
   }

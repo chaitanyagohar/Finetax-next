@@ -11,7 +11,8 @@ import {
   writeAuditLog,
 } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, sendFirmEmail, type MailAttachment } from "@/lib/email/mailer";
+import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, escapeHtml, sendFirmEmail, type MailAttachment } from "@/lib/email/mailer";
+import { isVaultPathAllowed } from "@/lib/storage/vaultPath";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_SYSTEM_ITEMS = 5;
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
     const result = await sendFirmEmail({
       to,
       subject,
-      html: body.replace(/\n/g, "<br/>"),
+      html: escapeHtml(body).replace(/\n/g, "<br/>"),
       text: body,
       attachments,
       accountId,

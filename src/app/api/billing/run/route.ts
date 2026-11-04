@@ -3,7 +3,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 import { NextResponse, type NextRequest } from "next/server";
-import { assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
+import { checkRateLimit } from "@/lib/api/rateLimit";
 import { issueAndEmailInvoice, sendPaymentReminders } from "@/lib/billing/invoiceMailer";
 
 /**
@@ -66,6 +67,9 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
     const caller = await requireAdmin();
+    if (!(await checkRateLimit(`billing-run:${caller.orgId}`, 3, 60 * 60 * 1000))) {
+      throw new ApiError(429, "Billing can be run at most 3 times an hour. The daily run happens automatically at 9:00.");
+    }
     const result = await runBilling(caller.orgId);
     await writeAuditLog({ actor: caller, action: "RUN_SUBSCRIPTION_BILLING", entity: "INVOICES", entity_id: null, metadata: result });
     return NextResponse.json({ success: true, ...result });

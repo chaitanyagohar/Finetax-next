@@ -5,6 +5,7 @@ import { ImapFlow } from "imapflow";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { createSmtpTransport, getAccountPassword, imapSettingsFor } from "@/lib/email/mailer";
+import { assertPublicMailHost } from "@/lib/email/mailHost";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (!account) throw new ApiError(404, "Account not found.");
 
+    await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
+    const imapTarget = imapSettingsFor(account);
+    await assertPublicMailHost(imapTarget.host, imapTarget.port, "imap");
+
     const password = await getAccountPassword(admin, account);
     const result = { smtp: { ok: false, message: "" }, imap: { ok: false, message: "" } };
 
@@ -44,6 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Receiving (IMAP)
     const imap = imapSettingsFor(account);
+    await assertPublicMailHost(imap.host, imap.port, "imap");
     const client = new ImapFlow({
       host: imap.host,
       port: imap.port,
@@ -64,6 +70,11 @@ export async function POST(request: NextRequest) {
       } catch {
         client.close();
       }
+    }
+
+    // A successful login proves this firm owns the mailbox (used by the incoming-email webhook)
+    if ((result.smtp.ok || result.imap.ok) && !account.verified_at) {
+      await admin.from("email_accounts").update({ verified_at: new Date().toISOString() }).eq("id", account.id);
     }
 
     return NextResponse.json({ success: true, ...result });

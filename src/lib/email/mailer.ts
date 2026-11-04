@@ -5,6 +5,7 @@
 import nodemailer from "nodemailer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, getAdminClient } from "@/lib/api/guard";
+import { assertPublicMailHost } from "@/lib/email/mailHost";
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MAX_RECIPIENTS = 20;
@@ -167,6 +168,7 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
   }
 
   // 3. Send over an encrypted connection with the decrypted password
+  await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
   const password = await getAccountPassword(supabase, account);
   const transporter = createSmtpTransport(account, password);
 

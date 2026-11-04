@@ -27,6 +27,7 @@ const STATUS_TONE: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-700",
   suspended: "bg-amber-100 text-amber-800",
   cancelled: "bg-surface-alt text-text-muted",
+  expired: "bg-rose-50 text-rose-700",
 };
 
 const inputClass =
@@ -85,7 +86,7 @@ export default function OwnerConsolePage() {
       total: firms.filter((f) => f.slug !== "oddlambda").length,
       active: firms.filter((f) => f.status === "active" && f.slug !== "oddlambda").length,
       trial: firms.filter((f) => f.status === "trial").length,
-      suspended: firms.filter((f) => f.status === "suspended").length,
+      suspended: firms.filter((f) => f.status === "suspended" || f.status === "expired").length,
     }),
     [firms]
   );
@@ -94,7 +95,15 @@ export default function OwnerConsolePage() {
     !search ? true : `${f.name} ${f.slug} ${f.admin_emails || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  async function changeFirm(f: Firm, patch: { status?: string; plan?: string }) {
+  async function extendTrial(f: Firm) {
+    const answer = window.prompt(`Extend the trial for ${f.name} by how many days? (1 to 90)`, "14");
+    if (answer === null) return;
+    const days = Math.round(Number(answer));
+    if (!(days >= 1 && days <= 90)) return setError("Enter a number of days from 1 to 90.");
+    await changeFirm(f, { extendTrialDays: days });
+  }
+
+  async function changeFirm(f: Firm, patch: { status?: string; plan?: string; extendTrialDays?: number }) {
     if (patch.status === "suspended" && !window.confirm(`Suspend ${f.name}? Everyone in this firm will be locked out until you reactivate it.`)) return;
     if (patch.status === "cancelled" && !window.confirm(`Mark ${f.name} as cancelled? Everyone in this firm will be locked out.`)) return;
     setBusyId(f.id);
@@ -163,7 +172,7 @@ export default function OwnerConsolePage() {
           { label: "Firms", value: stats.total, tone: "text-navy" },
           { label: "Active", value: stats.active, tone: "text-emerald-700" },
           { label: "On trial", value: stats.trial, tone: "text-violet-700" },
-          { label: "Suspended", value: stats.suspended, tone: "text-amber-700" },
+          { label: "Paused / trial ended", value: stats.suspended, tone: "text-amber-700" },
         ].map((k) => (
           <div key={k.label} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
@@ -242,11 +251,28 @@ export default function OwnerConsolePage() {
                           <option value="active">Active</option>
                           <option value="suspended">Suspended</option>
                           <option value="cancelled">Cancelled</option>
+                          <option value="expired">Trial ended</option>
                         </select>
                         {busyId === f.id && <Loader2 className="h-3 w-3 animate-spin text-text-muted" />}
                       </div>
-                      {f.status === "trial" && f.trial_ends_at && (
-                        <p className="mt-0.5 text-[10px] text-text-muted">Trial ends {formatDate(f.trial_ends_at)}</p>
+                      {(f.status === "trial" || f.status === "expired") && f.trial_ends_at && (
+                        <p
+                          className={`mt-0.5 text-[10px] ${
+                            new Date(f.trial_ends_at) < new Date() ? "font-semibold text-rose-700" : "text-text-muted"
+                          }`}
+                        >
+                          {new Date(f.trial_ends_at) < new Date() ? "Trial ended" : "Trial ends"} {formatDate(f.trial_ends_at)}
+                        </p>
+                      )}
+                      {(f.status === "trial" || f.status === "expired") && f.slug !== "oddlambda" && (
+                        <button
+                          type="button"
+                          disabled={busyId === f.id}
+                          onClick={() => extendTrial(f)}
+                          className="mt-1 text-[10px] font-semibold text-navy underline-offset-2 hover:underline disabled:opacity-50"
+                        >
+                          Extend trial
+                        </button>
                       )}
                     </td>
                     <td className="text-text-muted">{f.plan}</td>
