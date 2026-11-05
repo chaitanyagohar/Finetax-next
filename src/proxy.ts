@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages anyone may open without being signed in
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/confirm", "/engagement"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/confirm", "/engagement"];
 
 // Routes that only administrators may open
 const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings", "/proposals"];
@@ -90,7 +90,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname, search } = request.nextUrl;
-  const isLoginPage = pathname.startsWith("/login");
+  const isLoginPage = pathname.startsWith("/login") || matchesPath(pathname, "/signup");
   const isPublic = PUBLIC_PATHS.some((base) => matchesPath(pathname, base));
 
   // RULE 1: Not logged in? Go to the login page (and come back afterwards).
@@ -115,6 +115,12 @@ export async function proxy(request: NextRequest) {
     const { data: accessData } = await supabase.rpc("my_access");
     const access = accessData as Access;
     const active = !!access?.org_id;
+
+    // New signup that hasn't created its firm yet: finish on /welcome
+    if (!active && !matchesPath(pathname, "/welcome")) {
+      const { data: signupState } = await supabase.rpc("my_signup_state");
+      if (!(signupState as { has_membership?: boolean } | null)?.has_membership) return redirectToPath("/welcome");
+    }
 
     // Duesk staff workspace: keep owner/support on their console pages
     const platformHome = active && access!.org_slug === PLATFORM_ORG_SLUG;

@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   const failUrl = request.nextUrl.clone();
   failUrl.pathname = "/forgot-password";
   failUrl.search = "?error=link_invalid";
+  if (type === "invite") failUrl.pathname = "/signup";
 
   if (!tokenHash || !type || !ALLOWED_TYPES.includes(type)) {
     return NextResponse.redirect(failUrl);
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
       maxAge: 15 * 60,
     });
     target.pathname = "/reset-password";
+  } else if (type === "invite") {
+    // New signups (and later, invited staff) choose their password on /welcome
+    target.pathname = "/welcome";
   } else {
     target.pathname = safeNext(searchParams.get("next"));
   }

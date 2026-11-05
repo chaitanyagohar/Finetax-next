@@ -48,10 +48,11 @@ export default function EmailModal({
       formData.append("subject", subject);
       formData.append("body", body);
 
+      // The API reads attachments from the "files" field
       if (file) {
-        formData.append("file", file);
+        formData.append("files", file);
       } else if (attachmentBlob && attachmentName) {
-        formData.append("file", new File([attachmentBlob], attachmentName, { type: "application/pdf" }));
+        formData.append("files", new File([attachmentBlob], attachmentName, { type: "application/pdf" }));
       }
 
       const res = await fetch("/api/send-email", {

@@ -24,7 +24,7 @@ function getSafeRedirect(): string {
 function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("invalid login credentials")) return "Incorrect email or password.";
-  if (m.includes("email not confirmed")) return "Your email is not verified. Please contact your administrator.";
+  if (m.includes("email not confirmed")) return "Please confirm your email first, using the link Duesk sent you.";
   if (m.includes("rate") || m.includes("too many")) return "Too many attempts. Please wait a few minutes and try again.";
   return "Unable to sign in. Please try again.";
 }
@@ -152,6 +152,13 @@ export default function LoginPage() {
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {loading ? "Authenticating..." : "Secure Sign In"}
         </button>
+
+        <p className="text-center text-sm text-text-muted">
+          New to Duesk?{" "}
+          <Link href="/signup" className="font-semibold text-navy hover:underline">
+            Create your firm
+          </Link>
+        </p>
       </form>
     </AuthLayout>
   );

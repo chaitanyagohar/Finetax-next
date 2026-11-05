@@ -18,7 +18,7 @@ export default function AuthLayout({
         <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-white/5" />
 
         <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-lg font-bold">F</div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-lg font-bold">D</div>
           <span className="text-lg font-bold tracking-tight">Duesk</span>
         </div>
 

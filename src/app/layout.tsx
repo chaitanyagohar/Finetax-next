@@ -71,6 +71,17 @@ export default async function RootLayout({
 
   // Block deactivated accounts and people whose firm is not active (trial ended, suspended, closed)
   if ((profile && profile.is_active === false) || !access?.org_id) {
+    // A brand-new signup has no firm yet: show /welcome without the app shell (the proxy sends them there)
+    if (profile?.is_active !== false) {
+      const { data: signupState } = await supabase.rpc("my_signup_state");
+      if (!(signupState as { has_membership?: boolean } | null)?.has_membership) {
+        return (
+          <html lang="en" className={inter.variable}>
+            <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>
+          </html>
+        );
+      }
+    }
     const { data: blockedData } =
       profile?.is_active === false ? { data: null } : await supabase.rpc("my_blocked_firm");
     const blocked = blockedData as { org_name: string; status: string; trial_ends_at: string | null; is_admin: boolean } | null;
