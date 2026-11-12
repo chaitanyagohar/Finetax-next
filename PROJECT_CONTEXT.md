@@ -177,3 +177,89 @@ Grep checks are in brackets.
 - layout.tsx: AccessRow has org_status/trial_ends_at; new lock screen via my_blocked_firm; trialNotice banner [Select-String 'my_blocked_firm|trialNotice'].
 - lib/email/syncMailbox.ts sets verified_at; email-accounts/test sets verified_at on a successful login.
 - owner/firms/[id]: STATUSES includes "expired"; select includes trial_ends_at; extendTrialDays. owner/page.tsx: expired tone + option "Trial ended", stats "Paused / trial ended", extendTrial() + "Extend trial" link [Select-String 'extendTrial'].
+
+
+
+
+
+
+
+# DUESK — PROJECT CONTEXT
+Last updated: 12 Nov 2026. Supersedes all earlier context documents.
+
+## 0. How to use this (for Claude)
+- Code truth = the repo. Schema truth = the live Supabase DB (early multi-tenancy migrations were run in the SQL editor without files; later ones are in supabase/migrations/). If this document and the code disagree, trust the code and say so.
+- Owner works on Windows PowerShell: give Select-String commands, not git grep with quotes.
+- Never run anything against the production Supabase project unless the owner explicitly asks.
+
+## 1. Product and people
+- Duesk: multi-tenant practice-management SaaS for Indian CA firms (clients, leads, quotations, invoices + payments, retainer packages + engagement letters + recurring billing, tasks/compliance with maker-checker, calendar, time tracking, KPIs, documents vault, firm inbox, team chat, client discussions, help/support).
+- Company: Oddlambda (platform org slug `oddlambda`, Duesk staff workspace: Owner Console + Support Inbox). Brand email domain: oddlambda.com.
+- Owner/developer: Subhash (CA). His firm "M/S KUMAR SUBHASH & ASSOCIATES" is customer #1, org slug `finetax`, plan `firm`. Test firm: `sharma-and-associates`.
+- Production: https://finetax-next.vercel.app (Vercel). ONE Supabase project ("Practice Manager Finetax", free plan) shared by Preview and Production — test data hits live data (S3 pending).
+- Local: C:\Users\Chait\Downloads\practice-manager-next. GitHub chaitanyagohar/Finetax-next (main).
+- Workflow: edit → npx tsc --noEmit (Next build shows only the first error) → npm run build → commit/push → Vercel deploys. SQL in Supabase SQL Editor; save every migration as supabase/migrations/NNN_name.sql first. Backups: free plan has none; use pg_dump (PostgreSQL command line tools + session pooler URL) before data-changing migrations.
+
+## 2. Stack
+Next.js 16.4.4 (Turbopack, App Router, proxy.ts instead of middleware, /api excluded from proxy) · React 19 · TypeScript · Tailwind v4 · Supabase (Postgres, Auth, Storage, Realtime, pg_cron, pg_net, Vault) · @supabase/ssr · lucide-react · nodemailer 10.3.1 · imapflow · mailparser 3.14.1 · @react-pdf/renderer (server renderToBuffer) · qrcode · next/font (Inter; Barlow Condensed for the setup stamp only).
+
+## 3. Environment and external services
+- Env: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SITE_URL, INBOUND_EMAIL_WEBHOOK_SECRET (webhook IS used), CRON_SECRET (also in Vault as 'cron_secret'), PUBLIC_LINK_SECRET (required, ≥32 chars), NEXT_PUBLIC_TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY, optional NEXT_PUBLIC_DUESK_CONTACT_EMAIL. No AI keys (owner wants no paid AI). Razorpay not set up.
+- Supabase Auth: custom SMTP via Brevo (sender Duesk <noreply@oddlambda.com>, domain authenticated with DKIM+DMARC, branded tracking subdomain r.noreply.oddlambda.com). "Allow new users to sign up" OFF (accounts only via our server's admin invite). Confirm email ON. Email OTP expiration 86400. Site URL = production; redirect URLs include production/** and localhost/**.
+- Templates: Invite user = two versions via {{ if .Data.staff_invite }} (staff invite vs new-firm signup), link {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite. Reset password template uses the token_hash flow.
+- Cloudflare Turnstile widget on /signup (hostnames production + localhost); CSP allows https://challenges.cloudflare.com.
+- Firm outbound mail (invoices, reminders, proposals) goes through each firm's own connected mailbox (Gmail etc. via SMTP app passwords stored in Vault). Finetax's two Gmail app passwords were failing on 03 Nov — confirm they were replaced.
+
+## 4. Working rules (important)
+- Complete files, or find/replace edits whose anchor is UNIQUE ACROSS THE WHOLE PROJECT (not just the file) and name the file. Non-unique anchors have repeatedly landed in the wrong file. Prefer whole lines; never a fragment of a line as the find text when the replacement rewrites it.
+- Never put template literals inside inline code in chat (backticks get stripped) — use fenced blocks.
+- After code: short "Deploy and test" list. Plain language.
+- New SQL functions callable by the browser need explicit `grant execute ... to authenticated` (default privileges revoke public/anon since 030); service-only functions revoke from public, anon, authenticated and grant service_role.
+- No paid third-party services without asking. GST correctness matters (continuous series per firm, cancel not delete, place of supply, late fees carry GST). IST; dates DD/MM/YYYY.
+- Design: product UI is Inter/navy; onboarding uses the "firm file" concept (ledger sheet, violet stamp #5b3fa0). Avoid generic AI-looking UI (gradient text, glass cards, glowing blobs, confetti everywhere). Third-party real logos are not drawn; mocks use invented tools (GridBook, Daybook, LedgerBooks, Practicely, Pinger).
+
+## 5. Multi-tenancy architecture
+- Platform tables (no org_id): organizations (id, name, slug, status trial|active|suspended|cancelled|expired, plan, trial_ends_at, setup jsonb, setup_completed_at, grace_ends_at, plan_changed_at), memberships (PK org_id+user_id; role admin|staff|reviewer, is_reviewer, is_support_agent, module_access jsonb, designation, is_active, invited_by, joined_at, onboarding jsonb), user_active_org, profiles (global login profile; legacy role/module fields not authoritative), platform_admins, platform_config (support_org_id, legacy_org_id), plans (starter 3 users/200 active clients; professional 15/unlimited; firm unlimited; internal), rate_limits, support_kb, support_answer_stats, zz_legacy_* (to drop).
+- All firm tables have org_id NOT NULL default default_org_id() and a RESTRICTIVE policy org_isolation: org_id = current_org_id() (support_tickets/support_messages also allow is_platform_admin()).
+- Helpers: current_org_id(), default_org_id() (app.org_id setting else current org; null in cron/service role → inserts without org_id fail loudly), set_org_context(org) (service only), my_access() (org, role, modules, org_status, trial_ends_at, platform flags), my_blocked_firm(), my_signup_state(), my_onboarding(), mark_onboarding(), my_plan(), my_firms(), set_active_org(), firm_members() (admin), is_admin(), has_module(), is_org_member(), org_admin_ids(), shares_org_with() (both active), push_notification() (uses firm context; silent no-op without it), platform_create_firm(...), auth_email_status(email) (service only), plan_limit_message(org, kind) (service only), plan_refresh_grace(org), enforce_user_limit(org), expire_trials().
+- Server rule: requireUser/requireAdmin/requireModule return orgId; every getAdminClient() query filters by org or derives org from the record. Public/no-login code takes org from the record. PDFs/emails take letterhead from the document's own org. sendFirmEmail({orgId,...}) only uses that firm's mailboxes.
+- Storage: chat-attachments (<channel_id>/…), firm-documents/documents vault (<org_id>/<client|internal>/<year>/…; storage_folder_allowed also allows own-client folders and legacy client_files/internal for Finetax only; documents_check_path trigger), support-attachments (<user_id>/…), logos (public by design).
+- Proxy: public /login /signup /forgot-password /auth/confirm (+/continue) /engagement; admin-only /team /packages /audit-page /settings /proposals /setup /plan; module paths; users with no membership → /welcome; oddlambda workspace limited to /owner /support /chat /reset-password.
+
+## 6. Migrations
+001–029 pre-SaaS features (RLS, numbering, payments, maker-checker, time, timers, settings, Vault email, documents, packages, task types, categories, notifications, transfers/queue, automatic timer, reminders, KPIs, packages v2/proposals/billing, public acceptance, schedules, module gates, email sync, support, no-AI support, chat). 026 Razorpay not done.
+Multi-tenancy core: run in SQL editor, no files.
+030 org hardening (onboarding checks, revoke anon on helpers, default privileges, shares_org_with active).
+031 trial expiry status/my_access fields/my_blocked_firm/cron 'duesk-expire-trials' (19:15 UTC).
+032 email_accounts.verified_at + guard trigger (webhook delivers only to verified mailboxes).
+033 email & vault guards (mail_host_ok check constraint on hosts/ports; documents_check_path trigger).
+034 my_signup_state. 035 setup wizard (organizations.setup, setup_completed_at, save_firm_setup, auth_email_status).
+036 onboarding (memberships.onboarding, my_onboarding, mark_onboarding).
+037 team invites (firm_members, my_firms). 038 plans & limits (plans table, triggers on memberships/clients, grace + trimming, new expire_trials: trials end on free Starter, my_plan).
+Next number: 039.
+Cron: pg_cron finetax-reminders (*/15 run_reminders), finetax-email-sync (*/5 → /api/cron/sync-emails via pg_net + Vault secret), duesk-expire-trials (daily); Vercel cron 03:30 UTC → GET /api/billing/run.
+
+## 7. Features and where they live (recent additions)
+- Auth: /login, /signup (Turnstile, duplicate-email messages), /api/auth/signup (inviteUserByEmail, server-only), /auth/confirm (GET → /auth/confirm/continue page; POST verifies token: protects one-time links from email scanners), /welcome (set password; new signups also create the firm via /api/auth/complete-signup → platform_create_firm, 14-day Professional trial), /forgot-password, /reset-password.
+- Setup wizard /setup (firm file design: live letterhead, invoice prints, services, Compare step with mock old tool + "A month with one client" player, violet "Registered on Duesk" stamp). Components: onboarding/DueskLogo, Stamp; app/onboarding.css (ob-* classes, reduced-motion aware).
+- Onboarding: components/onboarding/OnboardingLayer (Getting started checklist with progress from my_onboarding, first-visit tour prompts, "Done" stamp toast), TourRunner (spotlight glide, click blockers, tryIt steps), lib/onboarding/tours.ts (tours for every module; data-tour tags exist on dashboard, tasks, clients, invoices, packages, time-tracking, inbox, quotations tabs, team-add; other pages show centred cards).
+- Team: /team (invite by email, existing Duesk users added directly, pending invites resend/cancel, remove/restore access per firm, edit role/modules via /api/admin/update-member, login security via /api/admin/manage-user), lib/team/members.ts, /api/admin/invite-member. Topbar firm switcher (my_firms + set_active_org).
+- Plans: /plan page, components/billing/PlanBanner (over-limit banner for admins), Owner Console plan select + extend trial; limits enforced by DB triggers; invite/restore pre-check plan_limit_message.
+- Email/security fixes: lib/email/mailHost.ts (blocks private hosts/ports), lib/storage/vaultPath.ts, send-email body escaped, EmailModal sends "files", billing run 3/hour/firm, inbox search escaping, webhook exact client match + verified_at.
+- Other modules unchanged in structure: dashboard (src/app/page.tsx), clients, leads, quotations, invoices (+/invoices/[id]/pdf), packages (tabs Packages/Proposals/Billing), public /engagement/[token], tasks, reviewer-queue, calendar, time-tracking (+WorkSession, AttendancePanel), performance, documents, inbox (+sync, compose), chat, client-discussions, help & support, settings, audit-page, owner console (/owner, /api/owner/firms).
+
+## 8. Decisions
+- Billing: bill day 5th, drafts approved by admin (auto-send per client optional), late fee 1.5%/month min ₹100 with GST on next bill, first period pro-rated, due in 5 days. Invoice numbers per firm, continuous; cancel never delete. OPEN QUESTION: the invoices page says the number is assigned on save (draft) — verify whether drafts consume real numbers.
+- Trials: 14 days on Professional; last-7-days admin banner; at end → free Starter. Over Starter limits → 14-day grace → extra users lose access (admins first, then most recently active). Clients over limit: only new clients blocked.
+- Plan modules (which features each plan unlocks) — NOT built yet; next step. Paid upgrades are manual via Duesk (contact) until Duesk's own billing exists.
+- Signup "already exists" messages are shown (accepted enumeration trade-off; Turnstile + rate limits).
+- Free Starter forever, to compete with Zoho Practice (free up to 3 users).
+
+## 9. Open items (priority order)
+1. Module gating by plan (needs navConfig.ts, proxy, pages).
+2. Security backlog: S2 rotate all secrets (.env was shared in a chat), S3 separate dev Supabase for Preview, S4 repo private + remove context/notes files from repo + secret scanning, S6 browser writes to firm_settings/audit_logs/profiles, S7 composite FKs (org_id, client_id…), S8 review every user-callable RPC for org checks (merge_clients, set_work_queue, team_scorecards, chat_*, record_proposal_acceptance, run_reminders_now should be firm-scoped), S9 webhook ?token= removal, S10 engagement link expiry + PDF rate limit, S11 manage-user must refuse platform staff, S12 reauth session cleanup + duplicate verifyCallerPassword, S13 rate limiter fail-closed + cleanup, S14 nonce CSP, S16 MFA for admins, S17 backups, S18 monitoring (Sentry), S19 DPDP (region Mumbai?, privacy policy, retention, delete-my-data), S20 dependency hygiene.
+3. Robustness migration: per-firm error isolation in generate_subscription_bills and run_reminders; billing auto-send should send every pending auto-send draft (60 s limit).
+4. Performance: P1 dashboard aggregates in SQL (1,000-row cap breaks totals), P2 realtime filters by org_id, P3 fewer my_access calls, P4 server pagination, P5 composite indexes, P6 email job batching, P7 cache issued PDFs, P8 archiving, P9 maintenance (drop zz_legacy).
+5. Inbox composer sends vault documents as links (private bucket → broken for clients) — switch to real attachments (documentIds).
+6. Tag remaining pages for tours (leads, documents, chat, performance, settings, reviewer queue, calendar).
+7. Product roadmap: bulk import + ready-made compliance setups, Razorpay payments + receivables/statement, client portal with document checklists, DSC register / credentials vault / notice tracker, client profitability, WhatsApp (paid API — decide cost), leave/attendance, Tally export.
