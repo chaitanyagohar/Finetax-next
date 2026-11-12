@@ -77,7 +77,7 @@ export default function SignupPage() {
               <p className="text-emerald-700">
                 Open it to choose your password and start your 14-day free trial. Check your spam folder if you don't see it in a few minutes.
               </p>
-              <p className="text-emerald-700">Already have a Duesk account with this email? Sign in instead.</p>
+
             </div>
           </div>
           <Link href="/login" className="block text-center text-sm font-semibold text-navy hover:underline">

@@ -275,7 +275,20 @@ export default function OwnerConsolePage() {
                         </button>
                       )}
                     </td>
-                    <td className="text-text-muted">{f.plan}</td>
+                    <td>
+                      <select
+                        value={f.plan}
+                        disabled={busyId === f.id || f.slug === "oddlambda"}
+                        onChange={(e) => changeFirm(f, { plan: e.target.value })}
+                        className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-text-main outline-none"
+                      >
+                        {["starter", "professional", "firm", "internal"].map((p) => (
+                          <option key={p} value={p}>
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="text-right font-mono">
                       {f.active_members}
                       <span className="text-text-muted">/{f.members}</span>

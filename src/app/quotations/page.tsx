@@ -653,7 +653,7 @@ export default function QuotationsPage() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-surface shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+          <div data-tour="quotes-tabs"  className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
             {STATUS_TABS.map((t) => (
               <button
                 key={t}

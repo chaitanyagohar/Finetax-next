@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/layout/AppShell";
+import OnboardingLayer from "@/components/onboarding/OnboardingLayer";
+import PlanBanner from "@/components/billing/PlanBanner";
 import SignOutButton from "@/components/layout/SignOutButton";
 import type { SessionUser } from "@/components/layout/navConfig";
 import { createClient } from "@/lib/supabase/server";
@@ -138,17 +140,16 @@ export default async function RootLayout({
     isPlatformHome: access.org_slug === "oddlambda",
   };
 
-  // Trial reminder for firm administrators (last 7 days + 7-day grace)
+  // Trial reminder for firm administrators (last 7 days of the trial)
   let trialNotice: string | null = null;
   if (isAdmin && access.org_status === "trial" && access.trial_ends_at) {
     const end = new Date(access.trial_ends_at);
     const daysLeft = Math.ceil((end.getTime() - Date.now()) / 86400000);
     const fmt = (d: Date) => d.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" }); // DD/MM/YYYY
     if (daysLeft <= 0) {
-      const lockOn = new Date(end.getTime() + 7 * 86400000);
-      trialNotice = `Your free trial ended on ${fmt(end)}. Access will be paused on ${fmt(lockOn)}. Contact Duesk to continue.`;
+      trialNotice = "Your free trial has ended. Your firm moves to the free Starter plan (3 users, 200 active clients) tonight. See Plan to upgrade.";
     } else if (daysLeft <= 7) {
-      trialNotice = `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"} (${fmt(end)}). Contact Duesk to continue.`;
+      trialNotice = `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"} (${fmt(end)}). After that your firm moves to the free Starter plan (3 users, 200 active clients) unless you upgrade.`;
     }
   }
 
@@ -156,6 +157,8 @@ export default async function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="m-0 bg-background p-0 text-text-main antialiased">
         <AppShell user={sessionUser}>{children}</AppShell>
+        <OnboardingLayer user={sessionUser} />
+        <PlanBanner user={sessionUser} />
         {trialNotice && (
           <div
             role="status"

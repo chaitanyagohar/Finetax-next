@@ -390,19 +390,19 @@ export default function PackagesPage() {
           </h2>
           <p className="mt-1 text-xs text-text-muted">Retainers, engagement letters and automatic recurring billing.</p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+        <div data-tour="pkg-actions" className="flex w-full flex-wrap gap-2 lg:w-auto">
           <EngagementSettingsButton />
           <button type="button" onClick={() => setComposerFor(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt">
             <FileSignature className="h-4 w-4 text-navy" /> New Proposal
           </button>
-          <button type="button" onClick={() => openPkgModal()} className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
+          <button type="button" data-tour="pkg-new" onClick={() => openPkgModal()} className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
             <Plus className="h-4 w-4" /> Create Package
           </button>
         </div>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div data-tour="pkg-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Active Packages", value: String(stats.packages), sub: "Available for proposals", icon: Layers, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Active Subscriptions", value: String(stats.subscriptions), sub: "Clients on retainers", icon: Users, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
@@ -436,7 +436,13 @@ export default function PackagesPage() {
             ["billing", "Billing", Receipt],
           ] as const
         ).map(([k, l, Icon]) => (
-          <button key={k} type="button" onClick={() => setTab(k)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${tab === k ? "bg-navy text-white shadow-sm" : "text-text-muted hover:bg-surface-alt"}`}>
+          <button
+            key={k}
+            data-tour={"pkg-tab-" + k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${tab === k ? "bg-navy text-white shadow-sm" : "text-text-muted hover:bg-surface-alt"}`}
+          >
             <Icon className="h-3.5 w-3.5" /> {l}
           </button>
         ))}
@@ -536,7 +542,7 @@ export default function PackagesPage() {
                       )}
                     </div>
 
-                    <div className="mt-auto flex flex-wrap gap-2 border-t border-border p-3">
+                    <div data-tour="pkg-card-actions" className="mt-auto flex flex-wrap gap-2 border-t border-border p-3">
                       {pkg.is_active !== false && (
                         <>
                           <button type="button" onClick={() => setComposerFor(pkg.id)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-semibold text-white transition hover:bg-navy-light">

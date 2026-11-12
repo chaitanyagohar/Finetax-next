@@ -840,6 +840,7 @@ export default function ClientsPage() {
           {isAdmin && (
             <button
               type="button"
+              data-tour="clients-duplicates"
               onClick={openPairs}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
             >
@@ -856,6 +857,7 @@ export default function ClientsPage() {
           </button>
           <button
             type="button"
+            data-tour="clients-import"
             onClick={openImport}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
           >
@@ -863,6 +865,7 @@ export default function ClientsPage() {
           </button>
           <button
             type="button"
+            data-tour="clients-new"
             onClick={() => openModal()}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
           >
@@ -872,7 +875,7 @@ export default function ClientsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div data-tour="clients-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Total Clients", value: String(stats.total), sub: "In the client master", icon: Users, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Active Clients", value: String(stats.active), sub: `${stats.total - stats.active} inactive`, icon: UserCheck, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
@@ -899,7 +902,7 @@ export default function ClientsPage() {
 
       {/* Table */}
       <div className="rounded-xl border border-border bg-surface shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center">
+        <div data-tour="clients-filters" className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center">
           <div className="relative w-full lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
             <input

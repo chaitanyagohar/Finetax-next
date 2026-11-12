@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/confirm", "/engagement"];
 
 // Routes that only administrators may open
-const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings", "/proposals"];
+const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings", "/proposals", "/setup", "/plan"];
 
 // Routes that need a specific module (same as the sidebar)
 const MODULE_PATHS: { base: string; module: string }[] = [

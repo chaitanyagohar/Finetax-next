@@ -589,6 +589,7 @@ export default function InvoicesPage() {
         </div>
         <button
           type="button"
+          data-tour="invoices-new"
           onClick={() => openModal()}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
@@ -597,7 +598,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div data-tour="invoices-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -754,7 +755,7 @@ export default function InvoicesPage() {
                         </div>
                       </td>
                       <td className="whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex gap-1.5">
+                        <div data-tour="invoices-actions" className="inline-flex gap-1.5">
                           {balance > 0 && !["Draft", "Cancelled"].includes(st) && (
                             <button
                               type="button"

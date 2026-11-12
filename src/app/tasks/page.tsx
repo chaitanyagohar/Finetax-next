@@ -949,8 +949,8 @@ export default function TasksPage() {
           </h2>
           <p className="mt-1 text-xs text-text-muted">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-          <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+        <div data-tour="tasks-toolbar" className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          <div data-tour="tasks-views" className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
             {(
               [
                 { key: "list", label: "List", icon: List },
@@ -997,6 +997,7 @@ export default function TasksPage() {
           {isAdmin && (
             <button
               type="button"
+              data-tour="tasks-new"
               onClick={() => openModal()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
             >
@@ -1019,7 +1020,7 @@ export default function TasksPage() {
       />
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div data-tour="tasks-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -1094,7 +1095,7 @@ export default function TasksPage() {
         {view !== "queue" && (
           <div className="flex flex-col gap-3 border-b border-border p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+              <div data-tour="tasks-scope" className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
                 {(
                   [
                     { key: "mine", label: "My Work" },

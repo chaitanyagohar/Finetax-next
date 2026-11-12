@@ -493,7 +493,7 @@ export default function TimeTrackingPage() {
   return (
     <div className="space-y-6">
       {/* Live Work Timer */}
-      <div className={`rounded-xl border p-5 shadow-sm ${myTimer ? "border-emerald-300 bg-emerald-50/40" : "border-border bg-surface"}`}>
+      <div data-tour="time-timer" className={`rounded-xl border p-5 shadow-sm ${myTimer ? "border-emerald-300 bg-emerald-50/40" : "border-border bg-surface"}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${myTimer ? "bg-emerald-600 text-white" : "bg-navy/10 text-navy"}`}>
@@ -589,7 +589,7 @@ export default function TimeTrackingPage() {
       </div>
 
       {/* Period + actions */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm lg:flex-row lg:items-center">
+      <div data-tour="time-period" className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm lg:flex-row lg:items-center">
         <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
           {(
             [
@@ -631,6 +631,7 @@ export default function TimeTrackingPage() {
           </button>
           <button
             type="button"
+            data-tour="time-review"
             onClick={() => window.dispatchEvent(new Event("finetax:open-day-review"))}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
           >
@@ -647,7 +648,7 @@ export default function TimeTrackingPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div data-tour="time-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Total Hours", value: formatHours(stats.total), sub: `${stats.entries} entries`, icon: Clock, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Billable Hours", value: formatHours(stats.billable), sub: `${formatHours(stats.total - stats.billable)} non-billable`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
@@ -717,7 +718,11 @@ export default function TimeTrackingPage() {
         </div>
       )}
 
-      {isAdmin && <AttendancePanel from={rangeFrom} to={rangeTo} team={team} />}
+      {isAdmin && (
+        <div data-tour="time-attendance">
+          <AttendancePanel from={rangeFrom} to={rangeTo} team={team} />
+        </div>
+      )}
 
       {/* Breakdown panels */}
       {filteredLogs.length > 0 && (
@@ -772,7 +777,7 @@ export default function TimeTrackingPage() {
       )}
 
       {/* Log sheet */}
-      <div className="rounded-xl border border-border bg-surface shadow-sm">
+      <div data-tour="time-entries" className="rounded-xl border border-border bg-surface shadow-sm">
         <div className="flex flex-col gap-2 border-b border-border p-4 lg:flex-row lg:items-center">
           <div className="relative w-full lg:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />

@@ -578,7 +578,7 @@ export default function UnifiedInboxPage() {
       {/* Left Sidebar - Mailbox Folders */}
       <div className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface-alt md:flex">
         <div className="border-b border-border p-3">
-          <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className={`${inputClass} text-xs font-semibold text-navy`}>
+          <select data-tour="inbox-mailbox" value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className={`${inputClass} text-xs font-semibold text-navy`}>
             <option value="all">All Inboxes</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -603,6 +603,7 @@ export default function UnifiedInboxPage() {
               <button
                 key={f.key}
                 type="button"
+                data-tour={"inbox-tab-" + f.key}
                 onClick={() => setActiveTab(f.key)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
                   active ? "bg-navy/10 font-semibold text-navy" : "text-text-muted hover:bg-surface hover:text-text-main"
@@ -619,6 +620,7 @@ export default function UnifiedInboxPage() {
         <div className="space-y-2 border-t border-border p-3">
           <button
             type="button"
+            data-tour="inbox-sync"
             onClick={isSyncing ? handleStopSync : handleSyncEmails}
             className={`flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition ${
               isSyncing ? "bg-rose-50 text-rose-700 hover:bg-rose-100" : "border border-border bg-surface text-navy hover:bg-surface-alt"
@@ -636,6 +638,7 @@ export default function UnifiedInboxPage() {
           </button>
           <button
             type="button"
+            data-tour="inbox-compose"
             onClick={() => openCompose()}
             disabled={activeAccounts.length === 0}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-50"
@@ -1247,7 +1250,7 @@ export default function UnifiedInboxPage() {
       {confirm?.kind === "deleteAccount" && (
         <ConfirmDialog
           title="Remove this email account?"
-          message={`${confirm.target.email_address} will be disconnected and all its synced synced messages removed from Duesk. Its encrypted password is destroyed. Consider "Disable" instead to keep history.`}
+          message={`${confirm.target.email_address} will be disconnected and all its synced messages removed from Duesk. Its encrypted password is destroyed. Consider "Disable" instead to keep history.`}
           confirmLabel="Remove account"
           tone="danger"
           loading={actionBusy}

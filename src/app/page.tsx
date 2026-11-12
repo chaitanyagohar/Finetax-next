@@ -201,6 +201,7 @@ function Panel({
   children,
   className = "",
   flush = false,
+  tour,
 }: {
   title: string;
   icon: ComponentType<{ className?: string }>;
@@ -208,9 +209,10 @@ function Panel({
   children: ReactNode;
   className?: string;
   flush?: boolean;
+  tour?: string;
 }) {
   return (
-    <section className={`flex flex-col rounded-xl border border-border bg-surface shadow-sm ${className}`}>
+    <section data-tour={tour} className={`flex flex-col rounded-xl border border-border bg-surface shadow-sm ${className}`}>
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
           <Icon className="h-4 w-4 text-navy" />
@@ -583,6 +585,7 @@ export default function DashboardPage() {
   const statutoryStrip = (
     <Panel
       title="Statutory Deadlines · Next 14 Days"
+      tour="dash-compliance"
       icon={CalendarDays}
       action={
         breachedStatutory > 0 ? (
@@ -742,7 +745,7 @@ export default function DashboardPage() {
         /* ================= ADMIN EAGLE'S EYE VIEW ================= */
         <>
           {/* Primary KPIs */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div data-tour="dash-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               label={`Billed · ${DATE_FILTER_LABELS[dateFilter]}`}
               value={compactINR(totalBilled)}
@@ -999,7 +1002,7 @@ export default function DashboardPage() {
 
           {/* Task stream + Invoice feed */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Panel title="Finetax-Wide Task Stream" icon={CheckSquare} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage Tasks" />}>
+            <Panel title="Firm-Wide Task Stream" tour="dash-stream" icon={CheckSquare} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage Tasks" />}>
               {pendingTasks.length === 0 ? (
                 <EmptyState icon={CheckSquare} text="No active tasks in the firm workflow." />
               ) : (
@@ -1086,7 +1089,7 @@ export default function DashboardPage() {
             </Link>
           )}
 
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div data-tour="dash-kpis" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard label="My Pending Tasks" value={pendingTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
             <KpiCard
               label="Overdue Deadlines"
@@ -1155,7 +1158,7 @@ export default function DashboardPage() {
             </Panel>
           </div>
 
-          <Panel title="My Assigned Tasks" icon={CheckSquare} flush action={<PanelLink href="/tasks" label="Open Task Board" />}>
+          <Panel title="My Assigned Tasks" tour="dash-stream" icon={CheckSquare} flush action={<PanelLink href="/tasks" label="Open Task Board" />}>
             {pendingTasks.length === 0 ? (
               <EmptyState icon={CheckCircle2} text="You have no active pending tasks assigned!" />
             ) : (

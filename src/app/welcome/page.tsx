@@ -72,7 +72,7 @@ export default function WelcomePage() {
         }
       }
 
-      window.location.href = "/";
+      window.location.href = needsFirm ? "/setup" : "/";
     } catch {
       setError("A network error occurred. Please check your connection and try again.");
     } finally {
@@ -108,7 +108,7 @@ export default function WelcomePage() {
 
   return (
     <AuthLayout
-      title={needsFirm ? "Set up your firm" : "Choose your password"}
+      title={needsFirm ? "Set up your firm" : firmName ? `Join ${firmName}` : "Choose your password"}
       subtitle={needsFirm ? `Email confirmed: ${email}. Your 14-day free trial starts now.` : `Email confirmed: ${email}.`}
     >
       <form onSubmit={handleSubmit} className="space-y-4">

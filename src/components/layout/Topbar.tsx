@@ -21,6 +21,8 @@ import {
   Megaphone,
   CheckCheck,
   X,
+  Building2,
+  Check,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -114,6 +116,24 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [firms, setFirms] = useState<{ org_id: string; name: string; role: string; is_current: boolean }[]>([]);
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+
+  // Firms this person can switch between (loaded when the account menu opens)
+  useEffect(() => {
+    if (openMenu !== "user") return;
+    supabase.rpc("my_firms").then(({ data }) => setFirms((data as { org_id: string; name: string; role: string; is_current: boolean }[]) || []));
+  }, [openMenu, supabase]);
+
+  async function switchFirm(orgId: string) {
+    setSwitchingTo(orgId);
+    const { error } = await supabase.rpc("set_active_org", { p_org: orgId });
+    if (error) {
+      setSwitchingTo(null);
+      return;
+    }
+    window.location.href = "/"; // reload so every page shows the new firm
+  }
 
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -465,6 +485,31 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
                     <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-accent">{user.designation || roleLabel}</p>
                   </div>
                 </div>
+                {firms.length > 1 && (
+                  <div className="border-b border-border p-2">
+                    <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold text-text-muted">Switch firm</p>
+                    {firms.map((f) => (
+                      <button
+                        key={f.org_id}
+                        type="button"
+                        disabled={f.is_current || !!switchingTo}
+                        onClick={() => switchFirm(f.org_id)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-surface-alt disabled:cursor-default disabled:hover:bg-transparent"
+                      >
+                        <Building2 className="h-4 w-4 shrink-0 text-text-muted" />
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate ${f.is_current ? "font-semibold text-navy" : "text-text-main"}`}>{f.name}</span>
+                          <span className="block text-[10px] capitalize text-text-muted">{f.role}</span>
+                        </span>
+                        {switchingTo === f.org_id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-text-muted" />
+                        ) : f.is_current ? (
+                          <Check className="h-3.5 w-3.5 text-navy" />
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="p-2">
                   <button
                     type="button"

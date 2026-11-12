@@ -30,8 +30,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       patch.status = body.status;
     }
     if (body?.plan !== undefined) {
-      const plan = String(body.plan).trim().slice(0, 40);
-      if (!plan) throw new ApiError(400, "Plan can't be empty.");
+      const plan = String(body.plan).trim();
+      const { data: planRow } = await admin.from("plans").select("id").eq("id", plan).maybeSingle();
+      if (!planRow) throw new ApiError(400, "Unknown plan.");
       patch.plan = plan;
     }
     if (body?.extendTrialDays !== undefined) {
@@ -42,10 +43,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const base = Math.max(Date.now(), firm.trial_ends_at ? Date.parse(firm.trial_ends_at) : 0);
       patch.trial_ends_at = new Date(base + days * 86400000).toISOString();
       patch.status = "trial";
+      patch.plan = "professional"; // trials run on Professional
     }
 
     const { error } = await admin.from("organizations").update(patch).eq("id", id);
     if (error) throw new ApiError(400, error.message);
+    if (patch.plan) await admin.rpc("plan_refresh_grace", { p_org: id }); // start or clear the 14-day grace
 
     await writeAuditLog({
       actor: caller,
