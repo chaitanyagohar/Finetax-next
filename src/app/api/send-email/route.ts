@@ -114,6 +114,9 @@ export async function POST(request: NextRequest) {
           .eq("org_id", caller.orgId)
           .maybeSingle();
         if (!doc?.storage_path) throw new ApiError(404, "One of the selected documents has no stored file.");
+        if (!(await isVaultPathAllowed(admin, caller.orgId, doc.bucket || "firm-documents", doc.storage_path))) {
+          throw new ApiError(403, `"${doc.title}" is not stored in your firm's vault.`);
+        }
         const { data: blob, error: dlErr } = await admin.storage.from(doc.bucket || "firm-documents").download(doc.storage_path);
         if (dlErr || !blob) throw new ApiError(404, `Could not read "${doc.title}" from the vault.`);
         const content = Buffer.from(await blob.arrayBuffer());

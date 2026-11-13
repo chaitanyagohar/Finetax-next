@@ -10,14 +10,18 @@ import PasswordInput from "@/components/ui/PasswordInput";
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 30000;
 
-// Only allow same-site relative redirects (prevents open-redirect attacks)
+// Only allow redirects that stay on this site (prevents open-redirect tricks like "/%09/evil.com")
 function getSafeRedirect(): string {
   const params = new URLSearchParams(window.location.search);
   const target = params.get("redirect") || params.get("next");
-  if (target && target.startsWith("/") && !target.startsWith("//") && !target.startsWith("/\\")) {
-    return target;
+  if (!target) return "/";
+  try {
+    const url = new URL(target, window.location.origin);
+    if (url.origin !== window.location.origin) return "/";
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return "/";
   }
-  return "/";
 }
 
 // Never show raw auth errors to the user

@@ -7,43 +7,76 @@ import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { issueAndEmailInvoice, sendPaymentReminders } from "@/lib/billing/invoiceMailer";
 
+const SEND_BUDGET_MS = 40_000; // stop starting new emails after this; the rest go next run
+const REMINDER_BUDGET_MS = 50_000;
+
+function istToday(): string {
+  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 /**
- * Creates due subscription bills for every firm (the database does this firm by firm),
- * auto-sends the ones marked auto-send, then sends payment reminders.
- * onlyOrgId limits reminders and the returned summary to one firm (the admin button).
+ * 1. Creates due subscription bills (one firm for the button, every firm for the daily job).
+ * 2. Issues and emails every waiting draft of an auto-send subscription, including any left over
+ *    from an earlier run that ran out of time.
+ * 3. Sends payment reminders.
  */
 async function runBilling(onlyOrgId?: string) {
   const admin = getAdminClient();
-  const { data, error } = await admin.rpc("generate_subscription_bills", { p_run_date: null });
-  if (error) throw new Error(error.message);
+  const started = Date.now();
 
+  const { data, error } = await admin.rpc("generate_subscription_bills", {
+    p_run_date: null,
+    p_org: onlyOrgId ?? null,
+  });
+  if (error) throw new Error(error.message);
   const created: { invoice_id: string; auto_send: boolean }[] = (data as any)?.created || [];
 
-  // Which firm each new bill belongs to
-  const ids = created.map((c) => c.invoice_id);
-  const { data: owners } = ids.length
-    ? await admin.from("invoices").select("id, org_id").in("id", ids)
-    : { data: [] as { id: string; org_id: string }[] };
-  const orgOf = new Map((owners || []).map((o: any) => [o.id, o.org_id as string]));
-  const mine = (invoiceId: string) => !onlyOrgId || orgOf.get(invoiceId) === onlyOrgId;
+  // Every draft bill of an auto-send subscription, oldest first
+  let subsQuery = admin.from("client_packages").select("id").eq("auto_send", true);
+  if (onlyOrgId) subsQuery = subsQuery.eq("org_id", onlyOrgId);
+  const { data: subs } = await subsQuery;
+  const subIds = (subs || []).map((s: any) => s.id as string);
 
-  // Auto-send every new auto-send bill (any firm), otherwise it would stay a draft
-  const results: { invoiceId: string; message: string }[] = [];
-  for (const c of created.filter((x) => x.auto_send)) {
+  let pending: { id: string }[] = [];
+  if (subIds.length) {
+    let invQuery = admin
+      .from("invoices")
+      .select("id")
+      .eq("status", "Draft")
+      .in("client_package_id", subIds)
+      .lte("date", istToday())
+      .order("date", { ascending: true })
+      .limit(100);
+    if (onlyOrgId) invQuery = invQuery.eq("org_id", onlyOrgId);
+    const { data: inv } = await invQuery;
+    pending = (inv || []) as { id: string }[];
+  }
+
+  const sent: string[] = [];
+  let deferred = 0;
+  for (let i = 0; i < pending.length; i++) {
+    if (Date.now() - started > SEND_BUDGET_MS) {
+      deferred = pending.length - i;
+      break;
+    }
     try {
-      const r = await issueAndEmailInvoice(admin, c.invoice_id);
-      results.push({ invoiceId: c.invoice_id, message: r.message });
+      const r = await issueAndEmailInvoice(admin, pending[i].id);
+      sent.push(r.message);
     } catch (e: any) {
-      results.push({ invoiceId: c.invoice_id, message: `Auto-send failed: ${e?.message || e}` });
+      sent.push(`Auto-send failed: ${e?.message || e}`);
     }
   }
 
-  const reminders = await sendPaymentReminders(admin, onlyOrgId);
+  let reminders: Awaited<ReturnType<typeof sendPaymentReminders>> | null = null;
+  if (Date.now() - started < REMINDER_BUDGET_MS) {
+    reminders = await sendPaymentReminders(admin, onlyOrgId);
+  }
 
   return {
-    bills_created: created.filter((c) => mine(c.invoice_id)).length,
-    drafts: created.filter((c) => !c.auto_send && mine(c.invoice_id)).length,
-    auto_sent: results.filter((r) => mine(r.invoiceId)).map((r) => r.message),
+    bills_created: created.length,
+    drafts: created.filter((c) => !c.auto_send).length,
+    auto_sent: sent,
+    deferred_to_next_run: deferred,
     reminders_sent: reminders,
   };
 }
@@ -62,7 +95,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** "Run billing now" button (administrators): results and reminders for their own firm only. */
+/** "Run billing now" button (administrators): their own firm only. */
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);

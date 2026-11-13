@@ -38,14 +38,33 @@ export async function POST(request: NextRequest) {
 
     // 2. Invoice & firm data
     const supabase = getAdminClient();
-        const { data: invoice, error: invErr } = await supabase
-      .from("invoices")
-      .select("*, clients!client_id(*)")
-      .eq("id", invoiceId)
-      .eq("org_id", caller.orgId)
-      .maybeSingle();
+    const loadInvoice = () =>
+      supabase.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId).eq("org_id", caller.orgId).maybeSingle();
+
+    let { data: invoice, error: invErr } = await loadInvoice();
     if (invErr || !invoice) throw new ApiError(404, "Invoice not found.");
     if (invoice.status === "Cancelled") throw new ApiError(400, "This invoice is cancelled and can't be emailed.");
+
+    // 3. Issue a draft first, so the client never receives a PDF stamped DRAFT
+    let justIssued = false;
+    if (invoice.status === "Draft") {
+      const { error: issueErr } = await supabase
+        .from("invoices")
+        .update({ status: "Sent" })
+        .eq("id", invoiceId)
+        .eq("org_id", caller.orgId);
+      if (issueErr) throw new ApiError(400, issueErr.message || "Could not issue this invoice.");
+      ({ data: invoice, error: invErr } = await loadInvoice());
+      if (invErr || !invoice) throw new ApiError(500, "The invoice was issued but could not be reloaded. Please try emailing it again.");
+      justIssued = true;
+      await writeAuditLog({
+        actor: caller,
+        action: "ISSUE_INVOICE",
+        entity: "INVOICES",
+        entity_id: invoiceId,
+        metadata: { invoiceNumber: invoice.invoice_number, via: "email" },
+      });
+    }
 
     const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", caller.orgId).maybeSingle();
 
@@ -55,10 +74,10 @@ export async function POST(request: NextRequest) {
     const firmName = firm?.firm_name || "Our firm";
     const balance = Math.max(0, Number(invoice.total || 0) - Number(invoice.amount_paid || 0));
 
-    // 3. PDF (same design as the preview)
+    // 4. PDF (same design as the preview)
     const pdfBuffer = await renderInvoicePdf(invoice, client, firm);
 
-    // 4. Email (all dynamic values escaped)
+    // 5. Email (all dynamic values escaped)
     const paymentLines = [
       balance > 0 ? `<strong>Amount payable:</strong> ${inr(balance)}${invoice.due_date ? ` by <strong>${dmy(invoice.due_date)}</strong>` : ""}` : "<strong>Status:</strong> Paid in full. Thank you!",
       balance > 0 && firm?.upi_id ? `<strong>UPI:</strong> ${escapeHtml(firm.upi_id)}` : "",
@@ -80,24 +99,35 @@ export async function POST(request: NextRequest) {
       (balance > 0 ? `\nAmount payable: ${inr(balance)}${invoice.due_date ? ` by ${dmy(invoice.due_date)}` : ""}.` : "\nPaid in full. Thank you!") +
       `\n\nBest regards,\n${firmName}`;
 
-    // 5. Send
-    await sendFirmEmail({
-      orgId: caller.orgId,
-      to: recipientEmail,
-      subject: `Tax Invoice ${invNum} from ${firmName}`,
-      html: htmlBody,
-      text: textBody,
-      attachments: [{ filename: pdfFileName(invNum, "Invoice"), content: pdfBuffer, contentType: "application/pdf" }],
-    });
-
-    // 6. Mark as emailed
-    const { error: updateError } = await supabase.from("invoices").update({ email_sent_at: new Date().toISOString() }).eq("id", invoiceId);
-    if (updateError) {
-      console.error("Supabase Update Error:", updateError.message);
-      throw new ApiError(500, "The email was sent, but the invoice status could not be updated.");
+    // 6. Send
+    try {
+      await sendFirmEmail({
+        orgId: caller.orgId,
+        to: recipientEmail,
+        subject: `Tax Invoice ${invNum} from ${firmName}`,
+        html: htmlBody,
+        text: textBody,
+        attachments: [{ filename: pdfFileName(invNum, "Invoice"), content: pdfBuffer, contentType: "application/pdf" }],
+      });
+    } catch (e: any) {
+      if (justIssued) {
+        throw new ApiError(502, `Invoice ${invNum} has been issued, but the email could not be sent (${e?.message || "mail error"}). You can email it again.`);
+      }
+      throw e;
     }
 
-    // 7. Audit trail
+    // 7. Mark as emailed
+    const { error: updateError } = await supabase
+      .from("invoices")
+      .update({ email_sent_at: new Date().toISOString() })
+      .eq("id", invoiceId)
+      .eq("org_id", caller.orgId);
+    if (updateError) {
+      console.error("Supabase Update Error:", updateError.message);
+      throw new ApiError(500, "The email was sent, but the invoice could not be marked as emailed.");
+    }
+
+    // 8. Audit trail
     await writeAuditLog({
       actor: caller,
       action: "SEND_INVOICE_EMAIL",
@@ -106,7 +136,10 @@ export async function POST(request: NextRequest) {
       metadata: { recipientEmail, invoiceNumber: invNum, actor_name: caller.name, user_id: caller.userId },
     });
 
-    return NextResponse.json({ success: true, message: "Invoice email sent successfully with PDF attachment!" });
+    return NextResponse.json({
+      success: true,
+      message: justIssued ? `Invoice ${invNum} issued and emailed with the PDF.` : "Invoice email sent successfully with PDF attachment!",
+    });
   } catch (err) {
     return errorResponse(err);
   }
