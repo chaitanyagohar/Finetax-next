@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "./onboarding.css";
 import AppShell from "@/components/layout/AppShell";
 import OnboardingLayer from "@/components/onboarding/OnboardingLayer";
 import PlanBanner from "@/components/billing/PlanBanner";
