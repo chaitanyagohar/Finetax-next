@@ -6,6 +6,7 @@
 import React from "react";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import QRCode from "qrcode";
+import { placeOfSupplyCode, placeOfSupplyLabel } from "@/lib/gst";
 
 // Never split words with hyphens (keeps names and addresses intact)
 Font.registerHyphenationCallback((word) => [word]);
@@ -29,16 +30,6 @@ const C = {
   amber: "#92400e",
   amberBg: "#fffbeb",
   red: "#b91c1c",
-};
-
-const GST_STATES: Record<string, string> = {
-  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-  "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim",
-  "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya",
-  "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
-  "24": "Gujarat", "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
-  "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
-  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
 };
 
 const s = StyleSheet.create({
@@ -183,10 +174,60 @@ function taxes(doc: Rec) {
   return { items, inter, rate, subtotal, cgst, sgst, igst, total };
 }
 
-function placeOfSupply(client: Rec): string {
-  const code = str(client?.gstin).slice(0, 2);
-  if (GST_STATES[code]) return `${GST_STATES[code]} (${code})`;
-  return str(client?.state) || "-";
+interface PartyDetails {
+  name: string;
+  contact: string;
+  address: string;
+  gstin: string;
+  pan: string;
+  email: string;
+}
+
+function quotationParty(quotation: Rec, client: Rec): PartyDetails {
+  const org = str(client?.organization_name) || str(quotation?.organisation);
+  const person = str(client?.name) || str(quotation?.recipient_name);
+  return {
+    name: org || person || "Valued Client",
+    contact: org && person && org !== person ? person : "",
+    address: str(client?.address),
+    gstin: str(client?.gstin),
+    pan: str(client?.pan),
+    email: str(quotation?.recipient_email) || str(client?.email),
+  };
+}
+
+/** An issued invoice prints the buyer details stored on it at issue; a draft prints the client as it is now. */
+function invoiceParty(invoice: Rec, client: Rec): PartyDetails {
+  if (invoice?.buyer_name) {
+    return {
+      name: str(invoice.buyer_name),
+      contact: str(invoice.buyer_contact),
+      address: str(invoice.buyer_address),
+      gstin: str(invoice.buyer_gstin),
+      pan: str(invoice.buyer_pan),
+      email: str(client?.email),
+    };
+  }
+  const person = str(client?.name);
+  const name = str(invoice?.organisation) || str(client?.organization_name) || person || "Valued Client";
+  return {
+    name,
+    contact: person && person !== name ? person : "",
+    address: str(client?.address),
+    gstin: str(client?.gstin),
+    pan: str(client?.pan),
+    email: str(client?.email),
+  };
+}
+
+function invoicePlaceOfSupply(invoice: Rec, client: Rec): string {
+  const stored = placeOfSupplyLabel(str(invoice?.place_of_supply));
+  if (stored) return stored;
+  // Invoices issued before the place of supply was stored
+  const code = invoice?.buyer_name
+    ? str(invoice?.buyer_state_code)
+    : placeOfSupplyCode(str(client?.gstin), str(client?.state));
+  return placeOfSupplyLabel(code) || "-";
 }
 
 /* ---------------- Shared blocks ---------------- */
@@ -216,18 +257,16 @@ function Header({ firm, badge, title, number, issued }: { firm: Rec; badge: stri
   );
 }
 
-function Party({ heading, client, fallbackName, organisation, email }: { heading: string; client: Rec; fallbackName: string; organisation?: string; email?: string }) {
-  const org = str(client?.organization_name) || str(organisation);
-  const person = str(client?.name) || fallbackName;
+function Party({ heading, party }: { heading: string; party: PartyDetails }) {
   return (
     <View style={s.party}>
       <Text style={s.label}>{heading}</Text>
-      <Text style={s.partyName}>{org || person || "Valued Client"}</Text>
-      {org && person && org !== person ? <Text style={s.partyText}>Attn: {person}</Text> : null}
-      {client?.address ? <Text style={s.partyText}>{str(client.address)}</Text> : null}
-      {client?.gstin ? <Text style={s.partyText}>GSTIN: {str(client.gstin)}</Text> : null}
-      {!client?.gstin && client?.pan ? <Text style={s.partyText}>PAN: {str(client.pan)}</Text> : null}
-      {email || client?.email ? <Text style={s.partyText}>Email: {str(email || client?.email)}</Text> : null}
+      <Text style={s.partyName}>{party.name}</Text>
+      {party.contact ? <Text style={s.partyText}>Attn: {party.contact}</Text> : null}
+      {party.address ? <Text style={s.partyText}>{party.address}</Text> : null}
+      {party.gstin ? <Text style={s.partyText}>GSTIN: {party.gstin}</Text> : null}
+      {!party.gstin && party.pan ? <Text style={s.partyText}>PAN: {party.pan}</Text> : null}
+      {party.email ? <Text style={s.partyText}>Email: {party.email}</Text> : null}
     </View>
   );
 }
@@ -315,15 +354,16 @@ export function InvoicePdf({ invoice, client, firm, qrDataUrl }: { invoice: Rec;
   const paid = Math.min(Math.max(0, num(invoice?.amount_paid ?? invoice?.amountPaid)), t.total);
   const balance = status === "Cancelled" ? 0 : Math.max(0, Math.round((t.total - paid) * 100) / 100);
   const issued = date(invoice?.date || invoice?.issue_date || invoice?.created_at);
+  const number = str(invoice?.invoice_number);
 
   return (
-    <Document title={`Invoice ${str(invoice?.invoice_number)}`} author={str(firm?.firm_name)} subject="Tax Invoice">
+    <Document title={number ? `Invoice ${number}` : "Draft invoice"} author={str(firm?.firm_name)} subject="Tax Invoice">
       <Page size="A4" style={s.page}>
         {status === "Cancelled" ? <Text style={s.watermark} fixed>CANCELLED</Text> : status === "Draft" ? <Text style={s.watermark} fixed>DRAFT</Text> : null}
-        <Header firm={firm} badge="TAX DOCUMENT" title="TAX INVOICE" number={str(invoice?.invoice_number)} issued={issued} />
+        <Header firm={firm} badge="TAX DOCUMENT" title="TAX INVOICE" number={number || "Assigned on issue"} issued={issued} />
 
         <View style={s.infoWrap}>
-          <Party heading="BILL TO" client={client} fallbackName="" organisation={str(invoice?.organisation)} />
+          <Party heading="BILL TO" party={invoiceParty(invoice, client)} />
           <View style={s.meta}>
             <Text style={s.label}>INVOICE DETAILS</Text>
             <View style={s.metaRow}>
@@ -336,7 +376,7 @@ export function InvoicePdf({ invoice, client, firm, qrDataUrl }: { invoice: Rec;
             </View>
             <View style={s.metaRow}>
               <Text style={s.metaLabel}>Place of Supply</Text>
-              <Text style={s.metaValue}>{placeOfSupply(client)}</Text>
+              <Text style={s.metaValue}>{invoicePlaceOfSupply(invoice, client)}</Text>
             </View>
             <View style={s.metaRow}>
               <Text style={s.metaLabel}>Tax Type</Text>
@@ -419,13 +459,7 @@ export function QuotationPdf({ quotation, client, firm }: { quotation: Rec; clie
         <Header firm={firm} badge="PROPOSAL" title="QUOTATION" number={number} issued={issued} />
 
         <View style={s.infoWrap}>
-          <Party
-            heading="PREPARED FOR"
-            client={client}
-            fallbackName={str(quotation?.recipient_name)}
-            organisation={str(quotation?.organisation)}
-            email={str(quotation?.recipient_email)}
-          />
+          <Party heading="PREPARED FOR" party={quotationParty(quotation, client)} />
           <View style={s.meta}>
             <Text style={s.label}>QUOTATION DETAILS</Text>
             <View style={s.metaRow}>

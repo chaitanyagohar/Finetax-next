@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: justIssued ? `Invoice ${invNum} issued and emailed with the PDF.` : "Invoice email sent successfully with PDF attachment!",
+      message: justIssued ? `Invoice ${invNum} issued and emailed to ${recipientEmail}.` : `Invoice ${invNum} emailed to ${recipientEmail}.`,
     });
   } catch (err) {
     return errorResponse(err);

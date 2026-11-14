@@ -35,6 +35,7 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, getInitials } from "@/lib/format";
+import { GSTIN_RE, PAN_RE, STATE_OPTIONS, stateCodeFromGstin, stateCodeFromName, stateName } from "@/lib/gst";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -51,8 +52,6 @@ const CLIENT_TYPES = [
   "Other",
 ];
 
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_IMPORT_ROWS = 5000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -70,18 +69,6 @@ const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: "assigned_to", label: "Relationship manager" },
   { key: "notes", label: "Notes" },
 ];
-
-const GST_STATE_CODES: Record<string, string> = {
-  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-  "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
-  "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-  "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
-  "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
-  "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
-  "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
-  "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
-};
-const STATE_NAMES = Array.from(new Set(Object.values(GST_STATE_CODES))).sort();
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -352,8 +339,8 @@ export default function ClientsPage() {
     const v = value.toUpperCase().replace(/\s/g, "");
     setGstin(v);
     if (GSTIN_RE.test(v)) {
-      const stateName = GST_STATE_CODES[v.slice(0, 2)];
-      if (stateName) setState(stateName);
+      const gstinState = stateName(stateCodeFromGstin(v));
+      if (gstinState) setState(gstinState);
       if (!pan.trim()) setPan(v.slice(2, 12));
     }
   }
@@ -370,7 +357,7 @@ export default function ClientsPage() {
       setGstin(client.gstin || "");
       setEmail(client.email || "");
       setPhone(client.phone || "");
-      setState(client.state || "");
+      setState(stateName(stateCodeFromName(client.state)));
       setStatus(client.status || "Active");
       setAssignedTo(client.assigned_to || "");
       setAddress(client.address || "");
@@ -419,6 +406,7 @@ export default function ClientsPage() {
     if (!panValid) return setFormError("PAN must look like ABCDE1234F.");
     if (!gstinValid) return setFormError("GSTIN must look like 07ABCDE1234F1Z5.");
     if (gstPanMismatch) return setFormError("This GSTIN does not belong to the PAN entered.");
+    if (!state) return setFormError("Select the client's state. It decides the place of supply on invoices.");
     if (cleanEmail && !EMAIL_RE.test(cleanEmail)) return setFormError("Please enter a valid email address.");
     if (phone.trim() && phone.replace(/\D/g, "").length < 10) return setFormError("Please enter a valid mobile number.");
 
@@ -735,9 +723,13 @@ export default function ClientsPage() {
 
         // Fill state from GSTIN and PAN from GSTIN when missing
         if (data.gstin && GSTIN_RE.test(data.gstin)) {
-          if (!data.state) data.state = GST_STATE_CODES[data.gstin.slice(0, 2)] || "";
+          if (!data.state) data.state = stateName(stateCodeFromGstin(data.gstin));
           if (!data.pan) data.pan = data.gstin.slice(2, 12);
         }
+        const stateCode = stateCodeFromName(data.state);
+        if (stateCode) data.state = stateName(stateCode);
+        else if (data.state) warnings.push("State not recognised: correct it before invoicing this client");
+        else warnings.push("State is missing: add it before invoicing this client");
         if (data.type && !CLIENT_TYPES.includes(data.type)) {
           const match = CLIENT_TYPES.find((t) => t.toLowerCase() === data.type.toLowerCase());
           data.type = match || (data.type.toLowerCase() === "company" ? "Private Limited" : "Other");
@@ -1362,13 +1354,16 @@ export default function ClientsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className={labelClass}>State</label>
-                    <input type="text" list="state-list" placeholder="e.g. Delhi" value={state} onChange={(e) => setState(e.target.value)} className={inputClass} />
-                    <datalist id="state-list">
-                      {STATE_NAMES.map((s) => (
-                        <option key={s} value={s} />
+                    <label className={labelClass}>State *</label>
+                    <select required value={state} onChange={(e) => setState(e.target.value)} className={inputClass}>
+                      <option value="">Select state</option>
+                      {STATE_OPTIONS.map((s) => (
+                        <option key={s.code} value={s.name}>
+                          {s.name}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
+                    <p className="mt-1 text-[10px] text-text-muted">Decides the place of supply on this client&apos;s invoices.</p>
                   </div>
                   <div>
                     <label className={labelClass}>Relationship Manager</label>
@@ -1433,7 +1428,7 @@ export default function ClientsPage() {
                           {snap.recentInvoices.map((inv) => (
                             <div key={inv.id} className="flex items-center justify-between rounded-lg border border-border px-2.5 py-1.5 text-[11px]">
                               <div>
-                                <p className="font-mono font-semibold text-navy">{inv.invoice_number}</p>
+                                <p className="font-mono font-semibold text-navy">{inv.invoice_number || "Draft"}</p>
                                 <p className="text-text-muted">{formatDate(inv.date)} · {inv.status}</p>
                               </div>
                               <p className="font-semibold">{formatINR(Number(inv.total || 0))}</p>

@@ -35,16 +35,22 @@ export async function issueAndEmailInvoice(
   invoiceId: string,
   expectOrgId?: string | null
 ): Promise<{ sent: boolean; message: string }> {
-  let query = admin.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId);
-  if (expectOrgId) query = query.eq("org_id", expectOrgId);
-  const { data: inv } = await query.maybeSingle();
+  const loadInvoice = () => {
+    const query = admin.from("invoices").select("*, clients!client_id(*)").eq("id", invoiceId);
+    return (expectOrgId ? query.eq("org_id", expectOrgId) : query).maybeSingle();
+  };
+
+  let { data: inv } = await loadInvoice();
   if (!inv) return { sent: false, message: "Invoice not found." };
-  if (inv.status === "Cancelled") return { sent: false, message: `${inv.invoice_number} is cancelled.` };
+  if (inv.status === "Cancelled") return { sent: false, message: `${inv.invoice_number || "This draft bill"} is cancelled.` };
 
   if (inv.status === "Draft") {
+    const clientName = inv.clients?.name || "this client";
     const { error } = await admin.from("invoices").update({ status: "Sent" }).eq("id", invoiceId);
-    if (error) return { sent: false, message: `${inv.invoice_number}: ${error.message}` };
-    inv.status = "Sent";
+    if (error) return { sent: false, message: `The bill for ${clientName} could not be issued: ${error.message}` };
+    // Issuing assigns the number, the invoice date and the tax split
+    ({ data: inv } = await loadInvoice());
+    if (!inv) return { sent: false, message: `The bill for ${clientName} was issued but could not be reloaded. Email it from Invoices.` };
   }
 
   const to = inv.clients?.email;

@@ -12,6 +12,7 @@ import {
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { verifyCallerPassword } from "@/lib/api/reauth";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { GSTIN_RE, PAN_RE } from "@/lib/gst";
 
 const TEXT_FIELDS = [
   "firm_name",
@@ -34,8 +35,6 @@ const TEXT_FIELDS = [
 const SENSITIVE_FIELDS = ["bank_name", "bank_account_no", "bank_ifsc", "upi_id"];
 const UPPERCASE_FIELDS = ["gstin", "pan", "bank_ifsc"];
 
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI_RE = /^[\w.\-]{2,256}@[A-Za-z]{2,64}$/;
 const PREFIX_RE = /^[A-Za-z0-9/_\-{}]{1,20}$/;

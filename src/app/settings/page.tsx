@@ -29,6 +29,7 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal } from "@/components/ui/Modal";
 import PasswordInput from "@/components/ui/PasswordInput";
 import { localISODate } from "@/lib/format";
+import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
 
 type Settings = {
   firm_name: string;
@@ -79,23 +80,10 @@ const PREFIX_TOKENS = [
   { token: "{YY}", hint: "Short year, e.g. 26" },
 ];
 
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI_RE = /^[\w.\-]{2,256}@[A-Za-z]{2,64}$/;
 const PREFIX_RE = /^[A-Za-z0-9/_\-{}]{1,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const GST_STATE_CODES: Record<string, string> = {
-  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-  "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar",
-  "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram",
-  "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
-  "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
-  "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
-  "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
-  "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
-};
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15 disabled:bg-surface-alt disabled:text-text-muted";
@@ -243,7 +231,7 @@ export default function SettingsPage() {
 
   /* ---------------- Derived helpers ---------------- */
 
-  const firmState = GSTIN_RE.test(form.gstin.toUpperCase()) ? GST_STATE_CODES[form.gstin.slice(0, 2)] : "";
+  const firmState = GSTIN_RE.test(form.gstin.toUpperCase()) ? stateName(form.gstin.slice(0, 2)) : "";
   const invoiceExample = `${resolvePrefix(form.invoice_prefix.trim(), today)}0001`;
   const quotationExample = `${resolvePrefix(form.quotation_prefix.trim(), today)}001`;
   const invoiceTooLong = invoiceExample.length > 16;

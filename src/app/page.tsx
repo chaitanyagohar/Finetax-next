@@ -1044,7 +1044,7 @@ export default function DashboardPage() {
                       return (
                         <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt p-2.5">
                           <div className="min-w-0">
-                            <p className="font-mono text-xs font-semibold text-navy">{inv.invoice_number}</p>
+                            <p className="font-mono text-xs font-semibold text-navy">{inv.invoice_number || "Draft"}</p>
                             <p className="truncate text-[11px] text-text-muted">
                               {clientName(inv.client_id) || inv.organisation || "Client"} · {formatDate(invoiceDate(inv))}
                             </p>

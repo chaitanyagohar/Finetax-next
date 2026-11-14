@@ -104,7 +104,7 @@ export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<any[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
-  const [invoiceByQuote, setInvoiceByQuote] = useState<Record<string, { id: string; invoice_number: string }>>({});
+  const [invoiceByQuote, setInvoiceByQuote] = useState<Record<string, { id: string; invoice_number: string | null }>>({});
   const [firmSettings, setFirmSettings] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState("All");
@@ -174,7 +174,7 @@ export default function QuotationsPage() {
     if (lRes.data) setLeads(lRes.data);
     if (sRes.data) setFirmSettings(sRes.data);
     if (iRes.data) {
-      const map: Record<string, { id: string; invoice_number: string }> = {};
+      const map: Record<string, { id: string; invoice_number: string | null }> = {};
       iRes.data.forEach((inv: any) => {
         if (inv.quotation_id) map[inv.quotation_id] = { id: inv.id, invoice_number: inv.invoice_number };
       });
@@ -506,18 +506,14 @@ export default function QuotationsPage() {
       const data = contentType.includes("application/json") ? await res.json() : {};
       if (!res.ok) throw new Error((data as any).error || `Server returned status ${res.status}.`);
 
-      // Persist the "Sent" status (previously only shown on screen)
-      if (statusOf(q) === "Draft") {
-        await supabase.from("quotations").update({ status: "Sent" }).eq("id", q.id);
-      }
-
       showToast("success", `Quotation ${getQuoteNumber(q)} emailed to ${to}.`);
-      loadData(false);
     } catch (err: any) {
       console.error("Send Email Error:", err);
-      showToast("error", "Failed to send the quotation email: " + (err?.message || "Unknown error"));
+      showToast("error", "The quotation email was not sent: " + (err?.message || "Unknown error"));
     } finally {
       setSendingId(null);
+      // The server marks a draft as Sent before emailing it, so reload even when the email failed
+      loadData(false);
     }
   }
 
@@ -540,17 +536,17 @@ export default function QuotationsPage() {
       return;
     }
 
-    const invoice = data as { id: string; invoice_number: string };
+    const invoice = data as { id: string; invoice_number: string | null };
     const pdfUrl = `${window.location.origin}/invoices/${invoice.id}/pdf`;
     await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
 
-    logAuditEvent("CONVERT_QUOTATION_TO_INVOICE", "QUOTATIONS", q.id, { invoiceNumber: invoice.invoice_number });
+    logAuditEvent("CONVERT_QUOTATION_TO_INVOICE", "QUOTATIONS", q.id, { invoiceId: invoice.id });
 
     setActionBusy(false);
     setConfirm(null);
     setIsModalOpen(false);
     setEditingQuotation(null);
-    showToast("success", `Invoice ${invoice.invoice_number} created.`, pdfUrl, "Open invoice PDF");
+    showToast("success", "Draft invoice created. Issue it from Invoices to give it a number.", pdfUrl, "Open draft PDF");
     loadData(false);
   }
 
@@ -737,7 +733,7 @@ export default function QuotationsPage() {
                             </span>
                           )}
                           {inv ? (
-                            <span className="text-[10px] font-medium text-violet-700">Invoice {inv.invoice_number}</span>
+                            <span className="text-[10px] font-medium text-violet-700">{inv.invoice_number ? `Invoice ${inv.invoice_number}` : "Draft invoice"}</span>
                           ) : q.email_sent_at ? (
                             <span className="text-[10px] font-medium text-emerald-600">✓ Emailed {formatDate(q.email_sent_at)}</span>
                           ) : (
@@ -805,7 +801,7 @@ export default function QuotationsPage() {
           headerExtra={
             locked ? (
               <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
-                <CheckCircle2 className="h-3 w-3" /> Converted to invoice {linkedInvoice?.invoice_number || ""} · read-only
+                <CheckCircle2 className="h-3 w-3" /> Converted to {linkedInvoice?.invoice_number ? `invoice ${linkedInvoice.invoice_number}` : "a draft invoice"} · read-only
               </span>
             ) : null
           }
@@ -1110,7 +1106,7 @@ export default function QuotationsPage() {
       {confirm?.kind === "invoice" && (
         <ConfirmDialog
           title="Convert to a tax invoice?"
-          message={`A new invoice will be created from quotation ${getQuoteNumber(confirm.quote)} with the next serial invoice number. The quotation will be locked.`}
+          message={`A draft invoice will be created from quotation ${getQuoteNumber(confirm.quote)}. It gets its invoice number when you issue it. The quotation will be locked.`}
           confirmLabel="Create invoice"
           tone="primary"
           loading={actionBusy}

@@ -230,7 +230,7 @@ export default function SubscriptionBilling({
                 const overdue = ["Sent", "Partially Paid"].includes(b.status) && b.due_date < today && bal > 0;
                 return (
                   <tr key={b.id}>
-                    <td className="whitespace-nowrap font-mono font-semibold text-navy">{b.invoice_number}</td>
+                    <td className={`whitespace-nowrap font-mono font-semibold ${b.invoice_number ? "text-navy" : "text-text-muted"}`}>{b.invoice_number || "Draft"}</td>
                     <td>{clientLabel(clientById[b.client_id]) || "—"}</td>
                     <td className="whitespace-nowrap">
                       {formatDate(b.billing_period_start)} – {formatDate(b.billing_period_end)}

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       delete payload[field];
     }
 
-    // 1. Insert — the database assigns the next serial invoice number in the same transaction
+    // 1. Insert as a draft. The database works out the totals; the number is assigned on issue.
     const { data: invoice, error } = await supabase.from("invoices").insert([payload]).select().single();
 
     if (error || !invoice) {
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       action: "CREATE_INVOICE",
       entity: "INVOICES",
       entity_id: invoice.id,
-      metadata: { invoiceNumber: invoice.invoice_number },
+      metadata: { total: invoice.total, status: invoice.status },
     });
 
     return NextResponse.json(invoice);

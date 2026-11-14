@@ -27,30 +27,18 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import DueskLogo from "@/components/onboarding/DueskLogo";
 import Stamp from "@/components/onboarding/Stamp";
+import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
 
 const stampFont = Barlow_Condensed({ subsets: ["latin"], weight: "700", variable: "--font-stamp" });
 
 /* ------------------------------------------------------------------ */
 /* Rules (same as the server)                                          */
 /* ------------------------------------------------------------------ */
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI_RE = /^[\w.\-]{2,256}@[A-Za-z]{2,64}$/;
 const PREFIX_RE = /^[A-Za-z0-9/_\-{}]{1,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BANK_FIELDS = ["bank_name", "bank_account_no", "bank_ifsc", "upi_id"] as const;
-
-const STATE_BY_CODE: Record<string, string> = {
-  "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
-  "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim",
-  "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya",
-  "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
-  "24": "Gujarat", "25": "Daman & Diu", "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra",
-  "28": "Andhra Pradesh (old)", "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
-  "34": "Puducherry", "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
-  "97": "Other Territory",
-};
 
 /* ------------------------------------------------------------------ */
 /* Content                                                             */
@@ -615,7 +603,7 @@ export default function SetupWizardPage() {
     });
   }
 
-  const gstState = form.gstin.length >= 2 ? STATE_BY_CODE[form.gstin.slice(0, 2)] : undefined;
+  const gstState = form.gstin.length >= 2 ? stateName(form.gstin.slice(0, 2)) || undefined : undefined;
   const gstValid = GSTIN_RE.test(form.gstin);
   const bankChanged = BANK_FIELDS.some((k) => String(settings[k] ?? "").trim() !== form[k].trim());
   const sampleNumber = `${(form.invoice_prefix || "INV/").replace(/\{FY\}/gi, financialYear())}0001`;

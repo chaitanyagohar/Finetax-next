@@ -30,6 +30,7 @@ import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
+import { STATE_OPTIONS, placeOfSupplyCode, placeOfSupplyLabel, stateCodeFromGstin, stateName } from "@/lib/gst";
 
 interface LineItem {
   description: string;
@@ -106,6 +107,9 @@ function toWhatsAppNumber(raw: string): string | null {
   if (digits.length === 10) digits = "91" + digits;
   return digits.length >= 11 && digits.length <= 15 ? digits : null;
 }
+function numberOf(inv: any): string {
+  return inv?.invoice_number || "Draft";
+}
 function fyStart(today: string): string {
   const [y, m] = today.split("-").map(Number);
   return `${m >= 4 ? y : y - 1}-04-01`;
@@ -141,8 +145,7 @@ export default function InvoicesPage() {
   const [organisation, setOrganisation] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(localISODate());
   const [dueDate, setDueDate] = useState("");
-  const [isInterState, setIsInterState] = useState(false);
-  const [gstAutoNote, setGstAutoNote] = useState("");
+  const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [gstRate, setGstRate] = useState<number>(18);
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<LineItem[]>([{ description: "", qty: 1, rate: 0 }]);
@@ -182,7 +185,7 @@ export default function InvoicesPage() {
         .from("invoices")
         .select("*, clients!client_id(name, email, phone, organization_name, gstin)")
         .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, email, phone, organization_name, gstin, status").order("name", { ascending: true }),
+      supabase.from("clients").select("id, name, email, phone, organization_name, gstin, state, status").order("name", { ascending: true }),
       supabase.from("profiles").select("id, name"),
     ]);
 
@@ -257,13 +260,19 @@ export default function InvoicesPage() {
       if (statusTab === "Overdue" && !isOverdue(i)) return false;
       if (!["All", "Overdue"].includes(statusTab) && statusOf(i) !== statusTab) return false;
       if (!q) return true;
-      return [i.invoice_number, clientNameOf(i), i.organisation].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
+      return [numberOf(i), clientNameOf(i), i.organisation].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
     });
   }, [invoices, search, statusTab, clientById, today]);
 
   /* ---------------- Editor ---------------- */
 
   const isLocked = !!editingInvoice && statusOf(editingInvoice) !== "Draft";
+
+  // The database applies the same rule on save: IGST when the place of supply is outside the firm's state
+  const firmStateCode = stateCodeFromGstin(firmSettings?.gstin);
+  const isInterState = isLocked
+    ? Boolean(editingInvoice.is_inter_state ?? editingInvoice.isInterState)
+    : !!firmStateCode && !!placeOfSupply && placeOfSupply !== firmStateCode;
 
   // Real-time preview (the database recalculates identically on save)
   const subtotal = round2(items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.rate) || 0), 0));
@@ -276,28 +285,30 @@ export default function InvoicesPage() {
     return `Payment Terms: ${firmSettings?.payment_terms || "Due on Receipt"}\n\nBank Details:\nBank: ${firmSettings?.bank_name || "N/A"}\nA/C: ${firmSettings?.bank_account_no || "N/A"}\nIFSC: ${firmSettings?.bank_ifsc || "N/A"}\nUPI: ${firmSettings?.upi_id || "N/A"}`;
   }
 
-  function detectInterState(clientGstin?: string) {
-    const firm = String(firmSettings?.gstin || "").trim();
-    const client = String(clientGstin || "").trim();
-    if (firm.length >= 2 && client.length >= 2) {
-      const inter = firm.slice(0, 2) !== client.slice(0, 2);
-      setIsInterState(inter);
-      setGstAutoNote(inter ? "Auto-set to IGST: client is in a different state." : "Auto-set to CGST + SGST: client is in your state.");
-    } else {
-      setGstAutoNote("");
-    }
+  function defaultPlaceOfSupply(clientId: string): string {
+    const c = clientById[clientId];
+    return placeOfSupplyCode(c?.gstin, c?.state) || "";
+  }
+
+  function placeOfSupplyHint(): string {
+    if (isLocked) return "";
+    if (!selectedClientId) return "Taken from the client's GSTIN, or the state on the client record.";
+    if (!placeOfSupply) return "This client has no state on record. Add it on the Clients page; it is needed to issue the invoice.";
+    if (!firmStateCode) return "Add your firm's GSTIN in Settings to work out IGST or CGST + SGST.";
+    return isInterState
+      ? `IGST applies: the supply is outside ${stateName(firmStateCode)}.`
+      : `CGST + SGST apply: the supply is within ${stateName(firmStateCode)}.`;
   }
 
   function openModal(inv?: any) {
     setFormError("");
-    setGstAutoNote("");
     if (inv) {
       setEditingInvoice(inv);
       setSelectedClientId(inv.client_id || "");
       setOrganisation(inv.organisation || inv.clients?.organization_name || "");
       setInvoiceDate(issueOf(inv) || today);
       setDueDate(dueOf(inv));
-      setIsInterState(Boolean(inv.is_inter_state ?? inv.isInterState));
+      setPlaceOfSupply(inv.place_of_supply || (statusOf(inv) === "Draft" ? defaultPlaceOfSupply(inv.client_id) : ""));
       setGstRate(Number(inv.gst_rate ?? inv.gstRate ?? 18));
       setNotes(inv.notes || "");
       setItems(normalizeItems(inv.items));
@@ -309,7 +320,7 @@ export default function InvoicesPage() {
       setOrganisation("");
       setInvoiceDate(today);
       setDueDate(addDays(today, termDays(firmSettings?.payment_terms)));
-      setIsInterState(false);
+      setPlaceOfSupply("");
       setGstRate(Number(firmSettings?.default_gst_rate ?? 18));
       setNotes(defaultNotes());
       setItems([{ description: "", qty: 1, rate: 0 }]);
@@ -328,7 +339,7 @@ export default function InvoicesPage() {
     setSelectedClientId(id);
     const c = clientById[id];
     setOrganisation(c?.organization_name || "");
-    detectInterState(c?.gstin);
+    setPlaceOfSupply(defaultPlaceOfSupply(id));
   }
 
   function handleAddItem() {
@@ -363,7 +374,7 @@ export default function InvoicesPage() {
           .eq("id", editingInvoice.id);
         if (error) throw error;
         logAuditEvent("UPDATE_INVOICE", "INVOICES", editingInvoice.id, { fields: "due_date, notes" });
-        showToast("success", `Invoice ${editingInvoice.invoice_number} updated.`);
+        showToast("success", `Invoice ${numberOf(editingInvoice)} updated.`);
         setIsModalOpen(false);
         loadData(false);
         return;
@@ -379,24 +390,25 @@ export default function InvoicesPage() {
       }
       if (!(gstRate >= 0 && gstRate <= 100)) throw new Error("GST rate must be between 0 and 100.");
 
-      // Totals and the invoice number are assigned by the database
+      // The database works out the totals and the tax split. Only administrators may override
+      // the place of supply; for everyone else it follows the client record.
       const payload = {
         client_id: selectedClientId,
         organisation: organisation.trim(),
         date: invoiceDate,
         issue_date: invoiceDate,
         due_date: dueDate || null,
-        is_inter_state: isInterState,
         gst_rate: gstRate,
         notes: notes.trim(),
         items: validItems,
+        ...(isAdmin ? { place_of_supply: placeOfSupply || null } : {}),
       };
 
       if (editingInvoice) {
         const { error } = await supabase.from("invoices").update(payload).eq("id", editingInvoice.id);
         if (error) throw error;
         logAuditEvent("UPDATE_INVOICE", "INVOICES", editingInvoice.id, { total: grandTotal });
-        showToast("success", `Draft ${editingInvoice.invoice_number} saved.`);
+        showToast("success", "Draft saved.");
       } else {
         const res = await fetch("/api/invoices", {
           method: "POST",
@@ -405,7 +417,7 @@ export default function InvoicesPage() {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Could not create the invoice.");
-        showToast("success", `Invoice ${data.invoice_number} created as a draft.`);
+        showToast("success", "Draft saved. It gets its invoice number when you issue it.");
       }
 
       setIsModalOpen(false);
@@ -424,12 +436,17 @@ export default function InvoicesPage() {
     const inv = confirm?.invoice;
     if (!inv) return;
     setActionBusy(true);
-    const { error } = await supabase.from("invoices").update({ status: "Sent" }).eq("id", inv.id);
+    const { data: issued, error } = await supabase
+      .from("invoices")
+      .update({ status: "Sent" })
+      .eq("id", inv.id)
+      .select("invoice_number, date")
+      .single();
     setActionBusy(false);
     setConfirm(null);
-    if (error) return showToast("error", error.message);
-    logAuditEvent("ISSUE_INVOICE", "INVOICES", inv.id, { invoiceNumber: inv.invoice_number });
-    showToast("success", `Invoice ${inv.invoice_number} issued and locked.`);
+    if (error || !issued) return showToast("error", error?.message || "Could not issue this invoice.");
+    logAuditEvent("ISSUE_INVOICE", "INVOICES", inv.id, { invoiceNumber: issued.invoice_number });
+    showToast("success", `Invoice ${issued.invoice_number} issued, dated ${formatDate(issued.date)}.`);
     setIsModalOpen(false);
     loadData(false);
   }
@@ -443,7 +460,7 @@ export default function InvoicesPage() {
     setConfirm(null);
     if (error) return showToast("error", error.message);
     logAuditEvent("CANCEL_INVOICE", "INVOICES", inv.id, { invoiceNumber: inv.invoice_number });
-    showToast("success", `Invoice ${inv.invoice_number} cancelled. Its number stays reserved.`);
+    showToast("success", inv.invoice_number ? `Invoice ${inv.invoice_number} cancelled. Its number stays reserved.` : "Draft cancelled.");
     setIsModalOpen(false);
     loadData(false);
   }
@@ -470,21 +487,21 @@ export default function InvoicesPage() {
       });
 
       const contentType = res.headers.get("content-type") || "";
-      const data = contentType.includes("application/json") ? await res.json() : {};
-      if (!res.ok) throw new Error((data as any).error || `Server returned status ${res.status}.`);
+      const data: { error?: string; message?: string } = contentType.includes("application/json") ? await res.json() : {};
+      if (!res.ok) throw new Error(data.error || `Server returned status ${res.status}.`);
 
-      // Emailing a draft issues it
-      if (statusOf(inv) === "Draft") {
-        await supabase.from("invoices").update({ status: "Sent" }).eq("id", inv.id);
-      }
-
-      showToast("success", `Invoice ${inv.invoice_number} emailed to ${recipientEmail}.`);
-      loadData(false);
+      showToast("success", data.message || `Invoice emailed to ${recipientEmail}.`);
     } catch (err: any) {
       console.error("Send Email Error:", err);
-      showToast("error", "Failed to send the invoice email: " + (err?.message || "Unknown error"));
+      showToast("error", "The invoice email was not sent: " + (err?.message || "Unknown error"));
     } finally {
       setSendingId(null);
+      // The server issues a draft before emailing it, so reload even when the email failed
+      if (statusOf(inv) === "Draft") {
+        setIsModalOpen(false);
+        setEditingInvoice(null);
+      }
+      loadData(false);
     }
   }
 
@@ -494,7 +511,7 @@ export default function InvoicesPage() {
     const due = dueOf(inv);
     const text =
       `Dear ${clientNameOf(inv)},\n\n` +
-      `This is a gentle reminder that invoice ${inv.invoice_number} has a balance of ${formatINR(balanceOf(inv))}` +
+      `This is a gentle reminder that invoice ${numberOf(inv)} has a balance of ${formatINR(balanceOf(inv))}` +
       `${due ? ` (due ${formatDate(due)})` : ""}.\n\n` +
       `${firmSettings?.upi_id ? `UPI: ${firmSettings.upi_id}\n` : ""}` +
       `${firmSettings?.bank_account_no ? `A/C: ${firmSettings.bank_account_no} · IFSC: ${firmSettings.bank_ifsc || ""}\n` : ""}` +
@@ -729,7 +746,7 @@ export default function InvoicesPage() {
                   const balance = balanceOf(i);
                   return (
                     <tr key={i.id} className={`cursor-pointer transition hover:bg-surface-alt ${st === "Cancelled" ? "opacity-60" : ""}`} onClick={() => openModal(i)}>
-                      <td className="whitespace-nowrap font-mono font-bold text-navy">{i.invoice_number || "—"}</td>
+                      <td className={`whitespace-nowrap font-mono font-bold ${i.invoice_number ? "text-navy" : "text-text-muted"}`}>{numberOf(i)}</td>
                       <td className="whitespace-nowrap">{formatDate(issueOf(i))}</td>
                       <td>
                         <p className="font-medium text-text-main">{i.organisation || clientNameOf(i)}</p>
@@ -800,11 +817,13 @@ export default function InvoicesPage() {
       {/* ================= Invoice Editor / Viewer ================= */}
       {isModalOpen && (
         <Modal
-          title={editingInvoice ? `Invoice ${editingInvoice.invoice_number}` : "New Invoice"}
+          title={!editingInvoice ? "New Invoice" : editingInvoice.invoice_number ? `Invoice ${editingInvoice.invoice_number}` : "Draft invoice"}
           subtitle={
-            editingInvoice
-              ? `${clientNameOf(editingInvoice)} · issued ${formatDate(issueOf(editingInvoice))}`
-              : "The invoice number is assigned automatically when you save."
+            !editingInvoice
+              ? "Saved as a draft. The invoice number is assigned when you issue it."
+              : editingStatus === "Draft"
+                ? `${clientNameOf(editingInvoice)} · not issued yet`
+                : `${clientNameOf(editingInvoice)} · issued ${formatDate(issueOf(editingInvoice))}`
           }
           onClose={closeModal}
           maxWidth="max-w-4xl"
@@ -852,7 +871,7 @@ export default function InvoicesPage() {
                     onClick={() => setConfirm({ kind: "markSent", invoice: editingInvoice })}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
                   >
-                    <Lock className="h-3.5 w-3.5" /> Issue (mark as Sent)
+                    <Lock className="h-3.5 w-3.5" /> Issue invoice
                   </button>
                 )}
                 {editingInvoice && isAdmin && !["Cancelled"].includes(editingStatus) && paidOf(editingInvoice) === 0 && (
@@ -931,20 +950,26 @@ export default function InvoicesPage() {
               </div>
 
               <div>
-                <label className={labelClass}>GST Type</label>
-                <select
-                  disabled={isLocked}
-                  value={String(isInterState)}
-                  onChange={(e) => {
-                    setIsInterState(e.target.value === "true");
-                    setGstAutoNote("");
-                  }}
-                  className={inputClass}
-                >
-                  <option value="false">Intra-state (CGST + SGST)</option>
-                  <option value="true">Inter-state (IGST)</option>
-                </select>
-                {gstAutoNote && <p className="mt-1 text-[10px] text-text-muted">{gstAutoNote}</p>}
+                <label className={labelClass}>Place of supply</label>
+                {isLocked || !isAdmin ? (
+                  <input
+                    type="text"
+                    disabled
+                    value={placeOfSupplyLabel(placeOfSupply) || (isLocked ? "Not recorded" : "")}
+                    placeholder="Set from the client record"
+                    className={inputClass}
+                  />
+                ) : (
+                  <select value={placeOfSupply} onChange={(e) => setPlaceOfSupply(e.target.value)} className={inputClass}>
+                    <option value="">Select state</option>
+                    {STATE_OPTIONS.map((st) => (
+                      <option key={st.code} value={st.code}>
+                        {st.name} ({st.code})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {placeOfSupplyHint() && <p className="mt-1 text-[10px] text-text-muted">{placeOfSupplyHint()}</p>}
               </div>
 
               <div>
@@ -1110,7 +1135,7 @@ export default function InvoicesPage() {
               </div>
 
               {editingStatus === "Draft" && (
-                <p className="text-[11px] text-text-muted">Issue the invoice (send it or mark as Sent) before recording payments.</p>
+                <p className="text-[11px] text-text-muted">Issue the invoice before recording payments.</p>
               )}
 
               {loadingPayments ? (
@@ -1235,9 +1260,11 @@ export default function InvoicesPage() {
       {confirm?.kind === "email" && (
         <ConfirmDialog
           title="Email this invoice?"
-          message={`Invoice ${confirm.invoice.invoice_number} will be sent as a PDF to ${clientEmailOf(confirm.invoice)}.${
-            statusOf(confirm.invoice) === "Draft" ? " This also issues the invoice, which locks it from editing." : ""
-          }`}
+          message={
+            statusOf(confirm.invoice) === "Draft"
+              ? `This draft will be issued with the next invoice number and locked, then sent as a PDF to ${clientEmailOf(confirm.invoice)}.`
+              : `Invoice ${numberOf(confirm.invoice)} will be sent as a PDF to ${clientEmailOf(confirm.invoice)}.`
+          }
           confirmLabel="Send email"
           tone="primary"
           onConfirm={sendInvoiceEmail}
@@ -1247,7 +1274,7 @@ export default function InvoicesPage() {
       {confirm?.kind === "markSent" && (
         <ConfirmDialog
           title="Issue this invoice?"
-          message={`Invoice ${confirm.invoice.invoice_number} will be marked as Sent. Line items, amounts and the client will be locked.`}
+          message="The invoice takes the next number in your series, and its line items, amounts and client are locked. If its date is in the future, or earlier than your last issued invoice, it is dated today."
           confirmLabel="Issue invoice"
           tone="primary"
           loading={actionBusy}
@@ -1257,9 +1284,13 @@ export default function InvoicesPage() {
       )}
       {confirm?.kind === "cancel" && (
         <ConfirmDialog
-          title="Cancel this invoice?"
-          message={`Invoice ${confirm.invoice.invoice_number} will be marked Cancelled. Its number stays reserved so the GST series has no gap. This cannot be undone.`}
-          confirmLabel="Cancel invoice"
+          title={confirm.invoice.invoice_number ? "Cancel this invoice?" : "Cancel this draft?"}
+          message={
+            confirm.invoice.invoice_number
+              ? `Invoice ${confirm.invoice.invoice_number} will be marked Cancelled. Its number stays reserved so the GST series has no gap. This cannot be undone.`
+              : "This draft will be marked Cancelled. It has no invoice number, so your GST series is not affected. This cannot be undone."
+          }
+          confirmLabel={confirm.invoice.invoice_number ? "Cancel invoice" : "Cancel draft"}
           tone="danger"
           loading={actionBusy}
           onConfirm={cancelInvoice}
