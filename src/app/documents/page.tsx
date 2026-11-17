@@ -25,6 +25,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
@@ -118,8 +119,8 @@ export default function DocumentsPage() {
   async function loadData() {
     setLoading(true);
     const [dRes, cRes, pRes] = await Promise.all([
-      supabase.from("documents").select("*").order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, status").order("name", { ascending: true }),
+      fetchAll((from, to) => supabase.from("documents").select("*").order("created_at", { ascending: false }).order("id").range(from, to)),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, status").order("name", { ascending: true }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name").order("name", { ascending: true }),
     ]);
     if (dRes.error) showToast("error", "Could not load the document vault.");

@@ -23,6 +23,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
@@ -105,8 +106,8 @@ export default function PackagesPage() {
     setLoading(true);
     const [pRes, sRes, cRes, tRes, ttRes] = await Promise.all([
       supabase.from("service_packages").select("*, package_services(*)").order("created_at", { ascending: false }),
-      supabase.from("client_packages").select("*").order("start_date", { ascending: false }),
-      supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, assigned_to, status").order("name", { ascending: true }),
+      fetchAll((from, to) => supabase.from("client_packages").select("*").order("start_date", { ascending: false }).order("id").range(from, to)),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, assigned_to, status").order("name", { ascending: true }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name, role, is_active, is_reviewer").order("name", { ascending: true }),
       supabase.from("task_types").select("*").order("category", { ascending: true }).order("name", { ascending: true }),
     ]);

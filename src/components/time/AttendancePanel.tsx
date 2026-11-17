@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Loader2, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { formatDate } from "@/lib/format";
 
 function hm(mins: number): string {
@@ -26,8 +27,8 @@ export default function AttendancePanel({ from, to, team }: { from: string; to: 
     (async () => {
       setLoading(true);
       const [dRes, lRes] = await Promise.all([
-        supabase.from("user_activity_days").select("*").gte("day", from).lte("day", to),
-        supabase.from("time_logs").select("user_id, log_date, hours").gte("log_date", from).lte("log_date", to),
+        fetchAll((start, end) => supabase.from("user_activity_days").select("*").gte("day", from).lte("day", to).order("day").order("user_id").range(start, end)),
+        fetchAll((start, end) => supabase.from("time_logs").select("user_id, log_date, hours").gte("log_date", from).lte("log_date", to).order("id").range(start, end)),
       ]);
       setDays(dRes.data || []);
       setLogs(lRes.data || []);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   Plus,
@@ -30,6 +30,7 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Task, Client, Profile, TaskStage } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -91,6 +92,9 @@ const labelClass = "mb-1 block text-[11px] font-semibold uppercase tracking-wide
 function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((Date.parse(toIso.slice(0, 10)) - Date.parse(fromIso.slice(0, 10))) / 86400000);
 }
+// Completed tasks older than this stay in the database until someone asks for them.
+const COMPLETED_WINDOW_DAYS = 90;
+
 function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   return localISODate(new Date(y, m - 1, d + days));
@@ -271,6 +275,9 @@ export default function TasksPage() {
 
   const today = localISODate();
   const periodOptions = useMemo(() => periodSuggestions(today), [today]);
+  const [showAllCompleted, setShowAllCompleted] = useState(false);
+  // Reloads after a save come from many handlers; they read the choice from here.
+  const showAllCompletedRef = useRef(false);
 
   useEffect(() => {
     loadData();
@@ -295,9 +302,31 @@ export default function TasksPage() {
   useEffect(() => {
     if (!taskParam || loading) return;
     const target = tasks.find((x) => x.id === taskParam);
-    if (target) openModal(target);
-    router.replace("/tasks");
+    if (target) {
+      openModal(target);
+      router.replace("/tasks");
+      return;
+    }
+    // Links can point at a task completed long ago, which is not in the loaded list.
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("id", taskParam)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setTasks((prev) => (prev.some((x) => x.id === data.id) ? prev : [...prev, data as TaskRow]));
+          openModal(data as TaskRow);
+        }
+        router.replace("/tasks");
+      });
   }, [taskParam, loading, tasks]);
+
+  function showAllCompletedTasks() {
+    showAllCompletedRef.current = true;
+    setShowAllCompleted(true);
+    loadData(false);
+  }
 
   function showToast(type: "success" | "error", message: string) {
     setToast({ type, message });
@@ -313,21 +342,28 @@ export default function TasksPage() {
     if (!me) return;
     if (showSpinner) setLoading(true);
 
-    let query = supabase.from("tasks").select("*").order("due_date", { ascending: true });
-    if (!isAdmin) {
-      query = query.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`);
-    }
+    const scoped = <Q extends { or: (filter: string) => Q }>(q: Q) => (isAdmin ? q : q.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`));
+    const since = addDays(today, -COMPLETED_WINDOW_DAYS);
 
-    const [tRes, cRes, pRes] = await Promise.all([
-      query,
-      supabase.from("clients").select("id, name, email, phone, pan, gstin, organization_name, status").order("name", { ascending: true }),
+    const [openRes, doneRes, cRes, pRes] = await Promise.all([
+      fetchAll<TaskRow>((from, to) =>
+        scoped(supabase.from("tasks").select("*").neq("stage", "Approved")).order("due_date", { ascending: true }).order("id").range(from, to)
+      ),
+      fetchAll<TaskRow>((from, to) => {
+        let q = scoped(supabase.from("tasks").select("*").eq("stage", "Approved"));
+        if (!showAllCompletedRef.current) q = q.or(`stage_changed_at.gte.${since},and(stage_changed_at.is.null,due_date.gte.${since})`);
+        return q.order("due_date", { ascending: true }).order("id").range(from, to);
+      }),
+      fetchAll<ClientRow>((from, to) =>
+        supabase.from("clients").select("id, name, email, phone, pan, gstin, organization_name, status").order("name", { ascending: true }).order("id").range(from, to)
+      ),
       supabase.from("profiles").select("id, name, email, role, is_active, is_reviewer").order("name", { ascending: true }),
       loadTaskTypes(),
     ]);
 
-    if (tRes.error) showToast("error", "Could not load tasks. Please refresh the page.");
-    if (tRes.data) setTasks(tRes.data as TaskRow[]);
-    if (cRes.data) setClients(cRes.data as ClientRow[]);
+    if (openRes.error || doneRes.error) showToast("error", "Could not load tasks. Please refresh the page.");
+    else setTasks([...openRes.data, ...doneRes.data].sort((a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999"))));
+    if (!cRes.error) setClients(cRes.data);
     if (pRes.data) setTeam(pRes.data as ProfileRow[]);
     setLoading(false);
   }
@@ -1196,6 +1232,14 @@ export default function TasksPage() {
                 </button>
               )}
             </div>
+            {!showAllCompleted && (
+              <p className="mt-2 text-[11px] text-text-muted">
+                Completed tasks from the last {COMPLETED_WINDOW_DAYS} days are shown.{" "}
+                <button type="button" onClick={showAllCompletedTasks} className="font-semibold text-navy hover:underline">
+                  Show all completed tasks
+                </button>
+              </p>
+            )}
           </div>
         )}
 
