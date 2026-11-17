@@ -31,7 +31,7 @@ import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import EngagementSettingsButton from "@/components/packages/EngagementSettings";
 import ProposalsPanel, { ProposalComposer } from "@/components/packages/Proposals";
 import SubscriptionBilling from "@/components/packages/SubscriptionBilling";
-import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
+import { compactINR, formatDate, formatINR, localISODate, ordinal } from "@/lib/format";
 import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
 
 const CYCLES = ["Monthly", "Quarterly", "Half-Yearly", "Yearly"];
@@ -78,7 +78,7 @@ export default function PackagesPage() {
   const [price, setPrice] = useState("");
   const [legal, setLegal] = useState({ scope_of_work: "", exclusions: "", client_responsibilities: "", special_terms: "" });
   const [billing, setBilling] = useState({ gst_rate: 18, bill_day: 5, due_days: 5, late_fee_percent: 1.5, late_fee_min: 100, prorate_first: true });
-  const [serviceTemplates, setServiceTemplates] = useState<ServiceRow[]>([{ ...EMPTY_SERVICE, title: "GSTR-3B Return Filing", days_due_offset: 20 }]);
+  const [serviceTemplates, setServiceTemplates] = useState<ServiceRow[]>([{ ...EMPTY_SERVICE, title: "GSTR-3B return filing", days_due_offset: 20 }]);
   const [pkgSaving, setPkgSaving] = useState(false);
   const [pkgError, setPkgError] = useState("");
 
@@ -193,7 +193,7 @@ export default function PackagesPage() {
         special_terms: "",
       });
       setBilling({ gst_rate: 18, bill_day: 5, due_days: 5, late_fee_percent: 1.5, late_fee_min: 100, prorate_first: true });
-      setServiceTemplates([{ ...EMPTY_SERVICE, title: "GSTR-3B Return Filing", days_due_offset: 20 }]);
+      setServiceTemplates([{ ...EMPTY_SERVICE, title: "GSTR-3B return filing", days_due_offset: 20 }]);
     }
     setIsPkgModalOpen(true);
   }
@@ -386,17 +386,17 @@ export default function PackagesPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Layers className="h-5 w-5 text-navy" /> Service Packages
+            <Layers className="h-5 w-5 text-navy" /> Service packages
           </h2>
           <p className="mt-1 text-xs text-text-muted">Retainers, engagement letters and automatic recurring billing.</p>
         </div>
         <div data-tour="pkg-actions" className="flex w-full flex-wrap gap-2 lg:w-auto">
           <EngagementSettingsButton />
           <button type="button" onClick={() => setComposerFor(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt">
-            <FileSignature className="h-4 w-4 text-navy" /> New Proposal
+            <FileSignature className="h-4 w-4 text-navy" /> New proposal
           </button>
           <button type="button" data-tour="pkg-new" onClick={() => openPkgModal()} className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
-            <Plus className="h-4 w-4" /> Create Package
+            <Plus className="h-4 w-4" /> Create package
           </button>
         </div>
       </div>
@@ -404,10 +404,10 @@ export default function PackagesPage() {
       {/* KPI cards */}
       <div data-tour="pkg-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
-          { label: "Active Packages", value: String(stats.packages), sub: "Available for proposals", icon: Layers, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
-          { label: "Active Subscriptions", value: String(stats.subscriptions), sub: "Clients on retainers", icon: Users, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
-          { label: "Monthly Recurring (MRR)", value: compactINR(stats.mrr), sub: "Normalised to one month", icon: IndianRupee, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
-          { label: "Annual Recurring (ARR)", value: compactINR(stats.arr), sub: "MRR × 12", icon: RefreshCw, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
+          { label: "Active packages", value: String(stats.packages), sub: "Available for proposals", icon: Layers, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
+          { label: "Active subscriptions", value: String(stats.subscriptions), sub: "Clients on retainers", icon: Users, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+          { label: "Monthly recurring (MRR)", value: compactINR(stats.mrr), sub: "Normalised to one month", icon: IndianRupee, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
+          { label: "Annual recurring (ARR)", value: compactINR(stats.arr), sub: "MRR × 12", icon: RefreshCw, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
         ].map((k) => {
           const Icon = k.icon;
           return (
@@ -511,7 +511,7 @@ export default function PackagesPage() {
                       </div>
 
                       <p className="text-[10px] text-text-muted">
-                        Bills on the {pkg.bill_day ?? 5}th · due in {pkg.due_days ?? 5} days · late fee {Number(pkg.late_fee_percent ?? 1.5)}%/month (min {formatINR(Number(pkg.late_fee_min ?? 100))})
+                        Bills on the {ordinal(Number(pkg.bill_day ?? 5))} · due in {pkg.due_days ?? 5} days · late fee {Number(pkg.late_fee_percent ?? 1.5)}%/month (min {formatINR(Number(pkg.late_fee_min ?? 100))})
                         {pkg.scope_of_work || pkg.exclusions ? " · engagement terms set" : ""}
                       </p>
 
@@ -546,7 +546,7 @@ export default function PackagesPage() {
                       {pkg.is_active !== false && (
                         <>
                           <button type="button" onClick={() => setComposerFor(pkg.id)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-semibold text-white transition hover:bg-navy-light">
-                            <FileSignature className="h-4 w-4" /> Send Proposal
+                            <FileSignature className="h-4 w-4" /> Send proposal
                           </button>
                           <button type="button" onClick={() => openOnboard(pkg)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-navy transition hover:bg-surface-alt" title="Onboard directly without a proposal">
                             <UserCheck className="h-4 w-4" /> Onboard
@@ -605,7 +605,7 @@ export default function PackagesPage() {
                 <input value={pkgName} onChange={(e) => setPkgName(e.target.value)} className={inputClass} placeholder="e.g. Complete GST Retainer" maxLength={120} />
               </div>
               <div>
-                <label className={labelClass}>Billing Cycle</label>
+                <label className={labelClass}>Billing cycle</label>
                 <select value={billingCycle} onChange={(e) => setBillingCycle(e.target.value)} className={inputClass}>
                   {CYCLES.map((c) => (
                     <option key={c}>{c}</option>
@@ -634,7 +634,7 @@ export default function PackagesPage() {
                 <div key={srv.id || `new-${idx}`} className="grid grid-cols-2 items-center gap-2 rounded-lg border border-border bg-surface-alt p-2 sm:grid-cols-12">
                   <div className="col-span-2 space-y-1 sm:col-span-4">
                     <select value={srv.task_type_id} onChange={(e) => linkTaskType(idx, e.target.value)} className={smallInput}>
-                      <option value="">Custom (not in Task List)</option>
+                      <option value="">Custom (not in task list)</option>
                       {typeGroups.map(([cat, list]) => (
                         <optgroup key={cat} label={cat}>
                           {list.map((t: any) => (
@@ -663,7 +663,7 @@ export default function PackagesPage() {
                     ))}
                   </select>
                   <select value={srv.default_assignee_id} onChange={(e) => updateTemplateField(idx, "default_assignee_id", e.target.value)} className={`${smallInput} sm:col-span-2`}>
-                    <option value="">Client's RM</option>
+                    <option value="">Client&apos;s RM</option>
                     {activeTeam.map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
@@ -693,7 +693,7 @@ export default function PackagesPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-text-muted">Leave a blank line between separate points. Firm-wide clauses are set under "Engagement Terms".</p>
+              <p className="text-[10px] text-text-muted">Leave a blank line between separate points. Firm-wide clauses are set under &quot;Engagement Terms&quot;.</p>
             </div>
 
             {/* Billing defaults */}

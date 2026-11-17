@@ -5,8 +5,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { cleanMemberInput, inviteNewPerson, sendInvitationNotice } from "@/lib/team/members";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTIONS = ["update", "deactivate", "reactivate", "resend_invite", "cancel_invite"];
 
 /** Change a member's role, modules and status in the caller's firm only. */

@@ -13,6 +13,9 @@ import { checkRateLimit } from "@/lib/api/rateLimit";
 import { verifyCallerPassword } from "@/lib/api/reauth";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { GSTIN_RE, PAN_RE } from "@/lib/gst";
+import { EMAIL_RE } from "@/lib/validate";
+
+const SAC_RE = /^\d{4,8}$/;
 
 const TEXT_FIELDS = [
   "firm_name",
@@ -38,7 +41,6 @@ const UPPERCASE_FIELDS = ["gstin", "pan", "bank_ifsc"];
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI_RE = /^[\w.\-]{2,256}@[A-Za-z]{2,64}$/;
 const PREFIX_RE = /^[A-Za-z0-9/_\-{}]{1,20}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function mask(field: string, value: string): string {
   if (!value) return "(empty)";
@@ -58,6 +60,7 @@ function validate(s: Record<string, any>) {
   if (s.gstin && s.pan && s.gstin.slice(2, 12) !== s.pan) throw new ApiError(400, "The GSTIN does not belong to this PAN.");
   if (s.bank_ifsc && !IFSC_RE.test(s.bank_ifsc)) throw new ApiError(400, "Invalid IFSC code.");
   if (s.upi_id && !UPI_RE.test(s.upi_id)) throw new ApiError(400, "Invalid UPI ID.");
+  if (s.default_sac && !SAC_RE.test(s.default_sac)) throw new ApiError(400, "The SAC code is 4 to 8 digits, e.g. 998231.");
   if (s.bank_account_no && !/^[0-9]{9,18}$/.test(s.bank_account_no)) throw new ApiError(400, "Account number must be 9 to 18 digits.");
   if (!s.invoice_prefix || !PREFIX_RE.test(s.invoice_prefix)) {
     throw new ApiError(400, "Invoice prefix may only use letters, numbers, / - _ and tokens like {FY}.");
@@ -95,6 +98,8 @@ export async function POST(request: NextRequest) {
       next[field] = v;
     }
     next.default_gst_rate = Number(input.default_gst_rate ?? 18);
+    // Only when sent, so the setup wizard (which doesn't show it) can't blank it
+    if ("default_sac" in input) next.default_sac = String(input.default_sac ?? "").replace(/\s/g, "").slice(0, 8) || null;
     next.enable_email_alerts = Boolean(input.enable_email_alerts);
 
     validate(next);

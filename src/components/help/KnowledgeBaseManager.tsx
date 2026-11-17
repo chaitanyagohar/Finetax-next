@@ -151,10 +151,10 @@ export default function KnowledgeBaseManager({ draft, onClose }: { draft: KbDraf
 
         {needsWork.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="mb-1.5 font-bold text-amber-800">Answers that often don't solve the problem</p>
+            <p className="mb-1.5 font-bold text-amber-800">Answers that often don&apos;t solve the problem</p>
             {needsWork.map((a) => (
               <p key={a.id} className="text-amber-900">
-                {a.title} · shown {a.s.shown}, solved {a.s.solved}, didn't work {a.s.not_solved}
+                {a.title} · shown {a.s.shown}, solved {a.s.solved}, didn&apos;t work {a.s.not_solved}
               </p>
             ))}
             <p className="mt-1.5 text-[10px] text-amber-700">Built-in answers live in src/lib/help/troubleshooting.ts. Add a better answer here, or improve that file.</p>
@@ -167,7 +167,7 @@ export default function KnowledgeBaseManager({ draft, onClose }: { draft: KbDraf
               <tr>
                 <th>Answer added by your team</th>
                 <th>Area</th>
-                <th className="text-right">Shown / Solved</th>
+                <th className="text-right">Shown / solved</th>
                 <th />
               </tr>
             </thead>
@@ -175,7 +175,7 @@ export default function KnowledgeBaseManager({ draft, onClose }: { draft: KbDraf
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-5 text-center text-text-muted">
-                    None yet. Use **Save as answer** on a conversation you've solved, or **Add an answer**.
+                    None yet. Use **Save as answer** on a conversation you&apos;ve solved, or **Add an answer**.
                   </td>
                 </tr>
               ) : (

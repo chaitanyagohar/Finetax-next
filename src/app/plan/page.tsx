@@ -99,7 +99,7 @@ export default function PlanPage() {
                   </Link>
                 </p>
               )}
-              {overClients && <p className={overUsers ? "mt-2" : ""}>You can't add new clients until you're under the limit. Marking old clients inactive frees up space.</p>}
+              {overClients && <p className={overUsers ? "mt-2" : ""}>You can&apos;t add new clients until you&apos;re under the limit. Marking old clients inactive frees up space.</p>}
             </div>
           )}
           <a href={upgradeHref} className="inline-flex w-full items-center justify-center rounded-lg bg-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-light">

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Building2, CheckCircle2, Loader2, Plus, Search } from "lucide-react";
-import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/format";
 
 type Firm = {
@@ -103,9 +103,22 @@ export default function OwnerConsolePage() {
     await changeFirm(f, { extendTrialDays: days });
   }
 
-  async function changeFirm(f: Firm, patch: { status?: string; plan?: string; extendTrialDays?: number }) {
-    if (patch.status === "suspended" && !window.confirm(`Suspend ${f.name}? Everyone in this firm will be locked out until you reactivate it.`)) return;
-    if (patch.status === "cancelled" && !window.confirm(`Mark ${f.name} as cancelled? Everyone in this firm will be locked out.`)) return;
+  // In-app confirmation instead of the browser's pop-up
+  const [ask, setAsk] = useState<{ title: string; message: string; label: string; run: () => Promise<void> } | null>(null);
+
+  async function changeFirm(f: Firm, patch: { status?: string; plan?: string; extendTrialDays?: number }, confirmed = false) {
+    if (!confirmed && (patch.status === "suspended" || patch.status === "cancelled")) {
+      const suspend = patch.status === "suspended";
+      setAsk({
+        title: suspend ? "Suspend firm" : "Cancel firm",
+        message: suspend
+          ? `Suspend ${f.name}? Everyone in this firm will be locked out until you reactivate it.`
+          : `Mark ${f.name} as cancelled? Everyone in this firm will be locked out.`,
+        label: suspend ? "Suspend" : "Mark cancelled",
+        run: () => changeFirm(f, patch, true),
+      });
+      return;
+    }
     setBusyId(f.id);
     setError("");
     const res = await fetch(`/api/owner/firms/${f.id}`, {
@@ -144,11 +157,24 @@ export default function OwnerConsolePage() {
 
   return (
     <div className="space-y-6">
+      {ask && (
+        <ConfirmDialog
+          title={ask.title}
+          message={ask.message}
+          confirmLabel={ask.label}
+          onCancel={() => setAsk(null)}
+          onConfirm={async () => {
+            const run = ask.run;
+            setAsk(null);
+            await run();
+          }}
+        />
+      )}
       {/* Header */}
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Building2 className="h-5 w-5 text-navy" /> Owner Console
+            <Building2 className="h-5 w-5 text-navy" /> Owner console
           </h2>
           <p className="mt-1 text-xs text-text-muted">Every firm on Duesk, with usage counts only. Firm client data is never shown here.</p>
         </div>
@@ -398,7 +424,7 @@ export default function OwnerConsolePage() {
                 placeholder="At least 8 characters, a letter and a number"
                 autoComplete="new-password"
               />
-              <p className="mt-1 text-[10px] text-text-muted">Share it with the admin securely. They can change it with "Forgot password".</p>
+              <p className="mt-1 text-[10px] text-text-muted">Share it with the admin securely. They can change it with &quot;Forgot password&quot;.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -432,7 +458,7 @@ export default function OwnerConsolePage() {
                 className="mt-0.5"
               />
               <span>
-                <span className="font-semibold text-text-main">Start with the standard Task List and categories</span>
+                <span className="font-semibold text-text-main">Start with the standard task list and categories</span>
                 <span className="block text-[10px] text-text-muted">
                   Copies the compliance task types (GST, TDS, ITR…) and categories from the template firm. Only the list is copied, never any client data.
                 </span>

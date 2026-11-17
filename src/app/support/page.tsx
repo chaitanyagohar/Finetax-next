@@ -61,11 +61,13 @@ export default function SupportInboxPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   selectedRef.current = selected;
 
+  // Ticket numbers restart in every firm, so the central inbox shows the firm with them (B-21)
+  const ticketRef = (t: any) => (t.organizations?.name ? `${t.organizations.name} ${t.number}` : t.number);
   const names = useMemo(() => Object.fromEntries(Object.values(people).map((p: any) => [p.id, p.name])), [people]);
   const agents = Object.values(people).filter((p: any) => p.is_support_agent);
 
   const loadTickets = useCallback(async () => {
-    const { data } = await supabase.from("support_tickets").select("*").order("last_message_at", { ascending: false }).limit(300);
+    const { data } = await supabase.from("support_tickets").select("*, organizations(name)").order("last_message_at", { ascending: false }).limit(300);
     setTickets(data || []);
     setLoading(false);
     const sel = selectedRef.current;
@@ -122,7 +124,7 @@ export default function SupportInboxPage() {
   const visible = tickets.filter(
     (t) =>
       matches(t, filter) &&
-      (!search || `${t.number} ${t.subject} ${names[t.user_id] || ""} ${t.ai_summary || ""}`.toLowerCase().includes(search.toLowerCase()))
+      (!search || `${ticketRef(t)} ${t.subject} ${names[t.user_id] || ""} ${t.ai_summary || ""}`.toLowerCase().includes(search.toLowerCase()))
   );
 
   async function act(action: string, payload: Record<string, unknown> = {}) {
@@ -207,7 +209,7 @@ export default function SupportInboxPage() {
                   <div className="mt-1 flex items-center gap-1">
                     <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${STATUS_TONE[t.status] || ""}`}>{t.kind === "feedback" ? "Feedback" : t.status === "ai" ? "AI" : t.status}</span>
                     {t.priority === "urgent" && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">Urgent</span>}
-                    <span className="text-[9px] text-text-muted">{t.number}</span>
+                    <span className="text-[9px] text-text-muted">{ticketRef(t)}</span>
                     {t.rating ? (
                       <span className="ml-auto flex items-center text-[9px] text-amber-600">
                         <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
@@ -231,7 +233,7 @@ export default function SupportInboxPage() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-text-main">
-                      {selected.number} · {selected.subject}
+                      {ticketRef(selected)} · {selected.subject}
                     </p>
                     <p className="text-[11px] text-text-muted">
                       {requester?.name || "User"} ({requester?.role || "staff"}) · {requester?.email || ""} · on {selected.page_path || "unknown page"} · started {ago(selected.created_at)}

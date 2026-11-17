@@ -40,17 +40,17 @@ import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import PasswordInput from "@/components/ui/PasswordInput";
 import ConfirmOwnership from "@/components/inbox/ConfirmOwnership";
 import MailboxAccess from "@/components/inbox/MailboxAccess";
 import { formatDate, localISODate } from "@/lib/format";
+import { EMAIL_RE } from "@/lib/validate";
 
 const PAGE_SIZE = 100;
 
 type MailboxRef = { id: string; email_address: string };
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PROVIDERS = [
   { key: "gmail", label: "Gmail / Google Workspace", smtpHost: "smtp.gmail.com", smtpPort: 587, imapHost: "imap.gmail.com", imapPort: 993, help: "Use a Google App Password (Google Account → Security → App passwords), not your normal password." },
@@ -60,6 +60,8 @@ const PROVIDERS = [
   { key: "titan", label: "Titan / GoDaddy", smtpHost: "smtp.titan.email", smtpPort: 465, imapHost: "imap.titan.email", imapPort: 993, help: "Use the Titan mailbox password." },
   { key: "custom", label: "Other (custom server)", smtpHost: "", smtpPort: 587, imapHost: "", imapPort: 993, help: "Ask your email provider for SMTP and IMAP settings." },
 ];
+
+type SystemFile = { kind: "invoice" | "quotation" | "link"; id?: string; url?: string; name: string; type: string };
 
 type Attachment =
   | { kind: "file"; name: string; file: File }
@@ -95,7 +97,8 @@ export default function UnifiedInboxPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
-  const [systemFiles, setSystemFiles] = useState<{ kind: "invoice" | "quotation" | "link"; id?: string; url?: string; name: string; type: string }[]>([]);
+  const [systemFiles, setSystemFiles] = useState<SystemFile[]>([]);
+  const [fileResults, setFileResults] = useState<{ term: string; files: SystemFile[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -192,19 +195,35 @@ export default function UnifiedInboxPage() {
     setClients(data);
   }
 
-  async function loadSystemFiles() {
+  /** The latest 200 of each kind, or, with a search, matches from all of them (the whole firm's history). */
+  async function fetchSystemFiles(search?: string): Promise<SystemFile[]> {
+    // Characters with a meaning in the filter syntax are dropped
+    const term = (search || "").replace(/[,()%_*\\]/g, " ").replace(/\s+/g, " ").trim();
+    const like = `%${term}%`;
+    let docQ = supabase.from("documents").select("id, title, file_url").not("file_url", "is", null);
+    let invQ = supabase.from("invoices").select("id, invoice_number, organisation").neq("status", "Cancelled");
+    let quoQ = supabase.from("quotations").select("id, quote_number, organisation");
+    if (term) {
+      docQ = docQ.ilike("title", like);
+      invQ = invQ.or(`invoice_number.ilike.${like},organisation.ilike.${like}`);
+      quoQ = quoQ.or(`quote_number.ilike.${like},organisation.ilike.${like}`);
+    }
+    const limit = term ? 50 : 200;
     const [docRes, invRes, quoRes] = await Promise.all([
-      supabase.from("documents").select("id, title, file_url").not("file_url", "is", null).order("created_at", { ascending: false }).limit(200),
-      supabase.from("invoices").select("id, invoice_number, status").neq("status", "Cancelled").order("created_at", { ascending: false }).limit(200),
-      supabase.from("quotations").select("id, quote_number").order("created_at", { ascending: false }).limit(200),
+      docQ.order("created_at", { ascending: false }).limit(limit),
+      invQ.order("created_at", { ascending: false }).limit(limit),
+      quoQ.order("created_at", { ascending: false }).limit(limit),
     ]);
-    setSystemFiles([
-      ...(invRes.data || []).map((i: any) => ({ kind: "invoice" as const, id: i.id, name: `Invoice ${i.invoice_number || i.id.slice(0, 6)}`, type: "Invoice PDF" })),
-      ...(quoRes.data || []).map((q: any) => ({ kind: "quotation" as const, id: q.id, name: `Quotation ${q.quote_number || q.id.slice(0, 6)}`, type: "Quotation PDF" })),
-      ...(docRes.data || [])
-        .filter((d: any) => d.file_url)
-        .map((d: any) => ({ kind: "link" as const, url: d.file_url, name: d.title || "Document", type: "Vault link" })),
-    ]);
+    const withOrg = (label: string, org?: string | null) => (org ? `${label} · ${org}` : label);
+    return [
+      ...(invRes.data || []).map((i: any) => ({ kind: "invoice" as const, id: i.id, name: withOrg(`Invoice ${i.invoice_number || i.id.slice(0, 6)}`, i.organisation), type: "Invoice PDF" })),
+      ...(quoRes.data || []).map((q: any) => ({ kind: "quotation" as const, id: q.id, name: withOrg(`Quotation ${q.quote_number || q.id.slice(0, 6)}`, q.organisation), type: "Quotation PDF" })),
+      ...(docRes.data || []).map((d: any) => ({ kind: "link" as const, url: d.file_url, name: d.title || "Document", type: "Vault link" })),
+    ];
+  }
+
+  async function loadSystemFiles() {
+    setSystemFiles(await fetchSystemFiles());
   }
 
   function messageQuery() {
@@ -579,7 +598,19 @@ export default function UnifiedInboxPage() {
 
   /* ---------------- Render ---------------- */
 
-  const filteredSystemFiles = systemFiles.filter((f) => !fileSearch || f.name.toLowerCase().includes(fileSearch.toLowerCase()));
+  const fileTerm = fileSearch.trim();
+  useEffect(() => {
+    if (fileTerm.length < 2) return;
+    const timer = window.setTimeout(async () => {
+      const files = await fetchSystemFiles(fileTerm);
+      setFileResults({ term: fileTerm, files });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [fileTerm]);
+  const filteredSystemFiles =
+    fileTerm.length >= 2 && fileResults?.term === fileTerm
+      ? fileResults.files
+      : systemFiles.filter((f) => !fileTerm || f.name.toLowerCase().includes(fileTerm.toLowerCase()));
 
   return (
     <div className="flex h-[calc(100vh-8.5rem)] min-h-[520px] overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
@@ -587,7 +618,7 @@ export default function UnifiedInboxPage() {
       <div className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface-alt md:flex">
         <div className="border-b border-border p-3">
           <select data-tour="inbox-mailbox" value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className={`${inputClass} text-xs font-semibold text-navy`}>
-            <option value="all">All Inboxes</option>
+            <option value="all">All inboxes</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.email_address}
@@ -601,8 +632,8 @@ export default function UnifiedInboxPage() {
           {(
             [
               { key: "inbox", label: "Inbox", icon: Inbox, badge: unreadCount },
-              { key: "sent", label: "Sent Mail", icon: Send, badge: 0 },
-              { key: "settings", label: "Connected Accounts", icon: Settings, badge: 0 },
+              { key: "sent", label: "Sent mail", icon: Send, badge: 0 },
+              { key: "settings", label: "Connected accounts", icon: Settings, badge: 0 },
             ] as const
           ).map((f) => {
             const Icon = f.icon;
@@ -665,10 +696,10 @@ export default function UnifiedInboxPage() {
             <option value="sent">Sent</option>
             <option value="settings">Accounts</option>
           </select>
-          <button type="button" onClick={handleSyncEmails} disabled={isSyncing} className="rounded-lg border border-border p-2 text-navy">
+          <button type="button" onClick={handleSyncEmails} disabled={isSyncing} aria-label="Fetch new mail" className="rounded-lg border border-border p-2 text-navy">
             <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
           </button>
-          <button type="button" onClick={() => openCompose()} className="rounded-lg bg-navy p-2 text-white">
+          <button type="button" onClick={() => openCompose()} aria-label="New message" className="rounded-lg bg-navy p-2 text-white">
             <Plus className="h-4 w-4" />
           </button>
         </div>
@@ -678,7 +709,7 @@ export default function UnifiedInboxPage() {
           <div className="flex-1 space-y-6 overflow-y-auto p-5">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div>
-                <h2 className="text-lg font-bold text-navy">Firm Email Accounts</h2>
+                <h2 className="text-lg font-bold text-navy">Firm email accounts</h2>
                 <p className="text-xs text-text-muted">Passwords are encrypted in the database and never shown again.</p>
               </div>
             </div>
@@ -810,7 +841,7 @@ export default function UnifiedInboxPage() {
             {isAdmin ? (
               <form onSubmit={handleAddAccount} className="max-w-2xl space-y-4 rounded-xl border border-border bg-surface-alt p-5">
                 <h3 className="flex items-center gap-2 text-sm font-bold text-text-main">
-                  <Plus className="h-4 w-4 text-navy" /> Connect an Email Account
+                  <Plus className="h-4 w-4 text-navy" /> Connect an email account
                 </h3>
 
                 {accountError && (
@@ -821,7 +852,7 @@ export default function UnifiedInboxPage() {
                 )}
 
                 <div>
-                  <label className={labelClass}>Email Provider</label>
+                  <label className={labelClass}>Email provider</label>
                   <select value={providerKey} onChange={(e) => chooseProvider(e.target.value)} className={inputClass}>
                     {PROVIDERS.map((p) => (
                       <option key={p.key} value={p.key}>{p.label}</option>
@@ -832,16 +863,16 @@ export default function UnifiedInboxPage() {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Email Address</label>
+                    <label className={labelClass}>Email address</label>
                     <input required type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={inputClass} placeholder="billing@firm.com" />
                   </div>
                   <div>
-                    <label className={labelClass}>Display Name</label>
+                    <label className={labelClass}>Display name</label>
                     <input required type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className={inputClass} placeholder="Firm Billing" />
                   </div>
                 </div>
 
-                <PasswordInput label="App Password / Mailbox Password" value={smtpPass} onChange={setSmtpPass} autoComplete="new-password" hint="Encrypted the moment you save. Nobody, including admins, can view it again." />
+                <PasswordInput label="App password / mailbox password" value={smtpPass} onChange={setSmtpPass} autoComplete="new-password" hint="Encrypted the moment you save. Nobody, including admins, can view it again." />
 
                 <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy">
                   <ChevronDown className={`h-3.5 w-3.5 transition ${showAdvanced ? "rotate-180" : ""}`} /> Server settings
@@ -849,19 +880,19 @@ export default function UnifiedInboxPage() {
                 {showAdvanced && (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="col-span-2 sm:col-span-1">
-                      <label className={labelClass}>SMTP Host</label>
+                      <label className={labelClass}>SMTP host</label>
                       <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} className={`${inputClass} font-mono text-xs`} />
                     </div>
                     <div>
-                      <label className={labelClass}>SMTP Port</label>
+                      <label className={labelClass}>SMTP port</label>
                       <input value={smtpPort} onChange={(e) => setSmtpPort(e.target.value.replace(/\D/g, ""))} className={`${inputClass} font-mono text-xs`} />
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <label className={labelClass}>IMAP Host</label>
+                      <label className={labelClass}>IMAP host</label>
                       <input value={imapHost} onChange={(e) => setImapHost(e.target.value)} className={`${inputClass} font-mono text-xs`} />
                     </div>
                     <div>
-                      <label className={labelClass}>IMAP Port</label>
+                      <label className={labelClass}>IMAP port</label>
                       <input value={imapPort} onChange={(e) => setImapPort(e.target.value.replace(/\D/g, ""))} className={`${inputClass} font-mono text-xs`} />
                     </div>
                   </div>
@@ -1072,7 +1103,7 @@ export default function UnifiedInboxPage() {
       {/* ================= Compose ================= */}
       {isComposing && (
         <Modal
-          title="New Message"
+          title="New message"
           onClose={() => !sending && setIsComposing(false)}
           maxWidth="max-w-2xl"
           footer={
@@ -1102,7 +1133,7 @@ export default function UnifiedInboxPage() {
                           autoFocus
                           value={fileSearch}
                           onChange={(e) => setFileSearch(e.target.value)}
-                          placeholder="Search invoices, quotations, documents..."
+                          placeholder="Search all invoices, quotations and documents"
                           className="w-full rounded-md border border-border px-2 py-1.5 text-xs outline-none focus:border-navy"
                         />
                       </div>
@@ -1268,7 +1299,7 @@ export default function UnifiedInboxPage() {
             </div>
           }
         >
-          <PasswordInput label="New App Password / Mailbox Password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" autoFocus hint="Replaces the stored password. It is encrypted immediately." />
+          <PasswordInput label="New app password / mailbox password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" autoFocus hint="Replaces the stored password. It is encrypted immediately." />
         </Modal>
       )}
 

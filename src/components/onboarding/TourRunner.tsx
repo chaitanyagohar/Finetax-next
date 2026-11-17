@@ -115,7 +115,10 @@ export default function TourRunner({ steps, onClose }: { steps: TourStep[]; onCl
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose(false);
-      if (e.key === "ArrowRight") (isLast ? onClose(true) : setIndex((i) => i + 1));
+      if (e.key === "ArrowRight") {
+        if (isLast) onClose(true);
+        else setIndex((i) => i + 1);
+      }
       if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
     }
     window.addEventListener("keydown", onKey);

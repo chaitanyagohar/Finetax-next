@@ -136,7 +136,7 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
                     className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-accent transition hover:text-white"
                   >
                     <span className="flex items-center gap-2">
-                      <Shield className="h-3.5 w-3.5" /> Review Tasks
+                      <Shield className="h-3.5 w-3.5" /> Review tasks
                     </span>
                     {isReviewerOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   </button>

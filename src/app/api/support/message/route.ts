@@ -7,8 +7,8 @@ import { checkRateLimit } from "@/lib/api/rateLimit";
 import { contextFor, escalateTicket, sanitizeAttachments } from "@/lib/help/supportServer";
 import { buildSummary, bumpStat, findProblem, loadProblems, present, rank, type Option } from "@/lib/help/troubleshooter";
 import type { Problem } from "@/lib/help/troubleshooting";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LOOKS_LIKE_FAULT = /\b(error|failed|failure|exception|violat\w*|crash\w*|bug|500|404|wrong data|data missing|galat)\b/i;
 
 export async function POST(request: NextRequest) {
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
         } else if (choice.startsWith("solved:")) {
           await bumpStat(admin, choice.slice(7), "solved");
           resolve = true;
-          reply = { body: "Great, glad that's sorted! If anything else comes up, just write here.", options: [] };
+          reply = { body: "Glad that's sorted. If anything else comes up, just write here.", options: [] };
         } else if (choice.startsWith("notsolved:")) {
           const id = choice.slice(10);
           await bumpStat(admin, id, "not_solved");

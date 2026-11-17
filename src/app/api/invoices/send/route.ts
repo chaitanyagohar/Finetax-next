@@ -4,13 +4,12 @@ export const runtime = "nodejs";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireModule, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { EMAIL_RE, escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { pdfFileName, renderInvoicePdf } from "@/lib/pdf/firmDocuments";
+import { EMAIL_RE, UUID_RE } from "@/lib/validate";
+import { formatDate, rupees } from "@/lib/format";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const inr = (n: unknown) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const dmy = (iso?: string | null) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Email (all dynamic values escaped)
     const paymentLines = [
-      balance > 0 ? `<strong>Amount payable:</strong> ${inr(balance)}${invoice.due_date ? ` by <strong>${dmy(invoice.due_date)}</strong>` : ""}` : "<strong>Status:</strong> Paid in full. Thank you!",
+      balance > 0 ? `<strong>Amount payable:</strong> ${rupees(balance)}${invoice.due_date ? ` by <strong>${formatDate(invoice.due_date, "")}</strong>` : ""}` : "<strong>Status:</strong> Paid in full. Thank you!",
       balance > 0 && firm?.upi_id ? `<strong>UPI:</strong> ${escapeHtml(firm.upi_id)}` : "",
       balance > 0 && firm?.bank_account_no
         ? `<strong>Bank:</strong> ${escapeHtml(firm.bank_name || "")} · A/C ${escapeHtml(firm.bank_account_no)} · IFSC ${escapeHtml(firm.bank_ifsc || "")}`
@@ -89,14 +88,14 @@ export async function POST(request: NextRequest) {
     const htmlBody = `
       <div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
         <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
-        <p>Please find attached tax invoice <strong>${escapeHtml(invNum)}</strong>${invoice.date ? ` dated ${dmy(invoice.date)}` : ""} for <strong>${inr(invoice.total)}</strong>.</p>
+        <p>Please find attached tax invoice <strong>${escapeHtml(invNum)}</strong>${invoice.date ? ` dated ${formatDate(invoice.date, "")}` : ""} for <strong>${rupees(invoice.total)}</strong>.</p>
         <p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">${paymentLines.join("<br/>")}</p>
         ${balance > 0 ? "<p>Please mention the invoice number when you pay.</p>" : ""}
         <p>Best regards,<br/><strong>${escapeHtml(firmName)}</strong></p>
       </div>`;
     const textBody =
-      `Dear ${clientName},\n\nPlease find attached tax invoice ${invNum} for ${inr(invoice.total)}.` +
-      (balance > 0 ? `\nAmount payable: ${inr(balance)}${invoice.due_date ? ` by ${dmy(invoice.due_date)}` : ""}.` : "\nPaid in full. Thank you!") +
+      `Dear ${clientName},\n\nPlease find attached tax invoice ${invNum} for ${rupees(invoice.total)}.` +
+      (balance > 0 ? `\nAmount payable: ${rupees(balance)}${invoice.due_date ? ` by ${formatDate(invoice.due_date, "")}` : ""}.` : "\nPaid in full. Thank you!") +
       `\n\nBest regards,\n${firmName}`;
 
     // 6. Send

@@ -1,7 +1,7 @@
 /** Checks that a vault file path belongs to the given firm before the server reads it. SERVER ONLY. */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const VAULT_BUCKETS = ["firm-documents", "documents"];
 
 export async function isVaultPathAllowed(admin: SupabaseClient, orgId: string, bucket: string, path: string): Promise<boolean> {

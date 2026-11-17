@@ -68,6 +68,8 @@ const s = StyleSheet.create({
   trAlt: { flexDirection: "row", paddingVertical: 7, paddingHorizontal: 9, borderBottomWidth: 1, borderBottomColor: C.border, minHeight: 26, backgroundColor: C.light },
   cNo: { width: "7%" },
   cDesc: { width: "48%" },
+  cDescSac: { width: "36%" },
+  cSac: { width: "12%" },
   cQty: { width: "11%", textAlign: "right" },
   cRate: { width: "17%", textAlign: "right" },
   cAmt: { width: "17%", textAlign: "right" },
@@ -153,6 +155,7 @@ function lineItems(raw: unknown) {
     description: str(it?.description ?? it?.desc) || "Professional Services",
     qty: num(it?.qty ?? 1) || 1,
     rate: num(it?.rate ?? it?.price),
+    sac: str(it?.sac),
   }));
 }
 
@@ -271,12 +274,15 @@ function Party({ heading, party }: { heading: string; party: PartyDetails }) {
   );
 }
 
-function Items({ items }: { items: { description: string; qty: number; rate: number }[] }) {
+/** `defaultSac` turns on the SAC column (tax invoices); a line without its own code uses it. */
+function Items({ items, defaultSac }: { items: { description: string; qty: number; rate: number; sac: string }[]; defaultSac?: string | null }) {
+  const showSac = defaultSac !== undefined;
   return (
     <View style={s.table}>
       <View style={s.th} fixed>
         <Text style={[s.thText, s.cNo]}>#</Text>
-        <Text style={[s.thText, s.cDesc]}>DESCRIPTION OF SERVICES</Text>
+        <Text style={[s.thText, showSac ? s.cDescSac : s.cDesc]}>DESCRIPTION OF SERVICES</Text>
+        {showSac && <Text style={[s.thText, s.cSac]}>SAC</Text>}
         <Text style={[s.thText, s.cQty]}>QTY</Text>
         <Text style={[s.thText, s.cRate]}>RATE</Text>
         <Text style={[s.thText, s.cAmt]}>AMOUNT</Text>
@@ -289,7 +295,8 @@ function Items({ items }: { items: { description: string; qty: number; rate: num
         items.map((it, i) => (
           <View key={i} wrap={false} style={i % 2 ? s.trAlt : s.tr}>
             <Text style={[s.tdMuted, s.cNo]}>{i + 1}</Text>
-            <Text style={[s.td, s.cDesc]}>{it.description}</Text>
+            <Text style={[s.td, showSac ? s.cDescSac : s.cDesc]}>{it.description}</Text>
+            {showSac && <Text style={[s.td, s.cSac]}>{it.sac || defaultSac || "-"}</Text>}
             <Text style={[s.tdNum, s.cQty]}>{it.qty}</Text>
             <Text style={[s.tdNum, s.cRate]}>{money(it.rate)}</Text>
             <Text style={[s.tdNum, s.cAmt]}>{money(it.qty * it.rate)}</Text>
@@ -385,7 +392,7 @@ export function InvoicePdf({ invoice, client, firm, qrDataUrl }: { invoice: Rec;
           </View>
         </View>
 
-        <Items items={t.items} />
+        <Items items={t.items} defaultSac={str(firm?.gstin) ? str(firm?.default_sac) || null : undefined} />
 
         <View style={s.lower} wrap={false}>
           <View style={s.left}>

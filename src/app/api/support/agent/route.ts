@@ -3,8 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireUser } from "@/lib/api/guard";
 import { isPlatformSupport } from "@/lib/help/supportServer";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUSES = ["ai", "waiting", "open", "resolved", "closed"];
 
 /** Duesk support team actions on any firm's ticket: reply, note, status, priority, assignment. */

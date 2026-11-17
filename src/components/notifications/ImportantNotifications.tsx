@@ -282,7 +282,7 @@ export default function ImportantNotifications() {
                       disabled={busy === current.id}
                       className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                     >
-                      {busy === current.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} I've read this
+                      {busy === current.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} I&apos;ve read this
                     </button>
                   )}
                   {!["task_assigned", "task_not_started", "task_due_soon", "task_submitted", "task_changes", "announcement"].includes(current.type) && (

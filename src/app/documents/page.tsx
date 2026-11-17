@@ -32,13 +32,13 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker from "@/components/ui/ClientPicker";
 import TaskPicker from "@/components/tasks/TaskPicker";
 import { formatDate, localISODate } from "@/lib/format";
+import { EMAIL_RE } from "@/lib/validate";
 
 const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
 const BUCKET = "firm-documents";
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const INTERNAL_FILTER = [{ id: "internal", label: "Internal (no client)" }];
 const ALLOWED_EXT = ["pdf", "xls", "xlsx", "csv", "doc", "docx", "ppt", "pptx", "txt", "jpg", "jpeg", "png", "zip", "xml", "json"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -425,7 +425,7 @@ export default function DocumentsPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Folder className="h-5 w-5 text-navy" /> Secure Document Vault
+            <Folder className="h-5 w-5 text-navy" /> Secure document vault
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Private storage. Files open through links that expire within minutes.
@@ -433,10 +433,11 @@ export default function DocumentsPage() {
         </div>
         <button
           type="button"
+          data-tour="docs-upload"
           onClick={openUpload}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
-          <Upload className="h-4 w-4" /> Upload Files
+          <Upload className="h-4 w-4" /> Upload files
         </button>
       </div>
 
@@ -444,9 +445,9 @@ export default function DocumentsPage() {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Documents", value: String(stats.total), sub: "In the vault", icon: Folder, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
-          { label: "Storage Used", value: formatBytes(stats.storage), sub: "Across all files", icon: HardDrive, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
-          { label: "This Month", value: String(stats.thisMonth), sub: "New uploads", icon: Calendar, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
-          { label: "Clients Covered", value: String(stats.clientsCovered), sub: "With at least one document", icon: Users, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
+          { label: "Storage used", value: formatBytes(stats.storage), sub: "Across all files", icon: HardDrive, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+          { label: "This month", value: String(stats.thisMonth), sub: "New uploads", icon: Calendar, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
+          { label: "Clients covered", value: String(stats.clientsCovered), sub: "With at least one document", icon: Users, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
         ].map((k) => {
           const Icon = k.icon;
           return (
@@ -526,7 +527,7 @@ export default function DocumentsPage() {
                   <th>Document</th>
                   <th>Category</th>
                   <th>Client</th>
-                  <th>Uploaded By</th>
+                  <th>Uploaded by</th>
                   <th className="text-right">Size</th>
                   <th>Date</th>
                   <th className="text-right">Actions</th>
@@ -693,7 +694,7 @@ export default function DocumentsPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Related Task</label>
+              <label className={labelClass}>Related task</label>
               <TaskPicker value={taskId} onChange={(id) => setTaskId(id)} clientId={clientId || undefined} noneLabel="No task" />
             </div>
 
@@ -747,7 +748,7 @@ export default function DocumentsPage() {
               <label className={labelClass}>Message</label>
               <textarea rows={6} value={emailBody} onChange={(e) => setEmailBody(e.target.value)} className={inputClass} />
             </div>
-            <p className="text-[10px] text-text-muted">Sent from your firm's default email account. Files over 20 MB must be shared as a link.</p>
+            <p className="text-[10px] text-text-muted">Sent from your firm&apos;s default email account. Files over 20 MB must be shared as a link.</p>
           </div>
         </Modal>
       )}

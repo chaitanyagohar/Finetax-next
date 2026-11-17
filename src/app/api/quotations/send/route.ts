@@ -4,13 +4,12 @@ export const runtime = "nodejs";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireModule, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { EMAIL_RE, escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { pdfFileName, renderQuotationPdf } from "@/lib/pdf/firmDocuments";
+import { EMAIL_RE, UUID_RE } from "@/lib/validate";
+import { formatDate, rupees } from "@/lib/format";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const inr = (n: unknown) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const dmy = (iso?: string | null) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,14 +73,14 @@ export async function POST(request: NextRequest) {
     const htmlBody = `
       <div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
         <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
-        <p>Thank you for your enquiry. Please find attached our quotation <strong>${escapeHtml(quoteNum)}</strong> for <strong>${inr(quotation.total)}</strong>${gstNote}.</p>
-        ${validUntil ? `<p>This quotation is valid until <strong>${dmy(validUntil)}</strong>.</p>` : ""}
+        <p>Thank you for your enquiry. Please find attached our quotation <strong>${escapeHtml(quoteNum)}</strong> for <strong>${rupees(quotation.total)}</strong>${gstNote}.</p>
+        ${validUntil ? `<p>This quotation is valid until <strong>${formatDate(validUntil, "")}</strong>.</p>` : ""}
         <p>Please reply to this email if you have any questions or would like to go ahead.</p>
         <p>Best regards,<br/><strong>${escapeHtml(firmName)}</strong></p>
       </div>`;
     const textBody =
-      `Dear ${clientName},\n\nPlease find attached our quotation ${quoteNum} for ${inr(quotation.total)}${gstNote}.` +
-      (validUntil ? `\nValid until ${dmy(validUntil)}.` : "") +
+      `Dear ${clientName},\n\nPlease find attached our quotation ${quoteNum} for ${rupees(quotation.total)}${gstNote}.` +
+      (validUntil ? `\nValid until ${formatDate(validUntil, "")}.` : "") +
       `\n\nBest regards,\n${firmName}`;
 
     // 6. Send
@@ -121,7 +120,7 @@ export async function POST(request: NextRequest) {
       metadata: { recipientEmail, quotationNumber: quoteNum, actor_name: caller.name, user_id: caller.userId },
     });
 
-    return NextResponse.json({ success: true, message: "Quotation email sent successfully with PDF attachment!" });
+    return NextResponse.json({ success: true, message: "Quotation emailed with the PDF attached." });
   } catch (err) {
     return errorResponse(err);
   }

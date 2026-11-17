@@ -14,8 +14,8 @@ import { checkRateLimit } from "@/lib/api/rateLimit";
 import { assertMailboxAccess } from "@/lib/email/access";
 import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, escapeHtml, sendFirmEmail, type MailAttachment } from "@/lib/email/mailer";
 import { isVaultPathAllowed } from "@/lib/storage/vaultPath";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_SYSTEM_ITEMS = 5;
 
 function idsFrom(formData: FormData, key: string): string[] {
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, message: "Email sent!" });
+    return NextResponse.json({ success: true, message: "Email sent." });
   } catch (err) {
     return errorResponse(err);
   }

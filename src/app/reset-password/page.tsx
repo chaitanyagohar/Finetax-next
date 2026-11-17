@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
         )}
 
         <PasswordInput
-          label="New Password"
+          label="New password"
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
@@ -121,7 +121,7 @@ export default function ResetPasswordPage() {
         />
 
         <PasswordInput
-          label="Confirm New Password"
+          label="Confirm new password"
           value={confirm}
           onChange={setConfirm}
           autoComplete="new-password"

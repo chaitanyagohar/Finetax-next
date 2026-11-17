@@ -6,8 +6,8 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { loadProposalBundle, renderEngagementLetter } from "@/lib/pdf/engagementLetter";
 import { pdfFileName } from "@/lib/pdf/firmDocuments";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

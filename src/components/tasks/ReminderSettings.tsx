@@ -93,8 +93,9 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const Toggle = ({ k, label, hint }: { k: keyof Settings; label: string; hint?: string }) => (
-    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-2.5">
+  // A plain function, not a component, so the checkboxes are not re-created on every render.
+  const toggle = (k: keyof Settings, label: string, hint?: string) => (
+    <label key={k} className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-2.5">
       <input type="checkbox" checked={!!s?.[k]} onChange={(e) => set(k, e.target.checked as any)} className="mt-0.5 h-4 w-4 accent-navy" />
       <span>
         <span className="block font-semibold text-text-main">{label}</span>
@@ -105,7 +106,7 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal
-      title="Reminders & Escalations"
+      title="Reminders & escalations"
       subtitle="Checked automatically every 15 minutes during working hours."
       onClose={() => !saving && onClose()}
       maxWidth="max-w-2xl"
@@ -153,11 +154,11 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
             </p>
           )}
 
-          <Toggle k="enabled" label="Send task reminders" hint="Snoozed popups and night-time timer clean-up keep working even when this is off." />
+          {toggle("enabled", "Send task reminders", "Snoozed popups and night-time timer clean-up keep working even when this is off.")}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>"Not started" reminder after</label>
+              <label className={labelClass}>&quot;Not started&quot; reminder after</label>
               <select value={s.not_started_hours} onChange={(e) => set("not_started_hours", Number(e.target.value))} className={inputClass}>
                 {[4, 8, 12, 24, 48, 72].map((h) => (
                   <option key={h} value={h}>{h} hours</option>
@@ -165,7 +166,7 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
             <div>
-              <label className={labelClass}>"Deadline approaching" when within</label>
+              <label className={labelClass}>&quot;Deadline approaching&quot; when within</label>
               <select value={s.due_soon_days} onChange={(e) => set("due_soon_days", Number(e.target.value))} className={inputClass}>
                 {[0, 1, 2, 3, 5, 7].map((d) => (
                   <option key={d} value={d}>{d === 0 ? "Same day" : `${d} day${d === 1 ? "" : "s"}`} of the internal deadline</option>
@@ -191,8 +192,8 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Toggle k="escalate_assigner" label="Escalate to the assigner" hint="Tell whoever assigned it (or admins) once when work hasn't started or is overdue." />
-            <Toggle k="overdue_daily" label="Daily overdue reminder" hint="Remind the assignee every working day until submitted." />
+            {toggle("escalate_assigner", "Escalate to the assigner", "Tell whoever assigned it (or admins) once when work hasn't started or is overdue.")}
+            {toggle("overdue_daily", "Daily overdue reminder", "Remind the assignee every working day until submitted.")}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -205,11 +206,11 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
               <input type="time" value={s.work_end} onChange={(e) => set("work_end", e.target.value)} className={inputClass} />
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <Toggle k="skip_sundays" label="No reminders on Sundays" />
+              {toggle("skip_sundays", "No reminders on Sundays")}
             </div>
           </div>
           <p className="text-[11px] text-text-muted">
-            Each reminder is sent at most once per day per person, so nobody gets flooded. "Run check now" doesn't notify you about your own tasks, so test with a staff login.
+            Each reminder is sent at most once per day per person, so nobody gets flooded. &quot;Run check now&quot; doesn&apos;t notify you about your own tasks, so test with a staff login.
           </p>
         </div>
       )}

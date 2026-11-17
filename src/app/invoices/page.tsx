@@ -27,16 +27,16 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import { STATE_OPTIONS, placeOfSupplyCode, placeOfSupplyLabel, stateCodeFromGstin, stateName } from "@/lib/gst";
+import { EMAIL_RE } from "@/lib/validate";
 
 interface LineItem {
   description: string;
   qty: number;
   rate: number;
+  sac: string;
 }
 
 type ClientRow = Client & Record<string, any>;
@@ -52,7 +52,6 @@ const STATUS_STYLES: Record<string, string> = {
   Cancelled: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15 disabled:bg-surface-alt disabled:text-text-muted";
@@ -72,11 +71,12 @@ function isoDate(value: unknown): string {
   return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "";
 }
 function normalizeItems(raw: unknown): LineItem[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [{ description: "", qty: 1, rate: 0 }];
+  if (!Array.isArray(raw) || raw.length === 0) return [{ description: "", qty: 1, rate: 0, sac: "" }];
   return raw.map((it: any) => ({
     description: String(it?.description ?? it?.desc ?? ""),
     qty: Number(it?.qty ?? 1) || 1,
     rate: Number(it?.rate ?? it?.price ?? 0) || 0,
+    sac: String(it?.sac ?? ""),
   }));
 }
 function statusOf(inv: any): string {
@@ -149,7 +149,7 @@ export default function InvoicesPage() {
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [gstRate, setGstRate] = useState<number>(18);
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<LineItem[]>([{ description: "", qty: 1, rate: 0 }]);
+  const [items, setItems] = useState<LineItem[]>([{ description: "", qty: 1, rate: 0, sac: "" }]);
 
   // Payments
   const [payments, setPayments] = useState<any[]>([]);
@@ -180,7 +180,7 @@ export default function InvoicesPage() {
     const [settingsRes, invRes, clientRes, teamRes] = await Promise.all([
       supabase
         .from("firm_settings")
-        .select("firm_name, gstin, default_gst_rate, payment_terms, bank_name, bank_account_no, bank_ifsc, upi_id")
+        .select("firm_name, gstin, default_gst_rate, default_sac, payment_terms, bank_name, bank_account_no, bank_ifsc, upi_id")
         .maybeSingle(),
       fetchAll((from, to) =>
         supabase
@@ -330,7 +330,7 @@ export default function InvoicesPage() {
       setPlaceOfSupply("");
       setGstRate(Number(firmSettings?.default_gst_rate ?? 18));
       setNotes(defaultNotes());
-      setItems([{ description: "", qty: 1, rate: 0 }]);
+      setItems([{ description: "", qty: 1, rate: 0, sac: firmSettings?.default_sac || "" }]);
     }
     setIsModalOpen(true);
   }
@@ -350,7 +350,7 @@ export default function InvoicesPage() {
   }
 
   function handleAddItem() {
-    setItems([...items, { description: "", qty: 1, rate: 0 }]);
+    setItems([...items, { description: "", qty: 1, rate: 0, sac: items[items.length - 1]?.sac || firmSettings?.default_sac || "" }]);
   }
 
   function handleRemoveItem(index: number) {
@@ -390,7 +390,8 @@ export default function InvoicesPage() {
       if (!selectedClientId) throw new Error("Please select a client.");
       const validItems = items
         .filter((it) => it.description.trim() !== "")
-        .map((it) => ({ description: it.description.trim(), qty: Number(it.qty), rate: Number(it.rate) }));
+        .map((it) => ({ description: it.description.trim(), qty: Number(it.qty), rate: Number(it.rate), ...(it.sac.trim() ? { sac: it.sac.trim() } : {}) }));
+      if (validItems.some((it) => it.sac && !/^\d{4,8}$/.test(it.sac))) throw new Error("A SAC code is 4 to 8 digits, e.g. 998231.");
       if (!validItems.length) throw new Error("Please add at least one line item.");
       if (validItems.some((it) => !(it.qty > 0) || it.rate < 0)) {
         throw new Error("Each line item needs a quantity above zero and a rate of zero or more.");
@@ -605,7 +606,7 @@ export default function InvoicesPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Receipt className="h-5 w-5 text-navy" /> Invoices & Billing
+            <Receipt className="h-5 w-5 text-navy" /> Invoices & billing
           </h2>
           <p className="mt-1 text-xs text-text-muted">
             Serial GST invoices, a full payments ledger, and receivables tracking.
@@ -617,7 +618,7 @@ export default function InvoicesPage() {
           onClick={() => openModal()}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
-          <Plus className="h-4 w-4" /> New Invoice
+          <Plus className="h-4 w-4" /> New invoice
         </button>
       </div>
 
@@ -696,7 +697,7 @@ export default function InvoicesPage() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-surface shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
+          <div data-tour="invoices-tabs" className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
             {STATUS_TABS.map((t) => (
               <button
                 key={t}
@@ -887,7 +888,7 @@ export default function InvoicesPage() {
                     onClick={() => setConfirm({ kind: "cancel", invoice: editingInvoice })}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"
                   >
-                    <Ban className="h-3.5 w-3.5" /> Cancel Invoice
+                    <Ban className="h-3.5 w-3.5" /> Cancel invoice
                   </button>
                 )}
               </div>
@@ -947,12 +948,12 @@ export default function InvoicesPage() {
               </div>
 
               <div>
-                <label className={labelClass}>Invoice Date</label>
+                <label className={labelClass}>Invoice date</label>
                 <input type="date" disabled={isLocked} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={inputClass} />
               </div>
 
               <div>
-                <label className={labelClass}>Due Date</label>
+                <label className={labelClass}>Due date</label>
                 <input type="date" value={dueDate} min={invoiceDate} disabled={editingStatus === "Cancelled"} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
               </div>
 
@@ -987,7 +988,7 @@ export default function InvoicesPage() {
 
             {/* Line Items */}
             <div className="space-y-2 border-t border-border pt-4">
-              <label className={labelClass}>Line Items</label>
+              <label className={labelClass}>Line items</label>
               {isLocked ? (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-xs">
@@ -1020,8 +1021,18 @@ export default function InvoicesPage() {
                         placeholder="Service description"
                         value={item.description}
                         onChange={(e) => handleItemChange(idx, "description", e.target.value)}
-                        className={`${inputClass} col-span-12 sm:col-span-6`}
+                        className={`${inputClass} col-span-9 sm:col-span-5`}
                         required
+                      />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={8}
+                        placeholder="SAC"
+                        aria-label="SAC code"
+                        value={item.sac}
+                        onChange={(e) => handleItemChange(idx, "sac", e.target.value.replace(/\D/g, ""))}
+                        className={`${inputClass} col-span-3 font-mono sm:col-span-1`}
                       />
                       <input
                         type="number"
@@ -1065,7 +1076,7 @@ export default function InvoicesPage() {
             <div className="flex flex-col gap-5 md:flex-row">
               {/* Notes */}
               <div className="flex-1">
-                <label className={labelClass}>Notes, Terms & Bank Details</label>
+                <label className={labelClass}>Notes, terms & bank details</label>
                 <textarea rows={7} value={notes} disabled={editingStatus === "Cancelled"} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
               </div>
 
@@ -1117,7 +1128,7 @@ export default function InvoicesPage() {
             <div className="mt-6 space-y-3 border-t border-border pt-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
-                  <Wallet className="h-4 w-4 text-emerald-600" /> Payments Received
+                  <Wallet className="h-4 w-4 text-emerald-600" /> Payments received
                 </h4>
                 <div className="flex gap-2">
                   {balanceOf(editingInvoice) > 0 && !["Draft", "Cancelled"].includes(editingStatus) && (
@@ -1159,7 +1170,7 @@ export default function InvoicesPage() {
                         <th>Date</th>
                         <th>Mode</th>
                         <th>Reference</th>
-                        <th>Recorded By</th>
+                        <th>Recorded by</th>
                         <th className="text-right">Amount</th>
                         {isAdmin && <th />}
                       </tr>
@@ -1244,7 +1255,7 @@ export default function InvoicesPage() {
               </div>
             </div>
             <div>
-              <label className={labelClass}>Payment Mode</label>
+              <label className={labelClass}>Payment mode</label>
               <select value={payMode} onChange={(e) => setPayMode(e.target.value)} className={inputClass}>
                 {PAYMENT_MODES.map((m) => (
                   <option key={m} value={m}>{m}</option>
@@ -1252,7 +1263,7 @@ export default function InvoicesPage() {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Reference / UTR / Cheque No.</label>
+              <label className={labelClass}>Reference / UTR / cheque No.</label>
               <input type="text" value={payRef} onChange={(e) => setPayRef(e.target.value)} className={inputClass} placeholder="e.g. UTR 4321…" maxLength={120} />
             </div>
             <div>

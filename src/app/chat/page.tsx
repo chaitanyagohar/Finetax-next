@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Archive, ArrowLeft, Hash, Loader2, Lock, LogOut, MessagesSquare, Plus, Search, UserPlus, Users, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
-import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import ChatConversation from "@/components/chat/ChatConversation";
 import { getInitials } from "@/lib/format";
 import type { ChatChannel, ChatPerson } from "@/lib/chat";
@@ -148,16 +148,31 @@ export default function ChatPage() {
     );
   }
 
+  // In-app confirmation instead of the browser's pop-up
+  const [ask, setAsk] = useState<{ title: string; message: string; label: string; run: () => Promise<void> } | null>(null);
   const conversationPeople = people;
 
   return (
     <div className="flex h-[calc(100vh-8.5rem)] min-h-[480px] overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+      {ask && (
+        <ConfirmDialog
+          title={ask.title}
+          message={ask.message}
+          confirmLabel={ask.label}
+          onCancel={() => setAsk(null)}
+          onConfirm={async () => {
+            const run = ask.run;
+            setAsk(null);
+            await run();
+          }}
+        />
+      )}
       {/* Sidebar */}
       <aside className={`w-full shrink-0 flex-col border-r border-border bg-surface-alt/40 lg:flex lg:w-72 ${selected ? "hidden" : "flex"}`}>
         <div className="space-y-2 border-b border-border p-3">
           <div className="flex items-center justify-between">
             <h1 className="flex items-center gap-2 text-base font-bold text-text-main">
-              <MessagesSquare className="h-4 w-4 text-navy" /> Team Chat
+              <MessagesSquare className="h-4 w-4 text-navy" /> Team chat
             </h1>
             <button type="button" onClick={() => setModal("dm")} className="rounded-md p-1.5 text-navy hover:bg-surface" title="New message">
               <Plus className="h-4 w-4" />
@@ -253,12 +268,17 @@ export default function ChatPage() {
                         {current.name !== "general" && (
                           <button
                             type="button"
-                            onClick={async () => {
-                              if (window.confirm(`Leave #${current.name}?`)) {
-                                await rpc("chat_leave", { p_channel: current.id });
-                                setSelected(null);
-                              }
-                            }}
+                            onClick={() =>
+                              setAsk({
+                                title: "Leave channel",
+                                message: `Leave #${current.name}? You can be added back by a member.`,
+                                label: "Leave",
+                                run: async () => {
+                                  await rpc("chat_leave", { p_channel: current.id });
+                                  setSelected(null);
+                                },
+                              })
+                            }
                             className="rounded-md p-1.5 text-text-muted hover:bg-surface-alt"
                             title="Leave channel"
                           >
@@ -268,12 +288,17 @@ export default function ChatPage() {
                         {(amOwner || isAdmin) && current.name !== "general" && (
                           <button
                             type="button"
-                            onClick={async () => {
-                              if (window.confirm(`Archive #${current.name}? Nobody will be able to post in it.`)) {
-                                await rpc("chat_archive", { p_channel: current.id });
-                                setSelected(null);
-                              }
-                            }}
+                            onClick={() =>
+                              setAsk({
+                                title: "Archive channel",
+                                message: `Archive #${current.name}? Nobody will be able to post in it.`,
+                                label: "Archive",
+                                run: async () => {
+                                  await rpc("chat_archive", { p_channel: current.id });
+                                  setSelected(null);
+                                },
+                              })
+                            }
                             className="rounded-md p-1.5 text-text-muted hover:bg-surface-alt"
                             title="Archive channel"
                           >
@@ -324,7 +349,7 @@ export default function ChatPage() {
       {modal === "browse" && (
         <Modal title="Browse channels" subtitle="Public channels you haven't joined." onClose={() => setModal(null)} maxWidth="max-w-md">
           {browsable.length === 0 ? (
-            <p className="text-xs text-text-muted">You're in every public channel.</p>
+            <p className="text-xs text-text-muted">You&apos;re in every public channel.</p>
           ) : (
             <ul className="divide-y divide-border">
               {browsable.map((c) => (

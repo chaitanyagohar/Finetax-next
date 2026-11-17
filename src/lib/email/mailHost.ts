@@ -23,8 +23,12 @@ function isPrivateIp(ip: string): boolean {
   return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(v);
 }
 
-/** Throws unless host:port is a public mail server on a normal mail port. */
-export async function assertPublicMailHost(host: string, port: number, kind: "smtp" | "imap"): Promise<void> {
+/**
+ * Throws unless host:port is a public mail server on a normal mail port.
+ * Returns the checked address: connect to it (with the host name for TLS), not to the name again,
+ * so a DNS answer that changes between the check and the connection can't reach a private address (S-14).
+ */
+export async function assertPublicMailHost(host: string, port: number, kind: "smtp" | "imap"): Promise<string> {
   const h = String(host || "").trim().toLowerCase();
   const ports = kind === "smtp" ? SMTP_PORTS : IMAP_PORTS;
   if (!ports.includes(Number(port))) {
@@ -42,4 +46,5 @@ export async function assertPublicMailHost(host: string, port: number, kind: "sm
   if (addresses.length === 0 || addresses.some(isPrivateIp)) {
     throw new ApiError(400, "That mail server address isn't allowed.");
   }
+  return addresses[0];
 }

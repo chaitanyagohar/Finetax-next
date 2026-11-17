@@ -12,35 +12,37 @@ import {
 } from "@/lib/api/guard";
 
 // Fields the browser must never set directly
-const PROTECTED_FIELDS = ["id", "invoice_number", "pdf_url", "email_sent_at", "created_at", "createdAt", "updated_at"];
+// Only the fields the Invoices page sends; anything else in the request is ignored (S-17).
+const ALLOWED_FIELDS = ["client_id", "organisation", "date", "issue_date", "due_date", "gst_rate", "notes", "items", "place_of_supply"];
 
 export async function POST(request: NextRequest) {
   try {
-    // 0. Security gates (invoices module, or quotations for quote → invoice conversion)
+    // 0. Security gates. Quotations become invoices through convert_quotation_to_invoice, not this route.
     assertSameOrigin(request);
-    const caller = await requireModule("invoices", "quotations");
+    const caller = await requireModule("invoices");
 
     const supabase = await createClient();
 
-    let payload: any;
+    let body: unknown;
     try {
-      payload = await request.json();
+      body = await request.json();
     } catch {
       throw new ApiError(400, "Invalid request body.");
     }
 
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new ApiError(400, "Invalid request body.");
+    }
+    const raw = body as Record<string, unknown>;
+    const payload: Record<string, unknown> = {};
+    for (const field of ALLOWED_FIELDS) {
+      if (field in raw) payload[field] = raw[field];
     }
     if (!payload.client_id || !Array.isArray(payload.items) || payload.items.length === 0) {
       throw new ApiError(400, "Client and at least one line item are required");
     }
     if (payload.items.length > 100) {
       throw new ApiError(400, "An invoice can have at most 100 line items.");
-    }
-
-    for (const field of PROTECTED_FIELDS) {
-      delete payload[field];
     }
 
     // 1. Insert as a draft. The database works out the totals; the number is assigned on issue.

@@ -6,8 +6,8 @@ import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { createSmtpTransport, getAccountPassword, imapSettingsFor } from "@/lib/email/mailer";
 import { assertPublicMailHost } from "@/lib/email/mailHost";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,16 +31,16 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (!account) throw new ApiError(404, "Account not found.");
 
-    await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
-    const imapTarget = imapSettingsFor(account);
-    await assertPublicMailHost(imapTarget.host, imapTarget.port, "imap");
+    const smtpAddress = await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
+    const imap = imapSettingsFor(account);
+    const imapAddress = await assertPublicMailHost(imap.host, imap.port, "imap");
 
     const password = await getAccountPassword(admin, account);
     const result = { smtp: { ok: false, message: "" }, imap: { ok: false, message: "" } };
 
     // Sending (SMTP)
     try {
-      await createSmtpTransport(account, password).verify();
+      await createSmtpTransport(account, password, smtpAddress).verify();
       result.smtp = { ok: true, message: `Connected to ${account.smtp_host || "smtp.gmail.com"}` };
     } catch (e: any) {
       const auth = e?.code === "EAUTH" || e?.responseCode === 535;
@@ -48,10 +48,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Receiving (IMAP)
-    const imap = imapSettingsFor(account);
-    await assertPublicMailHost(imap.host, imap.port, "imap");
     const client = new ImapFlow({
-      host: imap.host,
+      host: imapAddress,
+      servername: imap.host,
       port: imap.port,
       secure: true,
       auth: { user: imap.user, pass: password },

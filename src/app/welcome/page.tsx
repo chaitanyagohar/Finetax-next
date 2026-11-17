@@ -23,6 +23,8 @@ export default function WelcomePage() {
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Signed in with a password already: this page must not change it without the current one (S-08).
+  const [hasPassword, setHasPassword] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -34,6 +36,9 @@ export default function WelcomePage() {
       const meta = (user.user_metadata || {}) as Record<string, unknown>;
       setFirmName(String(meta.firm_name || ""));
       setName(String(meta.name || ""));
+      const { data: claims } = await supabase.auth.getClaims();
+      const methods = ((claims?.claims as { amr?: { method?: string }[] } | undefined)?.amr || []).map((a) => a.method);
+      setHasPassword(methods.includes("password"));
       const { data } = await supabase.rpc("my_signup_state");
       setNeedsFirm(!(data as { has_membership?: boolean } | null)?.has_membership);
       setState("ready");
@@ -45,18 +50,25 @@ export default function WelcomePage() {
     if (saving) return;
     if (needsFirm && firmName.trim().length < 2) return setError("Please enter your firm's name.");
     if (needsFirm && name.trim().length < 2) return setError("Please enter your name.");
-    if (password.length < 8 || password.length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      return setError("Password: 8 to 72 characters with at least one letter and one number.");
+    if (!hasPassword) {
+      if (password.length < 8 || password.length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+        return setError("Password: 8 to 72 characters with at least one letter and one number.");
+      }
+      if (password !== confirm) return setError("The two passwords don't match.");
+    } else if (!needsFirm) {
+      window.location.href = "/";
+      return;
     }
-    if (password !== confirm) return setError("The two passwords don't match.");
 
     setSaving(true);
     setError("");
     try {
-      const { error: pwErr } = await supabase.auth.updateUser({ password });
-      if (pwErr) {
-        setError(/weak|pwned|leaked|characters/i.test(pwErr.message) ? "Please choose a stronger password." : "Could not save your password. Please try again.");
-        return;
+      if (!hasPassword) {
+        const { error: pwErr } = await supabase.auth.updateUser({ password });
+        if (pwErr) {
+          setError(/weak|pwned|leaked|characters/i.test(pwErr.message) ? "Please choose a stronger password." : "Could not save your password. Please try again.");
+          return;
+        }
       }
 
       if (needsFirm) {
@@ -138,14 +150,26 @@ export default function WelcomePage() {
           </>
         )}
 
-        <div>
-          <label htmlFor="password" className={labelClass}>Password</label>
-          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" required />
-        </div>
-        <div>
-          <label htmlFor="confirm" className={labelClass}>Confirm password</label>
-          <PasswordInput id="confirm" value={confirm} onChange={setConfirm} autoComplete="new-password" required />
-        </div>
+        {hasPassword ? (
+          <p className="text-xs text-text-muted">
+            You signed in with your password, so it stays as it is. To change it, use{" "}
+            <Link href="/forgot-password" className="font-semibold text-navy hover:underline">
+              Forgot password
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            <div>
+              <label htmlFor="password" className={labelClass}>Password</label>
+              <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" required />
+            </div>
+            <div>
+              <label htmlFor="confirm" className={labelClass}>Confirm password</label>
+              <PasswordInput id="confirm" value={confirm} onChange={setConfirm} autoComplete="new-password" required />
+            </div>
+          </>
+        )}
 
         <button
           type="submit"
@@ -153,7 +177,7 @@ export default function WelcomePage() {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-navy p-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-70"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {saving ? "Setting up..." : needsFirm ? "Create my firm" : "Save password"}
+          {saving ? "Setting up..." : needsFirm ? "Create my firm" : hasPassword ? "Continue" : "Save password"}
         </button>
 
         <button type="button" onClick={signOut} className="block w-full text-center text-xs font-semibold text-text-muted hover:underline">

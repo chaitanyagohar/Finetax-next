@@ -4,8 +4,8 @@ export const runtime = "nodejs";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { issueAndEmailInvoice } from "@/lib/billing/invoiceMailer";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Approve a subscription bill: issue it and email the PDF to the client. */
 export async function POST(request: NextRequest) {

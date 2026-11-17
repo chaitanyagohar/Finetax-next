@@ -188,7 +188,7 @@ export default function ChatConversation({
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-text-muted">
             <MessagesSquare className="h-6 w-6" />
-            {taskId ? "No discussion yet. Questions, updates and files about this task go here." : "No messages yet. Say hello!"}
+            {taskId ? "No discussion yet. Questions, updates and files about this task go here." : "No messages yet."}
           </div>
         ) : (
           <>

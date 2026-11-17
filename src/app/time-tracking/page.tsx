@@ -583,9 +583,9 @@ export default function TimeTrackingPage() {
           {(
             [
               { key: "today", label: "Today" },
-              { key: "week", label: "This Week" },
-              { key: "month", label: "This Month" },
-              { key: "lastMonth", label: "Last Month" },
+              { key: "week", label: "This week" },
+              { key: "month", label: "This month" },
+              { key: "lastMonth", label: "Last month" },
               { key: "custom", label: "Custom" },
             ] as { key: Period; label: string }[]
           ).map((p) => (
@@ -621,7 +621,7 @@ export default function TimeTrackingPage() {
           <button
             type="button"
             data-tour="time-review"
-            onClick={() => window.dispatchEvent(new Event("finetax:open-day-review"))}
+            onClick={() => window.dispatchEvent(new Event("duesk:open-day-review"))}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
           >
             <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Review my day
@@ -631,7 +631,7 @@ export default function TimeTrackingPage() {
             onClick={() => openModal()}
             className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light"
           >
-            <Plus className="h-4 w-4" /> Manual Entry
+            <Plus className="h-4 w-4" /> Manual entry
           </button>
         </div>
       </div>
@@ -639,10 +639,10 @@ export default function TimeTrackingPage() {
       {/* KPI cards */}
       <div data-tour="time-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
-          { label: "Total Hours", value: formatHours(stats.total), sub: `${stats.entries} entries`, icon: Clock, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
-          { label: "Billable Hours", value: formatHours(stats.billable), sub: `${formatHours(stats.total - stats.billable)} non-billable`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
-          { label: "Billable Ratio", value: `${stats.ratio}%`, sub: "Of all logged time", icon: TrendingUp, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
-          { label: "Avg per Working Day", value: formatHours(stats.avgPerDay), sub: "Per person per day logged", icon: User, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
+          { label: "Total hours", value: formatHours(stats.total), sub: `${stats.entries} entries`, icon: Clock, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
+          { label: "Billable hours", value: formatHours(stats.billable), sub: `${formatHours(stats.total - stats.billable)} non-billable`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
+          { label: "Billable ratio", value: `${stats.ratio}%`, sub: "Of all logged time", icon: TrendingUp, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+          { label: "Avg per working day", value: formatHours(stats.avgPerDay), sub: "Per person per day logged", icon: User, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
         ].map((k) => {
           const Icon = k.icon;
           return (
@@ -667,14 +667,14 @@ export default function TimeTrackingPage() {
         <div className="rounded-xl border border-border bg-surface shadow-sm">
           <div className="border-b border-border px-4 py-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
-              <Calendar className="h-4 w-4 text-navy" /> Weekly Timesheet
+              <Calendar className="h-4 w-4 text-navy" /> Weekly timesheet
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Team Member</th>
+                  <th>Team member</th>
                   {weekDays.map((d) => (
                     <th key={d} className={`text-center ${d === today ? "text-navy" : ""}`}>
                       {new Date(d + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short" })}
@@ -718,7 +718,7 @@ export default function TimeTrackingPage() {
         <div className={`grid grid-cols-1 gap-6 ${isAdmin ? "lg:grid-cols-2" : ""}`}>
           <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
             <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-text-main">
-              <TrendingUp className="h-3.5 w-3.5 text-navy" /> Hours by Client
+              <TrendingUp className="h-3.5 w-3.5 text-navy" /> Hours by client
             </p>
             <div className="space-y-2.5">
               {byClient.map((c) => (
@@ -740,7 +740,7 @@ export default function TimeTrackingPage() {
           {isAdmin && (
             <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
               <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-text-main">
-                <Users className="h-3.5 w-3.5 text-navy" /> Hours by Team Member
+                <Users className="h-3.5 w-3.5 text-navy" /> Hours by team member
               </p>
               <div className="space-y-2.5">
                 {byPerson.map((p) => (
@@ -816,9 +816,9 @@ export default function TimeTrackingPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  {isAdmin && <th>Staff Member</th>}
+                  {isAdmin && <th>Staff member</th>}
                   <th>Client</th>
-                  <th>Task / Description</th>
+                  <th>Task / description</th>
                   <th className="text-right">Time</th>
                   <th>Billable</th>
                   <th className="text-right">Action</th>

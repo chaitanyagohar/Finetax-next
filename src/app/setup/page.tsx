@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Barlow_Condensed } from "next/font/google";
+import localFont from "next/font/local";
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -28,8 +29,10 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import DueskLogo from "@/components/onboarding/DueskLogo";
 import Stamp from "@/components/onboarding/Stamp";
 import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
+import { EMAIL_RE } from "@/lib/validate";
+import { formatDate, localISODate } from "@/lib/format";
 
-const stampFont = Barlow_Condensed({ subsets: ["latin"], weight: "700", variable: "--font-stamp" });
+const stampFont = localFont({ src: "../../fonts/barlow-condensed-latin-700.woff2", weight: "700", variable: "--font-stamp" });
 
 /* ------------------------------------------------------------------ */
 /* Rules (same as the server)                                          */
@@ -37,7 +40,6 @@ const stampFont = Barlow_Condensed({ subsets: ["latin"], weight: "700", variable
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const UPI_RE = /^[\w.\-]{2,256}@[A-Za-z]{2,64}$/;
 const PREFIX_RE = /^[A-Za-z0-9/_\-{}]{1,20}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BANK_FIELDS = ["bank_name", "bank_account_no", "bank_ifsc", "upi_id"] as const;
 
 /* ------------------------------------------------------------------ */
@@ -426,7 +428,7 @@ function FirmSheet({
   const base = 15000;
   const tax = Math.round(base * rate) / 100;
   const today = new Date();
-  const invoiceDate = today.toLocaleDateString("en-GB");
+  const invoiceDate = formatDate(localISODate(today));
   const stampDate = today.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const maskedAcc = form.bank_account_no ? "XXXX" + form.bank_account_no.slice(-4) : "";
 
@@ -714,10 +716,10 @@ export default function SetupWizardPage() {
         <div className="ob-rise max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <DueskLogo size={32} />
           <p className="mt-4 text-lg font-bold text-navy">Firm setup is for administrators</p>
-          <p className="mt-2 text-sm text-slate-600">Your firm's administrator has already set things up.</p>
-          <a href="/" className="mt-6 inline-block rounded-lg bg-navy px-5 py-2.5 text-sm font-semibold text-white">
+          <p className="mt-2 text-sm text-slate-600">Your firm&apos;s administrator has already set things up.</p>
+          <Link href="/" className="mt-6 inline-block rounded-lg bg-navy px-5 py-2.5 text-sm font-semibold text-white">
             Go to dashboard
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -903,7 +905,7 @@ export default function SetupWizardPage() {
                 <section className="space-y-7">
                   <div>
                     <h2 className="text-3xl font-bold tracking-tight text-navy">Your practice</h2>
-                    <p className="mt-1 text-sm text-slate-600">This tailors what Duesk shows you first. It doesn't limit anything.</p>
+                    <p className="mt-1 text-sm text-slate-600">This tailors what Duesk shows you first. It doesn&apos;t limit anything.</p>
                   </div>
                   <div>
                     <p className="mb-2.5 text-sm font-semibold text-slate-900">Services you offer</p>

@@ -583,7 +583,7 @@ export default function DashboardPage() {
 
   const statutoryStrip = (
     <Panel
-      title="Statutory Deadlines · Next 14 Days"
+      title="Statutory deadlines · next 14 days"
       tour="dash-compliance"
       icon={CalendarDays}
       action={
@@ -705,9 +705,9 @@ export default function DashboardPage() {
             <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs">
               <Calendar className="h-3.5 w-3.5 text-text-muted" />
               <select value={dateFilter} onChange={(e) => changeDateFilter(e.target.value)} className="bg-transparent text-xs font-medium focus:outline-none">
-                <option value="all">All Time</option>
-                <option value="month">This Month</option>
-                <option value="quarter">This Quarter</option>
+                <option value="all">All time</option>
+                <option value="month">This month</option>
+                <option value="quarter">This quarter</option>
                 <option value="fy">{fyLabel}</option>
               </select>
             </div>
@@ -722,13 +722,13 @@ export default function DashboardPage() {
                 <Plus className="h-3.5 w-3.5" /> Invoice
               </Link>
               <Link href="/tasks" className="inline-flex items-center gap-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
-                <Plus className="h-3.5 w-3.5" /> Assign Task
+                <Plus className="h-3.5 w-3.5" /> Assign task
               </Link>
             </>
           ) : (
             <>
               <Link href="/time-tracking" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-main shadow-sm transition hover:bg-surface-alt">
-                <Timer className="h-3.5 w-3.5" /> Log Time
+                <Timer className="h-3.5 w-3.5" /> Log time
               </Link>
               <Link href="/tasks" className="inline-flex items-center gap-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
                 My Tasks <ArrowRight className="h-3.5 w-3.5" />
@@ -771,7 +771,7 @@ export default function DashboardPage() {
               }
             />
             <KpiCard
-              label="Receivables (Balance Due)"
+              label="Receivables (balance due)"
               value={compactINR(totalOutstanding)}
               icon={Wallet}
               tone="amber"
@@ -784,7 +784,7 @@ export default function DashboardPage() {
               }
             />
             <KpiCard
-              label="Firm Overdue Work"
+              label="Firm overdue work"
               value={overdueTasks.length}
               icon={AlertCircle}
               tone="rose"
@@ -796,7 +796,7 @@ export default function DashboardPage() {
           {/* Secondary KPIs */}
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <KpiCard
-              label="Open Leads"
+              label="Open leads"
               value={crm?.open_leads || 0}
               icon={UserPlus}
               tone="blue"
@@ -810,7 +810,7 @@ export default function DashboardPage() {
               }
             />
             <KpiCard
-              label="Quotation Pipeline"
+              label="Quotation pipeline"
               value={compactINR(Number(crm?.pipeline_value || 0))}
               icon={FileText}
               tone="violet"
@@ -818,7 +818,7 @@ export default function DashboardPage() {
               sub={`${crm?.open_quotes || 0} live quote${crm?.open_quotes === 1 ? "" : "s"} awaiting decision`}
             />
             <KpiCard
-              label="Active Clients"
+              label="Active clients"
               value={crm?.active_clients || 0}
               icon={Users}
               tone="navy"
@@ -826,7 +826,7 @@ export default function DashboardPage() {
               sub={`${crm?.client_master || 0} in client master`}
             />
             <KpiCard
-              label="Client Follow-ups"
+              label="Client follow-ups"
               value={discussionFollowUps}
               icon={MessageSquare}
               tone={discussionFollowUps > 0 ? "amber" : "emerald"}
@@ -840,7 +840,7 @@ export default function DashboardPage() {
           {/* Billing trend + Receivables aging */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Panel
-              title="Billing vs Collections (Last 6 Months)"
+              title="Billing vs collections (last 6 months)"
               icon={TrendingUp}
               className="lg:col-span-2"
               action={
@@ -872,9 +872,9 @@ export default function DashboardPage() {
               )}
             </Panel>
 
-            <Panel title="Receivables Aging" icon={Receipt} action={<PanelLink href="/invoices" label="Invoices" />}>
+            <Panel title="Receivables aging" icon={Receipt} action={<PanelLink href="/invoices" label="Invoices" />}>
               <div className="mb-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total Balance Due</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total balance due</p>
                 <p className="mt-1 text-2xl font-bold tracking-tight text-amber-700">{formatINR(totalOutstanding)}</p>
                 <p className="text-[11px] text-text-muted">Across {finance?.outstanding_count || 0} issued invoices</p>
               </div>
@@ -898,7 +898,7 @@ export default function DashboardPage() {
 
           {/* Upcoming deadlines + Stage pipeline */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Panel title={`Deadlines in the Next 7 Days (${dueThisWeek.length})`} icon={Clock} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage Tasks" />}>
+            <Panel title={`Deadlines in the Next 7 Days (${dueThisWeek.length})`} icon={Clock} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage tasks" />}>
               {dueThisWeek.length === 0 ? (
                 <EmptyState icon={CheckCircle2} text="No internal or statutory deadlines in the next 7 days." />
               ) : (
@@ -907,9 +907,9 @@ export default function DashboardPage() {
                     <tr>
                       <th>Task</th>
                       <th>Client</th>
-                      <th>Internal Due</th>
-                      <th>Statutory Due</th>
-                      <th>Assigned To</th>
+                      <th>Internal due</th>
+                      <th>Statutory due</th>
+                      <th>Assigned to</th>
                       <th>Stage</th>
                     </tr>
                   </thead>
@@ -929,7 +929,7 @@ export default function DashboardPage() {
               )}
             </Panel>
 
-            <Panel title="Task Pipeline" icon={Briefcase} action={<PanelLink href="/reviewer-queue" label="Review Queue" />}>
+            <Panel title="Task pipeline" icon={Briefcase} action={<PanelLink href="/reviewer-queue" label="Review queue" />}>
               <div className="space-y-3">
                 {stageCounts.map((s) => (
                   <div key={s.stage} className="space-y-1">
@@ -945,7 +945,7 @@ export default function DashboardPage() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-4 text-xs">
                 <div className="rounded-lg bg-violet-50 p-2.5">
-                  <p className="text-[10px] font-semibold uppercase text-violet-700">Awaiting Review</p>
+                  <p className="text-[10px] font-semibold uppercase text-violet-700">Awaiting review</p>
                   <p className="text-lg font-bold text-violet-700">{reviewQueue.length}</p>
                 </div>
                 <div className={`rounded-lg p-2.5 ${unassignedCount > 0 ? "bg-rose-50" : "bg-emerald-50"}`}>
@@ -957,11 +957,11 @@ export default function DashboardPage() {
           </div>
 
           {/* Workload Capacity Monitor */}
-          <Panel title="Staff Workload & Capacity Distribution" icon={Users} action={<PanelLink href="/team" label="Team" />}>
+          <Panel title="Staff workload & capacity distribution" icon={Users} action={<PanelLink href="/team" label="Team" />}>
             {staffWorkload.length === 0 ? (
               <EmptyState icon={Users} text="No active team members found." />
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div data-tour="dash-capacity" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {staffWorkload.map((staff) => (
                   <div key={staff.id} className="space-y-2 rounded-lg border border-border bg-surface-alt p-3 text-xs">
                     <div className="flex items-center gap-2">
@@ -990,7 +990,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <p className="font-bold text-violet-700">{staff.reviewCount}</p>
-                        <p className="text-[10px] text-text-muted">To Review</p>
+                        <p className="text-[10px] text-text-muted">To review</p>
                       </div>
                     </div>
                   </div>
@@ -1001,7 +1001,7 @@ export default function DashboardPage() {
 
           {/* Task stream + Invoice feed */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Panel title="Firm-Wide Task Stream" tour="dash-stream" icon={CheckSquare} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage Tasks" />}>
+            <Panel title="Firm-wide task stream" tour="dash-stream" icon={CheckSquare} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage tasks" />}>
               {myTasks.length === 0 ? (
                 <EmptyState icon={CheckSquare} text="No active tasks in the firm workflow." />
               ) : (
@@ -1011,7 +1011,7 @@ export default function DashboardPage() {
                       <th>Due</th>
                       <th>Task</th>
                       <th>Client</th>
-                      <th>Assigned To</th>
+                      <th>Assigned to</th>
                       <th>Stage</th>
                     </tr>
                   </thead>
@@ -1030,7 +1030,7 @@ export default function DashboardPage() {
               )}
             </Panel>
 
-            <Panel title="Recent Invoices" icon={Receipt} action={<PanelLink href="/invoices" label="View All" />}>
+            <Panel title="Recent invoices" icon={Receipt} action={<PanelLink href="/invoices" label="View all" />}>
               {recentInvoices.length === 0 ? (
                 <EmptyState icon={Receipt} text="No issued invoices in this period." />
               ) : (
@@ -1086,9 +1086,9 @@ export default function DashboardPage() {
           )}
 
           <div data-tour="dash-kpis" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard label="My Pending Tasks" value={myTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
+            <KpiCard label="My pending tasks" value={myTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
             <KpiCard
-              label="Overdue Deadlines"
+              label="Overdue deadlines"
               value={overdueTasks.length}
               icon={AlertCircle}
               tone="rose"
@@ -1103,7 +1103,7 @@ export default function DashboardPage() {
               href={isReviewer ? "/reviewer-queue" : undefined}
               sub={`${approvedCount} completed in total`}
             />
-            <KpiCard label="Logged This Week" value={formatHours(weekHours)} icon={Timer} tone="emerald" href="/time-tracking" sub="Monday to today" />
+            <KpiCard label="Logged this week" value={formatHours(weekHours)} icon={Timer} tone="emerald" href="/time-tracking" sub="Monday to today" />
           </div>
 
           {statutoryStrip}
@@ -1154,15 +1154,15 @@ export default function DashboardPage() {
             </Panel>
           </div>
 
-          <Panel title="My Assigned Tasks" tour="dash-stream" icon={CheckSquare} flush action={<PanelLink href="/tasks" label="Open Task Board" />}>
+          <Panel title="My assigned tasks" tour="dash-stream" icon={CheckSquare} flush action={<PanelLink href="/tasks" label="Open task board" />}>
             {myTasks.length === 0 ? (
-              <EmptyState icon={CheckCircle2} text="You have no active pending tasks assigned!" />
+              <EmptyState icon={CheckCircle2} text="No open tasks assigned to you." />
             ) : (
               <table className="w-full text-xs">
                 <thead>
                   <tr>
-                    <th>Due Date</th>
-                    <th>Statutory Due</th>
+                    <th>Due date</th>
+                    <th>Statutory due</th>
                     <th>Task</th>
                     <th>Category</th>
                     <th>Client</th>
@@ -1208,7 +1208,7 @@ export default function DashboardPage() {
 
             <div className="flex-1 overflow-y-auto p-5">
               {overdueTasks.length === 0 ? (
-                <EmptyState icon={CheckCircle2} text="Great job! No overdue items." />
+                <EmptyState icon={CheckCircle2} text="No overdue items." />
               ) : (
                 <div className="space-y-2">
                   {overdueTasks.map((t) => {
@@ -1226,7 +1226,7 @@ export default function DashboardPage() {
                             <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">{daysLate}d late</span>
                           </div>
                           <p className="text-[11px] text-text-muted">Client: {clientName(t.client_id) || "Internal"}</p>
-                          <p className="text-[11px] text-text-muted">Assigned Staff: {teamName(t.assigned_to) || "Unassigned"}</p>
+                          <p className="text-[11px] text-text-muted">Assigned staff: {teamName(t.assigned_to) || "Unassigned"}</p>
                           <div className="flex flex-wrap items-center gap-2 pt-1">
                             <span className="text-[11px] text-text-muted">
                               Internal: <span className="font-semibold text-rose-600">{formatDate(t.due_date)}</span>

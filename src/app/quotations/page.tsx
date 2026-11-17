@@ -26,10 +26,9 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
+import { EMAIL_RE } from "@/lib/validate";
 
 type ClientRow = Client & Record<string, any>;
 type LineItem = { description: string; qty: number; rate: number };
@@ -60,7 +59,6 @@ const STATUS_STYLES: Record<string, string> = {
   Converted: "bg-violet-50 text-violet-700 border-violet-200",
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEFAULT_VALIDITY_DAYS = 15;
 
 const inputClass =
@@ -582,7 +580,7 @@ export default function QuotationsPage() {
           onClick={() => openModal()}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
-          <Plus className="h-4 w-4" /> New Quotation
+          <Plus className="h-4 w-4" /> New quotation
         </button>
       </div>
 
@@ -591,7 +589,7 @@ export default function QuotationsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Quoted Value</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Quoted value</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{compactINR(stats.quotedValue)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
@@ -608,7 +606,7 @@ export default function QuotationsPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting Response</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting response</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-blue-700">{stats.awaitingCount}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -621,7 +619,7 @@ export default function QuotationsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Acceptance Rate</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Acceptance rate</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-700">{stats.acceptanceRate}%</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -640,7 +638,7 @@ export default function QuotationsPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Expiring in 7 Days</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Expiring in 7 days</p>
               <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.expiringSoon > 0 ? "text-amber-700" : "text-text-main"}`}>
                 {stats.expiringSoon}
               </p>
@@ -703,8 +701,8 @@ export default function QuotationsPage() {
                 <tr>
                   <th>Quote #</th>
                   <th>Date</th>
-                  <th>Client / Recipient</th>
-                  <th>Valid Until</th>
+                  <th>Client / recipient</th>
+                  <th>Valid until</th>
                   <th className="text-right">Amount</th>
                   <th>Status</th>
                   <th className="text-right">Actions</th>
@@ -844,7 +842,7 @@ export default function QuotationsPage() {
                     disabled={saving}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    <Receipt className="h-3.5 w-3.5" /> Convert to Invoice
+                    <Receipt className="h-3.5 w-3.5" /> Convert to invoice
                   </button>
                 )}
               </div>
@@ -933,7 +931,7 @@ export default function QuotationsPage() {
                   <input type="tel" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} className={inputClass} placeholder="Phone number" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Billing Address</label>
+                  <label className={labelClass}>Billing address</label>
                   <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="Full address for the quotation..." />
                 </div>
               </div>
@@ -945,7 +943,7 @@ export default function QuotationsPage() {
                   <input type="date" required value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Valid Until</label>
+                  <label className={labelClass}>Valid until</label>
                   <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputClass} />
                 </div>
                 <div>
@@ -957,7 +955,7 @@ export default function QuotationsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>GST Type</label>
+                  <label className={labelClass}>GST type</label>
                   <select value={isInterState ? "inter" : "intra"} onChange={(e) => setIsInterState(e.target.value === "inter")} className={inputClass}>
                     <option value="intra">Intra-state (CGST + SGST)</option>
                     <option value="inter">Inter-state (IGST)</option>
@@ -972,7 +970,7 @@ export default function QuotationsPage() {
               {/* Line Items with Master Services Dropdown */}
               <div className="space-y-2 border-t border-border pt-4">
                 <div className="flex items-center justify-between">
-                  <label className={labelClass}>Quotation Line Items</label>
+                  <label className={labelClass}>Quotation line items</label>
                   <span className="text-[10px] text-text-muted">{items.length} item{items.length === 1 ? "" : "s"}</span>
                 </div>
 
@@ -1050,7 +1048,7 @@ export default function QuotationsPage() {
                 {/* Notes and Bank Details */}
                 <div className="flex-1">
                   <label className={`${labelClass} flex items-center gap-1`}>
-                    <Landmark className="h-3.5 w-3.5" /> Terms, Notes & Bank Details
+                    <Landmark className="h-3.5 w-3.5" /> Terms, notes & bank details
                   </label>
                   <textarea rows={7} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
                 </div>

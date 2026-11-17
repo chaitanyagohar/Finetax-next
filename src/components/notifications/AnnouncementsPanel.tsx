@@ -174,7 +174,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
                         disabled={busy === a.id}
                         className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                       >
-                        {busy === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />} I've read this
+                        {busy === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />} I&apos;ve read this
                       </button>
                     )}
                   </div>
@@ -245,11 +245,11 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-text-main">
               <input type="checkbox" checked={important} onChange={(e) => setImportant(e.target.checked)} className="h-4 w-4 accent-navy" />
-              Important: show as a popup on everyone's dashboard
+              Important: show as a popup on everyone&apos;s dashboard
             </label>
             <label className="flex cursor-pointer items-center gap-2 text-text-main">
               <input type="checkbox" checked={requiresAck} onChange={(e) => setRequiresAck(e.target.checked)} className="h-4 w-4 accent-navy" />
-              Require each person to confirm "I've read this"
+              Require each person to confirm &quot;I&apos;ve read this&quot;
             </label>
           </form>
         </Modal>
