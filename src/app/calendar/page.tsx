@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
@@ -148,7 +149,7 @@ export default function ComplianceCalendarPage() {
 
   async function loadReference() {
     const [cRes, pRes] = await Promise.all([
-      supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status, assigned_to").order("name", { ascending: true }),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status, assigned_to").order("name", { ascending: true }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name, role, is_active, is_reviewer").order("name", { ascending: true }),
     ]);
     setClients(cRes.data || []);
@@ -158,11 +159,14 @@ export default function ComplianceCalendarPage() {
   async function loadCalendarData() {
     setLoading(true);
     const range = `and(due_date.gte.${monthStartISO},due_date.lte.${monthEndISO}),and(official_due_date.gte.${monthStartISO},official_due_date.lte.${monthEndISO})`;
-    let taskQuery = supabase
-      .from("tasks")
-      .select("id, title, category, client_id, assigned_to, reviewer_id, stage, due_date, official_due_date, recurrence, priority")
-      .or(range);
-    if (scope === "mine") taskQuery = taskQuery.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`);
+    const taskQuery = fetchAll((from, to) => {
+      let q = supabase
+        .from("tasks")
+        .select("id, title, category, client_id, assigned_to, reviewer_id, stage, due_date, official_due_date, recurrence, priority")
+        .or(range);
+      if (scope === "mine") q = q.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`);
+      return q.order("id").range(from, to);
+    });
 
     const [eRes, tRes] = await Promise.all([
       supabase.from("compliance_events").select("*").gte("due_date", monthStartISO).lte("due_date", monthEndISO).order("due_date", { ascending: true }),

@@ -21,6 +21,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -155,22 +156,30 @@ export default function QuotationsPage() {
     if (showSpinner) setLoading(true);
 
     const [qRes, cRes, lRes, sRes, iRes] = await Promise.all([
-      supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, email, phone, organization_name, address, status").order("name", { ascending: true }),
-      supabase
-        .from("leads")
-        .select("id, name, email, phone, organization_name, company, status, converted_client_id")
-        .order("created_at", { ascending: false }),
+      fetchAll((from, to) => supabase.from("quotations").select("*").order("created_at", { ascending: false }).order("id").range(from, to)),
+      fetchAll<ClientRow>((from, to) =>
+        supabase.from("clients").select("id, name, email, phone, organization_name, address, status").order("name", { ascending: true }).order("id").range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("leads")
+          .select("id, name, email, phone, organization_name, company, status, converted_client_id")
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to)
+      ),
       supabase
         .from("firm_settings")
         .select("firm_name, bank_name, bank_account_no, bank_ifsc, upi_id, default_gst_rate, payment_terms")
         .maybeSingle(),
-      supabase.from("invoices").select("id, invoice_number, quotation_id").not("quotation_id", "is", null),
+      fetchAll((from, to) =>
+        supabase.from("invoices").select("id, invoice_number, quotation_id").not("quotation_id", "is", null).order("id").range(from, to)
+      ),
     ]);
 
     if (qRes.error) showToast("error", "Could not load quotations. Please refresh the page.");
-    if (qRes.data) setQuotations(qRes.data);
-    if (cRes.data) setClients(cRes.data as ClientRow[]);
+    else setQuotations(qRes.data);
+    if (!cRes.error) setClients(cRes.data);
     if (lRes.data) setLeads(lRes.data);
     if (sRes.data) setFirmSettings(sRes.data);
     if (iRes.data) {

@@ -36,6 +36,7 @@ import {
   Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
@@ -185,16 +186,15 @@ export default function UnifiedInboxPage() {
   }
 
   async function loadClients() {
-    const { data } = await supabase
-      .from("clients")
-      .select("id, name, organization_name, email, phone, pan, gstin, status")
-      .order("name", { ascending: true });
-    setClients(data || []);
+    const { data } = await fetchAll((from, to) =>
+      supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, status").order("name", { ascending: true }).order("id").range(from, to)
+    );
+    setClients(data);
   }
 
   async function loadSystemFiles() {
     const [docRes, invRes, quoRes] = await Promise.all([
-      supabase.from("documents").select("id, title, file_url"),
+      supabase.from("documents").select("id, title, file_url").not("file_url", "is", null).order("created_at", { ascending: false }).limit(200),
       supabase.from("invoices").select("id, invoice_number, status").neq("status", "Cancelled").order("created_at", { ascending: false }).limit(200),
       supabase.from("quotations").select("id, quote_number").order("created_at", { ascending: false }).limit(200),
     ]);

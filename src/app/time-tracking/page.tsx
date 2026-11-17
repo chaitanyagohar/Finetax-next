@@ -22,6 +22,7 @@ import {
   Timer,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
@@ -166,7 +167,7 @@ export default function TimeTrackingPage() {
 
   async function loadReferenceData() {
     const [cRes, pRes] = await Promise.all([
-      supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status").order("name", { ascending: true }),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status").order("name", { ascending: true }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
     if (cRes.data) setClients(cRes.data);
@@ -175,17 +176,11 @@ export default function TimeTrackingPage() {
 
   async function loadLogs(showSpinner = true) {
     if (showSpinner) setLoading(true);
-    let query = supabase
-      .from("time_logs")
-      .select("*")
-      .gte("log_date", rangeFrom)
-      .lte("log_date", rangeTo)
-      .order("log_date", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (!isAdmin) query = query.eq("user_id", me);
-
-    const { data, error } = await query;
+    const { data, error } = await fetchAll((from, to) => {
+      let query = supabase.from("time_logs").select("*").gte("log_date", rangeFrom).lte("log_date", rangeTo);
+      if (!isAdmin) query = query.eq("user_id", me);
+      return query.order("log_date", { ascending: false }).order("created_at", { ascending: false }).order("id").range(from, to);
+    });
     if (error) showToast("error", "Could not load time logs. Please refresh the page.");
     setLogs(data || []);
     setLoading(false);

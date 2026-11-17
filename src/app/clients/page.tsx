@@ -29,6 +29,7 @@ import {
   Copy,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -255,23 +256,18 @@ export default function ClientsPage() {
   async function fetchClients(showSpinner = true) {
     if (showSpinner) setLoading(true);
 
-    const [cRes, iRes, pRes] = await Promise.all([
-      supabase.from("clients").select("*").order("name", { ascending: true }),
-      supabase.from("invoices").select("client_id, total, amount_paid, status"),
+    const [cRes, bRes, pRes] = await Promise.all([
+      fetchAll<ClientRow>((from, to) => supabase.from("clients").select("*").order("name", { ascending: true }).order("id").range(from, to)),
+      supabase.rpc("client_balances"),
       supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
 
     if (cRes.error) showToast("error", "Could not load clients. Please refresh the page.");
-    if (cRes.data) setClients(cRes.data as ClientRow[]);
+    else setClients(cRes.data);
     if (pRes.data) setTeam(pRes.data as any[]);
-    if (iRes.data) {
-      const map: Record<string, number> = {};
-      iRes.data.forEach((inv: any) => {
-        if (!inv.client_id || ["Draft", "Cancelled"].includes(inv.status || "Draft")) return;
-        const bal = Number(inv.total || 0) - Number(inv.amount_paid || 0);
-        if (bal > 0.009) map[inv.client_id] = (map[inv.client_id] || 0) + bal;
-      });
-      setOutstandingByClient(map);
+    if (!bRes.error) {
+      const rows = (bRes.data || []) as { client_id: string; balance: number }[];
+      setOutstandingByClient(Object.fromEntries(rows.map((r) => [r.client_id, Number(r.balance)])));
     }
 
     setLoading(false);

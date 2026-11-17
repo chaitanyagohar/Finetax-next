@@ -23,6 +23,7 @@ import {
   Target,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal } from "@/components/ui/Modal";
@@ -117,18 +118,24 @@ export default function ReviewerQueuePage() {
 
     const since = new Date(Date.now() - ANALYTICS_DAYS * 86400000).toISOString();
 
-    let openQuery = supabase.from("tasks").select("*").in("stage", ["Submitted for Review", "Changes Required"]).order("due_date", { ascending: true });
-    let approvedQuery = supabase.from("tasks").select("*").eq("stage", "Approved").gte("created_at", since);
-    if (!(isAdmin && scope === "all")) {
-      openQuery = openQuery.eq("reviewer_id", me);
-      approvedQuery = approvedQuery.eq("reviewer_id", me);
-    }
+    const mine = <Q extends { eq: (column: string, value: string) => Q }>(q: Q) => (isAdmin && scope === "all" ? q : q.eq("reviewer_id", me));
 
     const [openRes, approvedRes, logRes, clientRes, teamRes] = await Promise.all([
-      openQuery,
-      approvedQuery,
-      supabase.from("audit_logs").select("id, entity_id, action, metadata, timestamp").eq("entity", "TASKS").gte("timestamp", since).order("timestamp", { ascending: true }),
-      supabase.from("clients").select("id, name, email, phone"),
+      fetchAll((from, to) =>
+        mine(supabase.from("tasks").select("*").in("stage", ["Submitted for Review", "Changes Required"])).order("due_date", { ascending: true }).order("id").range(from, to)
+      ),
+      fetchAll((from, to) => mine(supabase.from("tasks").select("*").eq("stage", "Approved").gte("created_at", since)).order("id").range(from, to)),
+      fetchAll((from, to) =>
+        supabase
+          .from("audit_logs")
+          .select("id, entity_id, action, metadata, timestamp")
+          .eq("entity", "TASKS")
+          .gte("timestamp", since)
+          .order("timestamp", { ascending: true })
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, email, phone").order("id").range(from, to)),
       supabase.from("profiles").select("id, name, email, is_active"),
     ]);
 

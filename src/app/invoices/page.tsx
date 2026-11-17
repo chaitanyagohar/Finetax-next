@@ -22,6 +22,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -181,11 +182,17 @@ export default function InvoicesPage() {
         .from("firm_settings")
         .select("firm_name, gstin, default_gst_rate, payment_terms, bank_name, bank_account_no, bank_ifsc, upi_id")
         .maybeSingle(),
-      supabase
-        .from("invoices")
-        .select("*, clients!client_id(name, email, phone, organization_name, gstin)")
-        .order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, email, phone, organization_name, gstin, state, status").order("name", { ascending: true }),
+      fetchAll((from, to) =>
+        supabase
+          .from("invoices")
+          .select("*, clients!client_id(name, email, phone, organization_name, gstin)")
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll<ClientRow>((from, to) =>
+        supabase.from("clients").select("id, name, email, phone, organization_name, gstin, state, status").order("name", { ascending: true }).order("id").range(from, to)
+      ),
       supabase.from("profiles").select("id, name"),
     ]);
 
@@ -193,10 +200,10 @@ export default function InvoicesPage() {
     if (invRes.error) {
       console.error("Fetch Invoices Error:", invRes.error);
       showToast("error", "Could not load invoices. Please refresh the page.");
-    } else if (invRes.data) {
+    } else {
       setInvoices(invRes.data);
     }
-    if (clientRes.data) setClients(clientRes.data as ClientRow[]);
+    if (!clientRes.error) setClients(clientRes.data);
     if (teamRes.data) setTeamNames(Object.fromEntries(teamRes.data.map((p: any) => [p.id, p.name])));
 
     setLoading(false);

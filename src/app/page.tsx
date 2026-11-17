@@ -26,6 +26,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import ImportantNotifications from "@/components/notifications/ImportantNotifications";
@@ -55,9 +56,6 @@ const STAGE_BARS: Record<string, string> = {
   Approved: "bg-emerald-500",
 };
 
-const CLOSED_LEAD_STATUSES = ["won", "lost", "converted", "closed"];
-const OPEN_QUOTE_STATUSES = ["draft", "sent"];
-const ISSUED_EXCLUDED = ["Draft", "Cancelled"];
 
 type Tone = "navy" | "emerald" | "amber" | "rose" | "blue" | "violet";
 
@@ -120,19 +118,45 @@ function periodBounds(filter: string, today: string): [string, string] | null {
   return null;
 }
 
-function inPeriod(date: string, bounds: [string, string] | null): boolean {
-  if (!bounds) return true;
-  return !!date && date >= bounds[0] && date < bounds[1];
-}
-
 function invoiceDate(inv: any): string {
   return isoOf(inv.date || inv.issue_date || inv.created_at);
 }
 
 function invoiceBalance(inv: any): number {
-  if (ISSUED_EXCLUDED.includes(inv.status || "Draft")) return 0;
-  return Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid ?? inv.amountPaid ?? 0));
+  return Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
 }
+
+type FinanceTotals = {
+  billed: number;
+  billed_count: number;
+  collected: number;
+  payments_count: number;
+  outstanding: number;
+  outstanding_count: number;
+  aging: { bucket: number; count: number; amount: number }[];
+  trend: { month: string; billed: number; collected: number }[];
+  has_activity: boolean;
+};
+
+type CrmTotals = {
+  open_leads: number;
+  lead_followups_due: number;
+  won_leads: number;
+  lost_leads: number;
+  open_quotes: number;
+  pipeline_value: number;
+  active_clients: number;
+  client_master: number;
+  discussion_followups: number;
+};
+
+const AGING_BUCKETS = [
+  { label: "Not yet due", bar: "bg-blue-500" },
+  { label: "1–30 days overdue", bar: "bg-amber-400" },
+  { label: "31–60 days overdue", bar: "bg-orange-500" },
+  { label: "61–90 days overdue", bar: "bg-rose-500" },
+  { label: "90+ days overdue", bar: "bg-rose-700" },
+];
 
 function formatHours(hours: number): string {
   const mins = Math.round((Number(hours) || 0) * 60);
@@ -305,14 +329,14 @@ export default function DashboardPage() {
   const isReviewer = !!currentUser?.isReviewer;
   const [supabase] = useState(() => createClient());
 
+  // Open tasks only; finished work is counted in the database instead of downloaded.
   const [tasks, setTasks] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
+  const [approvedCount, setApprovedCount] = useState(0);
   const [clients, setClients] = useState<any[]>([]);
-  const [quotations, setQuotations] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
-  const [leads, setLeads] = useState<any[]>([]);
-  const [discussions, setDiscussions] = useState<any[]>([]);
+  const [finance, setFinance] = useState<FinanceTotals | null>(null);
+  const [crm, setCrm] = useState<CrmTotals | null>(null);
+  const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [complianceEvents, setComplianceEvents] = useState<any[]>([]);
   const [weekHours, setWeekHours] = useState(0);
 
@@ -327,6 +351,8 @@ export default function DashboardPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const reloadTimer = useRef<number | null>(null);
+  // Realtime reloads run from a listener set up once, so they read the period from here.
+  const dateFilterRef = useRef(dateFilter);
   const today = localISODate();
   const fyLabel = currentFYLabel(today);
 
@@ -361,6 +387,27 @@ export default function DashboardPage() {
     };
   }, []);
 
+  function changeDateFilter(next: string) {
+    setDateFilter(next);
+    dateFilterRef.current = next;
+    loadFinance(next);
+  }
+
+  async function loadFinance(filter: string) {
+    const bounds = periodBounds(filter, localISODate());
+    let recentQuery = supabase
+      .from("invoices")
+      .select("id, invoice_number, client_id, organisation, total, amount_paid, status, date, issue_date, created_at")
+      .not("status", "in", "(Draft,Cancelled)");
+    if (bounds) recentQuery = recentQuery.gte("date", bounds[0]).lt("date", bounds[1]);
+    const [totalsRes, recentRes] = await Promise.all([
+      supabase.rpc("dashboard_finance", { p_from: bounds?.[0] ?? null, p_to: bounds?.[1] ?? null }),
+      recentQuery.order("date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(6),
+    ]);
+    if (!totalsRes.error && totalsRes.data) setFinance(totalsRes.data as FinanceTotals);
+    if (!recentRes.error) setRecentInvoices(recentRes.data || []);
+  }
+
   // Close drawer with Escape key
   useEffect(() => {
     if (!isOverdueDrawerOpen) return;
@@ -382,39 +429,31 @@ export default function DashboardPage() {
     const horizon = addDaysISO(today, 13);
 
     try {
-      // Shared data for everyone
-      let taskQuery = supabase.from("tasks").select("*").order("due_date", { ascending: true });
-      if (!isAdmin) taskQuery = taskQuery.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`);
+      const scoped = <Q extends { or: (filter: string) => Q }>(q: Q) => (isAdmin ? q : q.or(`assigned_to.eq.${me},reviewer_id.eq.${me}`));
+      const approvedQuery = supabase.from("tasks").select("id", { count: "exact", head: true }).eq("stage", "Approved");
 
-      const [taskRes, clientRes, teamRes, eventRes] = await Promise.all([
-        taskQuery,
-        supabase.from("clients").select("id, name, organization_name, status"),
+      const [taskRes, approvedRes, clientRes, teamRes, eventRes] = await Promise.all([
+        fetchAll((from, to) =>
+          scoped(supabase.from("tasks").select("*").neq("stage", "Approved"))
+            .order("due_date", { ascending: true })
+            .order("id")
+            .range(from, to)
+        ),
+        isAdmin ? approvedQuery : approvedQuery.eq("assigned_to", me),
+        fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name").order("id").range(from, to)),
         supabase.from("profiles").select("id, name, role, designation, is_active, is_reviewer").order("name", { ascending: true }),
         supabase.from("compliance_events").select("id, title, category, due_date").gte("due_date", today).lte("due_date", horizon),
       ]);
 
-      if (taskRes.data) setTasks(taskRes.data);
-      if (clientRes.data) setClients(clientRes.data);
+      if (!taskRes.error) setTasks(taskRes.data);
+      if (!approvedRes.error) setApprovedCount(approvedRes.count || 0);
+      if (!clientRes.error) setClients(clientRes.data);
       if (teamRes.data) setTeam(teamRes.data);
       setComplianceEvents(eventRes.data || []);
 
       if (isAdmin) {
-        const [iRes, pRes, qRes, lRes, dRes] = await Promise.all([
-          supabase
-            .from("invoices")
-            .select("id, invoice_number, client_id, organisation, total, amount_paid, status, date, issue_date, due_date, created_at")
-            .order("created_at", { ascending: false }),
-          supabase.from("invoice_payments").select("invoice_id, amount, paid_on"),
-          supabase.from("quotations").select("*"),
-          supabase.from("leads").select("*"),
-          supabase.from("discussions").select("id, client_id, summary, date, follow_up_date, follow_up_completed"),
-        ]);
-
-        if (iRes.data) setInvoices(iRes.data);
-        if (pRes.data) setPayments(pRes.data);
-        if (qRes.data) setQuotations(qRes.data);
-        if (lRes.data) setLeads(lRes.data);
-        if (dRes.data) setDiscussions(dRes.data);
+        const [, crmRes] = await Promise.all([loadFinance(dateFilterRef.current), supabase.rpc("dashboard_crm")]);
+        if (!crmRes.error && crmRes.data) setCrm(crmRes.data as CrmTotals);
       } else {
         const { data: logs } = await supabase
           .from("time_logs")
@@ -446,16 +485,14 @@ export default function DashboardPage() {
   /* ---------------- Task calculations ---------------- */
 
   const myTasks = isAdmin ? tasks : tasks.filter((t) => t.assigned_to === me);
-  const pendingTasks = myTasks.filter((t) => t.stage !== "Approved");
-  const overdueTasks = pendingTasks.filter((t) => t.due_date && t.due_date < today);
-  const completedTasks = myTasks.filter((t) => t.stage === "Approved");
-  const changesRequired = pendingTasks.filter((t) => t.stage === "Changes Required");
+  const overdueTasks = myTasks.filter((t) => t.due_date && t.due_date < today);
+  const changesRequired = myTasks.filter((t) => t.stage === "Changes Required");
   const reviewQueue = tasks.filter((t) => t.stage === "Submitted for Review" && (isAdmin || t.reviewer_id === me));
-  const unassignedCount = tasks.filter((t) => t.stage !== "Approved" && !t.assigned_to).length;
+  const unassignedCount = tasks.filter((t) => !t.assigned_to).length;
 
   const weekAhead = addDaysISO(today, 7);
   const inNextWeek = (d?: string | null) => !!d && d.slice(0, 10) >= today && d.slice(0, 10) <= weekAhead;
-  const dueThisWeek = pendingTasks
+  const dueThisWeek = myTasks
     .filter((t) => inNextWeek(t.due_date) || inNextWeek(t.official_due_date))
     .sort((a, b) => {
       const aMin = [a.due_date, a.official_due_date].filter(Boolean).sort()[0] || "9999";
@@ -465,15 +502,15 @@ export default function DashboardPage() {
 
   const stageCounts = STAGES.map((stage) => ({
     stage,
-    count: tasks.filter((t) => t.stage === stage).length,
+    count: stage === "Approved" ? approvedCount : tasks.filter((t) => t.stage === stage).length,
   }));
-  const totalTaskCount = Math.max(1, tasks.length);
+  const totalTaskCount = Math.max(1, tasks.length + approvedCount);
 
   /* ---------------- Statutory deadline strip (next 14 days) ---------------- */
 
   const statutoryDays = useMemo(() => {
     const days = Array.from({ length: 14 }, (_, i) => addDaysISO(today, i));
-    const openStatutory = tasks.filter((t) => t.stage !== "Approved" && t.official_due_date);
+    const openStatutory = tasks.filter((t) => t.official_due_date);
     return days.map((d) => {
       const taskItems = openStatutory
         .filter((t) => String(t.official_due_date).slice(0, 10) === d)
@@ -485,76 +522,38 @@ export default function DashboardPage() {
     });
   }, [tasks, complianceEvents, today, clientName]);
 
-  const breachedStatutory = tasks.filter((t) => t.stage !== "Approved" && t.official_due_date && t.official_due_date < today).length;
+  const breachedStatutory = tasks.filter((t) => t.official_due_date && t.official_due_date < today).length;
   const selectedDayItems = selectedDay ? statutoryDays.find((d) => d.date === selectedDay)?.items || [] : [];
 
-  /* ---------------- Financial calculations (admin) ---------------- */
+  /* ---------------- Financial and CRM totals (admin, worked out in the database) ---------------- */
 
-  const bounds = periodBounds(dateFilter, today);
-  const issuedInvoices = invoices.filter((i) => !ISSUED_EXCLUDED.includes(i.status || "Draft"));
-  const periodInvoices = issuedInvoices.filter((i) => inPeriod(invoiceDate(i), bounds));
-  const totalBilled = periodInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
-  const periodPayments = payments.filter((p) => inPeriod(isoOf(p.paid_on), bounds));
-  const totalCollected = periodPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalBilled = Number(finance?.billed || 0);
+  const totalCollected = Number(finance?.collected || 0);
+  // Payments received in the period compared with the amount billed in it. Clearing older dues can push this past 100%, so the bar is capped.
   const collectionRate = totalBilled > 0 ? Math.min(100, Math.round((totalCollected / totalBilled) * 100)) : 0;
-
-  const outstandingInvoices = issuedInvoices.filter((i) => invoiceBalance(i) > 0.009);
-  const totalOutstanding = outstandingInvoices.reduce((s, i) => s + invoiceBalance(i), 0);
-
-  // Receivables aging by days past due (falls back to invoice date when no due date)
-  const agingBuckets = [
-    { label: "Not yet due", test: (d: number) => d <= 0, bar: "bg-blue-500" },
-    { label: "1–30 days overdue", test: (d: number) => d >= 1 && d <= 30, bar: "bg-amber-400" },
-    { label: "31–60 days overdue", test: (d: number) => d >= 31 && d <= 60, bar: "bg-orange-500" },
-    { label: "61–90 days overdue", test: (d: number) => d >= 61 && d <= 90, bar: "bg-rose-500" },
-    { label: "90+ days overdue", test: (d: number) => d > 90, bar: "bg-rose-700" },
-  ].map((b) => {
-    const items = outstandingInvoices.filter((i) => {
-      const ref = isoOf(i.due_date) || invoiceDate(i);
-      return b.test(ref ? daysBetween(ref, today) : 0);
-    });
-    return { ...b, count: items.length, amount: items.reduce((s, i) => s + invoiceBalance(i), 0) };
+  const totalOutstanding = Number(finance?.outstanding || 0);
+  const agingBuckets = AGING_BUCKETS.map((b, i) => {
+    const row = finance?.aging?.find((a) => a.bucket === i);
+    return { ...b, count: Number(row?.count || 0), amount: Number(row?.amount || 0) };
   });
   const overdueReceivables = agingBuckets.slice(1).reduce((s, b) => s + b.amount, 0);
 
-  // 6-month trend: billed (issued invoices) vs collected (payments received)
-  const [ty, tm] = today.split("-").map(Number);
-  const trend = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(ty, tm - 1 - 5 + i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const trend = (finance?.trend || []).map((m) => {
+    const [y, mo] = m.month.split("-").map(Number);
     return {
-      key,
-      label: d.toLocaleString("en-IN", { month: "short" }),
-      billed: issuedInvoices.filter((inv) => invoiceDate(inv).slice(0, 7) === key).reduce((s, inv) => s + Number(inv.total || 0), 0),
-      collected: payments.filter((p) => isoOf(p.paid_on).slice(0, 7) === key).reduce((s, p) => s + Number(p.amount || 0), 0),
+      key: m.month,
+      label: new Date(y, mo - 1, 1).toLocaleString("en-IN", { month: "short" }),
+      billed: Number(m.billed || 0),
+      collected: Number(m.collected || 0),
     };
   });
   const maxTrend = Math.max(1, ...trend.map((m) => Math.max(m.billed, m.collected)));
   const barHeight = (v: number) => (v > 0 ? Math.max(3, (v / maxTrend) * 100) : 0);
 
-  /* ---------------- CRM calculations (admin) ---------------- */
-
-  const activeClients = clients.filter((c) => !c.status || String(c.status).toLowerCase() === "active");
-  const openLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(String(l.status || "").toLowerCase()));
-  const leadFollowUpsDue = openLeads.filter((l) => {
-    const f = isoOf(l.follow_up_date || l.followUpDate);
-    return f && f <= today;
-  });
-  const wonLeads = leads.filter((l) => String(l.status || "").toLowerCase() === "won" || l.converted_client_id).length;
-  const lostLeads = leads.filter((l) => String(l.status || "").toLowerCase() === "lost").length;
+  const wonLeads = Number(crm?.won_leads || 0);
+  const lostLeads = Number(crm?.lost_leads || 0);
   const winRate = wonLeads + lostLeads > 0 ? Math.round((wonLeads / (wonLeads + lostLeads)) * 100) : 0;
-
-  const openQuotes = quotations.filter((q) => {
-    const s = String(q.status || "Draft").toLowerCase();
-    const validUntil = isoOf(q.valid_until || q.validUntil);
-    return OPEN_QUOTE_STATUSES.includes(s) && (!validUntil || validUntil >= today);
-  });
-  const pipelineValue = openQuotes.reduce((s, q) => s + Number(q.total || 0), 0);
-
-  const discussionFollowUps = discussions.filter((d) => {
-    const f = isoOf(d.follow_up_date);
-    return f && f <= today && !d.follow_up_completed;
-  });
+  const discussionFollowUps = Number(crm?.discussion_followups || 0);
 
   /* ---------------- Workload Map per Staff (admin) ---------------- */
 
@@ -705,7 +704,7 @@ export default function DashboardPage() {
           {isAdmin && (
             <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs">
               <Calendar className="h-3.5 w-3.5 text-text-muted" />
-              <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="bg-transparent text-xs font-medium focus:outline-none">
+              <select value={dateFilter} onChange={(e) => changeDateFilter(e.target.value)} className="bg-transparent text-xs font-medium focus:outline-none">
                 <option value="all">All Time</option>
                 <option value="month">This Month</option>
                 <option value="quarter">This Quarter</option>
@@ -752,7 +751,7 @@ export default function DashboardPage() {
               icon={IndianRupee}
               tone="navy"
               href="/invoices"
-              sub={`${periodInvoices.length} issued invoice${periodInvoices.length === 1 ? "" : "s"}`}
+              sub={`${finance?.billed_count || 0} issued invoice${finance?.billed_count === 1 ? "" : "s"}`}
             />
             <KpiCard
               label={`Collected · ${DATE_FILTER_LABELS[dateFilter]}`}
@@ -766,7 +765,7 @@ export default function DashboardPage() {
                     <div className="h-full rounded-full bg-emerald-500" style={{ width: `${collectionRate}%` }} />
                   </div>
                   <span className="font-medium text-emerald-700">
-                    {periodPayments.length} payment{periodPayments.length === 1 ? "" : "s"} received · {collectionRate}% of billed
+                    {finance?.payments_count || 0} payment{finance?.payments_count === 1 ? "" : "s"} received · {collectionRate}% of the amount billed in this period
                   </span>
                 </div>
               }
@@ -779,7 +778,7 @@ export default function DashboardPage() {
               href="/invoices"
               sub={
                 <span>
-                  {outstandingInvoices.length} invoices
+                  {finance?.outstanding_count || 0} invoices
                   {overdueReceivables > 0 && <span className="font-semibold text-rose-600"> · {compactINR(overdueReceivables)} overdue</span>}
                 </span>
               }
@@ -798,13 +797,13 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <KpiCard
               label="Open Leads"
-              value={openLeads.length}
+              value={crm?.open_leads || 0}
               icon={UserPlus}
               tone="blue"
               href="/leads"
               sub={
                 <span>
-                  {leadFollowUpsDue.length > 0 ? <span className="font-semibold text-amber-700">{leadFollowUpsDue.length} follow-ups due</span> : "No follow-ups due"}
+                  {crm?.lead_followups_due ? <span className="font-semibold text-amber-700">{crm.lead_followups_due} follow-ups due</span> : "No follow-ups due"}
                   {" · "}
                   {winRate}% win rate
                 </span>
@@ -812,27 +811,27 @@ export default function DashboardPage() {
             />
             <KpiCard
               label="Quotation Pipeline"
-              value={compactINR(pipelineValue)}
+              value={compactINR(Number(crm?.pipeline_value || 0))}
               icon={FileText}
               tone="violet"
               href="/quotations"
-              sub={`${openQuotes.length} live quote${openQuotes.length === 1 ? "" : "s"} awaiting decision`}
+              sub={`${crm?.open_quotes || 0} live quote${crm?.open_quotes === 1 ? "" : "s"} awaiting decision`}
             />
             <KpiCard
               label="Active Clients"
-              value={activeClients.length}
+              value={crm?.active_clients || 0}
               icon={Users}
               tone="navy"
               href="/clients"
-              sub={`${clients.filter((c) => c.status !== "Merged").length} in client master`}
+              sub={`${crm?.client_master || 0} in client master`}
             />
             <KpiCard
               label="Client Follow-ups"
-              value={discussionFollowUps.length}
+              value={discussionFollowUps}
               icon={MessageSquare}
-              tone={discussionFollowUps.length > 0 ? "amber" : "emerald"}
+              tone={discussionFollowUps > 0 ? "amber" : "emerald"}
               href="/client-discussions"
-              sub={discussionFollowUps.length > 0 ? "Due today or overdue" : "All discussion follow-ups clear"}
+              sub={discussionFollowUps > 0 ? "Due today or overdue" : "All discussion follow-ups clear"}
             />
           </div>
 
@@ -851,7 +850,7 @@ export default function DashboardPage() {
                 </div>
               }
             >
-              {issuedInvoices.length === 0 && payments.length === 0 ? (
+              {!finance?.has_activity ? (
                 <EmptyState icon={TrendingUp} text="No issued invoices yet. The trend appears once invoices are issued." />
               ) : (
                 <div className="flex h-52 items-end gap-2 sm:gap-4">
@@ -877,7 +876,7 @@ export default function DashboardPage() {
               <div className="mb-4">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total Balance Due</p>
                 <p className="mt-1 text-2xl font-bold tracking-tight text-amber-700">{formatINR(totalOutstanding)}</p>
-                <p className="text-[11px] text-text-muted">Across {outstandingInvoices.length} issued invoices</p>
+                <p className="text-[11px] text-text-muted">Across {finance?.outstanding_count || 0} issued invoices</p>
               </div>
               <div className="space-y-3">
                 {agingBuckets.map((b) => (
@@ -1003,7 +1002,7 @@ export default function DashboardPage() {
           {/* Task stream + Invoice feed */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Panel title="Firm-Wide Task Stream" tour="dash-stream" icon={CheckSquare} className="lg:col-span-2" flush action={<PanelLink href="/tasks" label="Manage Tasks" />}>
-              {pendingTasks.length === 0 ? (
+              {myTasks.length === 0 ? (
                 <EmptyState icon={CheckSquare} text="No active tasks in the firm workflow." />
               ) : (
                 <table className="w-full text-xs">
@@ -1017,7 +1016,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingTasks.slice(0, 8).map((t) => (
+                    {myTasks.slice(0, 8).map((t) => (
                       <tr key={t.id} className="transition hover:bg-surface-alt">
                         <td><DueDate date={t.due_date} today={today} /></td>
                         <td className="max-w-[240px] truncate font-semibold text-navy">{t.title}</td>
@@ -1032,14 +1031,11 @@ export default function DashboardPage() {
             </Panel>
 
             <Panel title="Recent Invoices" icon={Receipt} action={<PanelLink href="/invoices" label="View All" />}>
-              {periodInvoices.length === 0 ? (
+              {recentInvoices.length === 0 ? (
                 <EmptyState icon={Receipt} text="No issued invoices in this period." />
               ) : (
                 <div className="space-y-2">
-                  {[...periodInvoices]
-                    .sort((a, b) => invoiceDate(b).localeCompare(invoiceDate(a)))
-                    .slice(0, 6)
-                    .map((inv) => {
+                  {recentInvoices.map((inv) => {
                       const balance = invoiceBalance(inv);
                       return (
                         <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt p-2.5">
@@ -1090,7 +1086,7 @@ export default function DashboardPage() {
           )}
 
           <div data-tour="dash-kpis" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard label="My Pending Tasks" value={pendingTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
+            <KpiCard label="My Pending Tasks" value={myTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
             <KpiCard
               label="Overdue Deadlines"
               value={overdueTasks.length}
@@ -1105,7 +1101,7 @@ export default function DashboardPage() {
               icon={ShieldCheck}
               tone="violet"
               href={isReviewer ? "/reviewer-queue" : undefined}
-              sub={`${completedTasks.length} completed in total`}
+              sub={`${approvedCount} completed in total`}
             />
             <KpiCard label="Logged This Week" value={formatHours(weekHours)} icon={Timer} tone="emerald" href="/time-tracking" sub="Monday to today" />
           </div>
@@ -1159,7 +1155,7 @@ export default function DashboardPage() {
           </div>
 
           <Panel title="My Assigned Tasks" tour="dash-stream" icon={CheckSquare} flush action={<PanelLink href="/tasks" label="Open Task Board" />}>
-            {pendingTasks.length === 0 ? (
+            {myTasks.length === 0 ? (
               <EmptyState icon={CheckCircle2} text="You have no active pending tasks assigned!" />
             ) : (
               <table className="w-full text-xs">
@@ -1174,7 +1170,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingTasks.map((t) => (
+                  {myTasks.map((t) => (
                     <tr key={t.id} className="transition hover:bg-surface-alt">
                       <td><DueDate date={t.due_date} today={today} /></td>
                       <td><DueDate date={t.official_due_date} today={today} /></td>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Edit2, Loader2, MessageCircle, PlayCircle, Printer, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal } from "@/components/ui/Modal";
 import { clientLabel } from "@/components/ui/ClientPicker";
@@ -55,7 +56,7 @@ export default function SubscriptionBilling({
   async function load() {
     setLoading(true);
     const [s, b] = await Promise.all([
-      supabase.from("client_packages").select("*").eq("status", "Active").order("start_date", { ascending: false }),
+      fetchAll((from, to) => supabase.from("client_packages").select("*").eq("status", "Active").order("start_date", { ascending: false }).order("id").range(from, to)),
       supabase
         .from("invoices")
         .select("id, invoice_number, client_id, total, amount_paid, status, date, due_date, billing_period_start, billing_period_end, email_sent_at, client_package_id")

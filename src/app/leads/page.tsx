@@ -26,6 +26,7 @@ import {
   Clock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Lead, Profile, Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -194,9 +195,9 @@ export default function LeadsPage() {
     if (showSpinner) setLoading(true);
 
     const [leadsRes, profilesRes, clientsRes] = await Promise.all([
-      supabase.from("leads").select("*").order("created_at", { ascending: false }),
+      fetchAll<LeadRow>((from, to) => supabase.from("leads").select("*").order("created_at", { ascending: false }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name, email, role, is_active").order("name", { ascending: true }),
-      supabase.from("clients").select("id, name, organization_name").order("name", { ascending: true }),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name").order("name", { ascending: true }).order("id").range(from, to)),
     ]);
 
     if (leadsRes.error) showToast("error", "Could not load leads. Please refresh the page.");

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
@@ -123,8 +124,10 @@ export default function ClientDiscussionsPage() {
   async function loadData(showSpinner = true) {
     if (showSpinner) setLoading(true);
     const [dRes, cRes, pRes] = await Promise.all([
-      supabase.from("discussions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
-      supabase.from("clients").select("id, name, organization_name, status, phone, email").order("name", { ascending: true }),
+      fetchAll((from, to) =>
+        supabase.from("discussions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }).order("id").range(from, to)
+      ),
+      fetchAll((from, to) => supabase.from("clients").select("id, name, organization_name, status, phone, email").order("name", { ascending: true }).order("id").range(from, to)),
       supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
 
