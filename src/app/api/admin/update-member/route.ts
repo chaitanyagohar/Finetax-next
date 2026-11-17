@@ -2,9 +2,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { cleanMemberInput, inviteNewPerson } from "@/lib/team/members";
+import { cleanMemberInput, inviteNewPerson, sendInvitationNotice } from "@/lib/team/members";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTIONS = ["update", "deactivate", "reactivate", "resend_invite", "cancel_invite"];
@@ -27,13 +27,15 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const { data: member } = await admin
       .from("memberships")
-      .select("user_id, role, is_active, is_reviewer, module_access, designation")
+      .select("user_id, role, is_active, is_reviewer, module_access, designation, accepted_at, invited_name")
       .eq("org_id", caller.orgId)
       .eq("user_id", userId)
       .maybeSingle();
     if (!member) throw new ApiError(404, "This person isn't in your firm.");
 
     const self = userId === caller.userId;
+    // Invited with an existing Duesk login and not yet accepted: the login is not this firm's to change
+    const awaitingAcceptance = !member.accepted_at;
     const activeAdmins = async () => {
       const { count } = await admin
         .from("memberships")
@@ -44,7 +46,12 @@ export async function POST(request: NextRequest) {
       return count || 0;
     };
     const otherFirms = async () => {
-      const { count } = await admin.from("memberships").select("org_id", { count: "exact", head: true }).eq("user_id", userId).neq("org_id", caller.orgId);
+      const { count } = await admin
+        .from("memberships")
+        .select("org_id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .neq("org_id", caller.orgId)
+        .not("accepted_at", "is", null);
       return count || 0;
     };
 
@@ -57,10 +64,21 @@ export async function POST(request: NextRequest) {
 
       const { error } = await admin
         .from("memberships")
-        .update({ role: input.role, is_reviewer: input.is_reviewer, module_access: input.module_access, designation: input.designation })
+        .update({
+          role: input.role,
+          is_reviewer: input.is_reviewer,
+          module_access: input.module_access,
+          designation: input.designation,
+          ...(awaitingAcceptance ? { invited_name: input.name } : {}),
+        })
         .eq("org_id", caller.orgId)
         .eq("user_id", userId);
       if (error) throw new ApiError(500, "Could not save the changes.");
+
+      if (awaitingAcceptance) {
+        await writeAuditLog({ actor: caller, action: "UPDATE_MEMBER", entity: "MEMBERSHIPS", entity_id: userId, metadata: { role: input.role, modules: input.module_access, reviewer: input.is_reviewer } });
+        return NextResponse.json({ success: true, message: `${input.name}'s invitation updated.` });
+      }
 
       // Name and phone belong to the login, which may also be used in another firm
       const shared = (await otherFirms()) > 0;
@@ -75,6 +93,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "deactivate" || action === "reactivate") {
       if (self) throw new ApiError(400, "You can't change your own access.");
+      if (awaitingAcceptance) throw new ApiError(400, "This person hasn't accepted the invitation yet. Cancel the invitation instead.");
       if (action === "deactivate" && member.role === "admin" && member.is_active && (await activeAdmins()) <= 1) {
         throw new ApiError(400, "Your firm needs at least one active administrator.");
       }
@@ -97,6 +116,19 @@ export async function POST(request: NextRequest) {
 
     // Pending invitations: resend or cancel
     const { data: authData } = await admin.auth.admin.getUserById(userId);
+
+    if (awaitingAcceptance) {
+      const email = String(authData?.user?.email || "").toLowerCase();
+      if (action === "cancel_invite") {
+        await admin.from("memberships").delete().eq("org_id", caller.orgId).eq("user_id", userId).is("accepted_at", null);
+        await writeAuditLog({ actor: caller, action: "CANCEL_INVITE", entity: "MEMBERSHIPS", entity_id: userId, metadata: { email } });
+        return NextResponse.json({ success: true, message: "Invitation cancelled." });
+      }
+      await sendInvitationNotice(caller, email, member.invited_name || "there", getSiteUrl(request));
+      await writeAuditLog({ actor: caller, action: "RESEND_INVITE", entity: "MEMBERSHIPS", entity_id: userId, metadata: { email } });
+      return NextResponse.json({ success: true, message: "Invitation sent again." });
+    }
+
     if (authData?.user?.email_confirmed_at) throw new ApiError(400, "This person has already accepted the invitation.");
 
     const shared = (await otherFirms()) > 0;

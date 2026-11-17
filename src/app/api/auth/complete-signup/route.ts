@@ -35,7 +35,12 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
 
-    const { count } = await admin.from("memberships").select("org_id", { count: "exact", head: true }).eq("user_id", user.id);
+    // An unanswered invitation from another firm does not count
+    const { count } = await admin
+      .from("memberships")
+      .select("org_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .not("accepted_at", "is", null);
     if ((count || 0) > 0) throw new ApiError(400, "Your account already belongs to a firm. Please sign in.");
 
     // Unique short name for the firm

@@ -363,9 +363,8 @@ export default function PackagesPage() {
       ({ error } = await supabase.from("service_packages").update({ is_active: target.is_active === false }).eq("id", target.id));
       if (!error) logAuditEvent(target.is_active === false ? "RESTORE_SERVICE_PACKAGE" : "ARCHIVE_SERVICE_PACKAGE", "SERVICE_PACKAGES", target.id, { name: target.name });
     } else if (kind === "delete") {
-      const { error: sErr } = await supabase.from("package_services").delete().eq("package_id", target.id);
-      error = sErr;
-      if (!error) ({ error } = await supabase.from("service_packages").delete().eq("id", target.id));
+      // Its service lines go with it; the database refuses if any client is or was on the package
+      ({ error } = await supabase.from("service_packages").delete().eq("id", target.id));
       if (!error) logAuditEvent("DELETE_SERVICE_PACKAGE", "SERVICE_PACKAGES", target.id, { name: target.name });
     } else if (kind === "end") {
       ({ error } = await supabase.from("client_packages").update({ status: "Ended", end_date: localISODate(), billing_enabled: false }).eq("id", target.id));

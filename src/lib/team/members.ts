@@ -1,6 +1,7 @@
 /** Shared helpers for inviting and updating firm members. SERVER ONLY. */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, type AuthContext } from "@/lib/api/guard";
+import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 
 export const ROLES = ["staff", "reviewer", "admin"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -90,4 +91,47 @@ export async function inviteNewPerson(admin: SupabaseClient, caller: AuthContext
 
   await admin.from("user_active_org").upsert({ user_id: userId, org_id: caller.orgId });
   return userId;
+}
+
+/**
+ * Invites someone who already has a Duesk login. They join only after accepting: until then
+ * the membership is inactive and gives no access in either direction.
+ */
+export async function inviteExistingPerson(admin: SupabaseClient, caller: AuthContext, input: MemberInput, userId: string): Promise<void> {
+  const { error } = await admin.from("memberships").insert({
+    org_id: caller.orgId,
+    user_id: userId,
+    role: input.role,
+    is_reviewer: input.is_reviewer,
+    is_support_agent: false,
+    module_access: input.module_access,
+    designation: input.designation,
+    is_active: false,
+    accepted_at: null,
+    invited_name: input.name,
+    invited_by: caller.userId,
+  });
+  if (error) {
+    console.error("[team] invitation error:", error.message);
+    throw new ApiError(500, "Could not send the invitation. Try again.");
+  }
+}
+
+/** Tells an invited Duesk user where to accept. Best effort: the firm's mailbox may not be connected yet. */
+export async function sendInvitationNotice(caller: AuthContext, to: string, name: string, site: string): Promise<void> {
+  try {
+    await sendFirmEmail({
+      orgId: caller.orgId,
+      to,
+      subject: `${caller.orgName} has invited you to join them on Duesk`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
+        <p>Hi ${escapeHtml(name)},</p>
+        <p>${escapeHtml(caller.name)} has invited you to join <strong>${escapeHtml(caller.orgName)}</strong> on Duesk.</p>
+        <p>Sign in with your Duesk login to accept or decline. Nothing is shared with the firm until you accept.</p>
+        <p><a href="${site}/login">Sign in to Duesk</a></p></div>`,
+      text: `${caller.name} has invited you to join ${caller.orgName} on Duesk. Sign in at ${site}/login to accept or decline. Nothing is shared with the firm until you accept.`,
+    });
+  } catch (e) {
+    console.error("[team] invitation notice failed:", e);
+  }
 }

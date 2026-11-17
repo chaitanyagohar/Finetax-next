@@ -79,7 +79,12 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
 
     // 1b. The person must belong to the admin's firm
-    const { data: memberships } = await admin.from("memberships").select("org_id, role, is_active").eq("user_id", userId);
+    //     and have accepted: an unanswered invitation gives no say over someone's login
+    const { data: memberships } = await admin
+      .from("memberships")
+      .select("org_id, role, is_active")
+      .eq("user_id", userId)
+      .not("accepted_at", "is", null);
     const myFirmMembership = (memberships || []).find((m: any) => m.org_id === caller.orgId);
     if (!myFirmMembership) {
       throw new ApiError(404, "User not found.");

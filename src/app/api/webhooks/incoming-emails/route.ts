@@ -63,14 +63,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = getAdminClient();
 
-    // 3. Every firm that connected this address gets its own copy
+    // 3. Deliver only to the firm that confirmed it owns this address with an emailed code
     const { data: accounts } = await supabase
       .from("email_accounts")
       .select("id, org_id")
       .ilike("email_address", escapeLike(toAddress))
       .or("is_active.is.null,is_active.eq.true")
-      // Only mailboxes this firm has proven it owns (a login has succeeded at least once)
-      .not("verified_at", "is", null);
+      .not("ownership_confirmed_at", "is", null);
 
     if (!accounts || accounts.length === 0) {
       console.warn(`[webhook] Incoming email to unknown address: ${toAddress}`);

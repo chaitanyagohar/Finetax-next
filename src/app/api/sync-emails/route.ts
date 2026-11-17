@@ -5,6 +5,7 @@ export const maxDuration = 60;
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireUser } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
+import { assertMailboxAccess } from "@/lib/email/access";
 import { MailboxConnectError, syncMailbox } from "@/lib/email/syncMailbox";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
       .eq("org_id", caller.orgId)
       .maybeSingle();
     if (!account) throw new ApiError(400, "Account not found.");
+    await assertMailboxAccess(admin, caller, account.id);
     if (account.is_active === false) throw new ApiError(400, "This email account is disabled.");
 
     try {

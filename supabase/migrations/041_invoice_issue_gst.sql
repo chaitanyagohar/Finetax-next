@@ -81,40 +81,43 @@ create table if not exists public.zz_041_released_draft_numbers (
 alter table public.zz_041_released_draft_numbers enable row level security;
 revoke all on public.zz_041_released_draft_numbers from anon, authenticated;
 
-create temporary table tmp_041_series on commit drop as
+-- One statement, so it does not depend on a temporary table surviving between statements
 with numbered as (
-  select id, org_id, status,
+  select id, org_id, status, invoice_number,
          substring(invoice_number from '^(.*?)[0-9]+$') as prefix,
          substring(invoice_number from '([0-9]+)$')::bigint as seq
   from public.invoices
   where invoice_number ~ '[0-9]{1,9}$'
+),
+series as (
+  select n.org_id, n.prefix,
+         coalesce(max(n.seq) filter (where n.status is distinct from 'Draft'), 0) as last_issued
+  from numbered n
+  join public.document_counters c on c.org_id = n.org_id and c.scope = 'invoices:' || n.prefix
+  group by n.org_id, n.prefix
+  having min(n.seq) filter (where n.status = 'Draft')
+       > coalesce(max(n.seq) filter (where n.status is distinct from 'Draft'), 0)
+),
+releasable as (
+  select n.id, n.org_id, n.invoice_number
+  from numbered n
+  join series s on s.org_id = n.org_id and s.prefix = n.prefix
+  where n.status = 'Draft'
+),
+recorded as (
+  insert into public.zz_041_released_draft_numbers (invoice_id, org_id, invoice_number)
+  select id, org_id, invoice_number from releasable
+  on conflict (invoice_id) do nothing
+),
+released as (
+  update public.invoices i
+     set invoice_number = null
+    from releasable r
+   where i.id = r.id
 )
-select n.org_id, n.prefix,
-       coalesce(max(n.seq) filter (where n.status is distinct from 'Draft'), 0) as last_issued
-from numbered n
-join public.document_counters c on c.org_id = n.org_id and c.scope = 'invoices:' || n.prefix
-group by n.org_id, n.prefix
-having min(n.seq) filter (where n.status = 'Draft')
-     > coalesce(max(n.seq) filter (where n.status is distinct from 'Draft'), 0);
-
-insert into public.zz_041_released_draft_numbers (invoice_id, org_id, invoice_number)
-select i.id, i.org_id, i.invoice_number
-from public.invoices i
-join tmp_041_series s
-  on s.org_id = i.org_id and s.prefix = substring(i.invoice_number from '^(.*?)[0-9]+$')
-where i.status = 'Draft'
-on conflict (invoice_id) do nothing;
-
-update public.invoices i
-   set invoice_number = null
-  from tmp_041_series s
- where i.status = 'Draft'
-   and s.org_id = i.org_id
-   and s.prefix = substring(i.invoice_number from '^(.*?)[0-9]+$');
-
 update public.document_counters c
    set last_value = s.last_issued, updated_at = now()
-  from tmp_041_series s
+  from series s
  where c.org_id = s.org_id
    and c.scope = 'invoices:' || s.prefix
    and c.last_value > s.last_issued;
@@ -133,6 +136,16 @@ update public.invoices i
  where c.id = i.client_id
    and i.status is distinct from 'Draft'
    and i.buyer_name is null;
+
+-- A pre-041 invoice whose client had no state takes it once the state is added and this file is run again
+update public.invoices i
+   set buyer_state_code = public.gst_place_of_supply(c.gstin, c.state)
+  from public.clients c
+ where c.id = i.client_id
+   and i.status is distinct from 'Draft'
+   and i.issued_at is null
+   and i.buyer_state_code is null
+   and public.gst_place_of_supply(c.gstin, c.state) is not null;
 
 -- 3c. ...and a place of supply, but only where it agrees with the tax already charged
 update public.invoices i
