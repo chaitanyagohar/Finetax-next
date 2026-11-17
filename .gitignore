@@ -49,3 +49,8 @@ DUESK_CONTEXT.md
 batch1.txt
 modules.txt
 tatus
+
+# Playwright output
+/test-results/
+/playwright-report/
+/playwright/.cache/

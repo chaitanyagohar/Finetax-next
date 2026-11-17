@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { localISODate } from "@/lib/format";
+import { istDate } from "@/lib/format";
 import {
   ApiError,
   assertSameOrigin,
@@ -11,8 +11,8 @@ import {
   requireModule,
   writeAuditLog,
 } from "@/lib/api/guard";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Validates line items: quantities must be positive, rates non-negative
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       recipient_email: recipientEmail,
       recipient_phone: recipientPhone,
       organisation: typeof organisation === "string" ? organisation.slice(0, 200) : "",
-      date: date || localISODate(),
+      date: date || istDate(),
       valid_until: validUntil || null,
       items: cleanItems,
       is_inter_state: Boolean(isInterState),

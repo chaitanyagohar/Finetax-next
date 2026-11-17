@@ -5,8 +5,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { confirmOwnershipCode, sendOwnershipCode } from "@/lib/email/ownership";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_RE = /^[0-9]{6}$/;
 
 /** Confirm that the caller's firm owns a mailbox: "send" emails a code to it, "confirm" checks the code. */

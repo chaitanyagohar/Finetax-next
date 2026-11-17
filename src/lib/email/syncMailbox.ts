@@ -8,8 +8,10 @@ import { assertPublicMailHost } from "@/lib/email/mailHost";
 const MAX_PER_RUN = 100; // larger backlogs continue on the next run
 const FIRST_SYNC_DAYS = 14; // how far back the very first sync looks
 
-// Prevents two syncs of the same mailbox at the same time
-const running = new Set<string>();
+// Stays under the 60-second route limit, so a slow server can't outlive the request (B-15)
+const SOCKET_TIMEOUT_MS = 25000;
+// A sync that crashed without releasing its claim is retried after this long
+const CLAIM_MS = 90000;
 
 export class MailboxConnectError extends Error {}
 
@@ -19,23 +21,31 @@ function extractAddress(field: any, fallback: string): string {
 }
 
 export async function syncMailbox(admin: SupabaseClient, account: any): Promise<{ count: number; more?: boolean; skipped?: boolean }> {
-  if (running.has(account.id)) return { count: 0, skipped: true };
-  running.add(account.id);
+  // Claimed in the database, so two server instances never sync the same mailbox at once (B-15)
+  const now = new Date();
+  const { data: claimed } = await admin
+    .from("email_accounts")
+    .update({ sync_locked_until: new Date(now.getTime() + CLAIM_MS).toISOString() })
+    .eq("id", account.id)
+    .or(`sync_locked_until.is.null,sync_locked_until.lt.${now.toISOString()}`)
+    .select("id");
+  if (!claimed?.length) return { count: 0, skipped: true };
 
   try {
     const password = await getAccountPassword(admin, account);
     const imap = imapSettingsFor(account);
-    await assertPublicMailHost(imap.host, imap.port, "imap");
+    const address = await assertPublicMailHost(imap.host, imap.port, "imap");
 
     const client = new ImapFlow({
-      host: imap.host,
+      host: address,
+      servername: imap.host,
       port: imap.port,
       secure: true,
       auth: { user: imap.user, pass: password },
       logger: false,
       connectionTimeout: 15000,
       greetingTimeout: 15000,
-      socketTimeout: 60000,
+      socketTimeout: SOCKET_TIMEOUT_MS,
     });
 
     const rows: any[] = [];
@@ -156,6 +166,6 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
       .eq("id", account.id);
     throw err;
   } finally {
-    running.delete(account.id);
+    await admin.from("email_accounts").update({ sync_locked_until: null }).eq("id", account.id);
   }
 }

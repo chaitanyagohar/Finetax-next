@@ -2,10 +2,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { pdfFileName, renderInvoicePdf } from "@/lib/pdf/firmDocuments";
+import { formatDate, istDate, rupees } from "@/lib/format";
 
-const inr = (n: unknown) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const dmy = (iso?: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "-");
-const istToday = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
 
 function emailShell(firmName: string, bodyHtml: string): string {
@@ -17,7 +15,7 @@ function emailShell(firmName: string, bodyHtml: string): string {
 
 function paymentBlock(firm: any, balance: number): string {
   const lines = [
-    `<strong>Amount payable:</strong> ${inr(balance)}`,
+    `<strong>Amount payable:</strong> ${rupees(balance)}`,
     firm?.upi_id ? `<strong>UPI:</strong> ${escapeHtml(firm.upi_id)}` : "",
     firm?.bank_account_no
       ? `<strong>Bank:</strong> ${escapeHtml(firm.bank_name || "")} · A/C ${escapeHtml(firm.bank_account_no)} · IFSC ${escapeHtml(firm.bank_ifsc || "")}`
@@ -66,25 +64,25 @@ export async function issueAndEmailInvoice(
   const balance = Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
   const pdf = await renderInvoicePdf(inv, inv.clients, firm);
   const firmName = firm?.firm_name || "Our firm";
-  const period = inv.billing_period_start ? ` for ${dmy(inv.billing_period_start)} to ${dmy(inv.billing_period_end)}` : "";
+  const period = inv.billing_period_start ? ` for ${formatDate(inv.billing_period_start, "-")} to ${formatDate(inv.billing_period_end, "-")}` : "";
   const late =
     Number(sub?.late_fee_percent) > 0
-      ? `<p style="color:#92400e">Please pay by the due date. Late payment charges of ${escapeHtml(String(sub!.late_fee_percent))}% per month (minimum ${inr(sub!.late_fee_min)}) apply on overdue amounts.</p>`
+      ? `<p style="color:#92400e">Please pay by the due date. Late payment charges of ${escapeHtml(String(sub!.late_fee_percent))}% per month (minimum ${rupees(sub!.late_fee_min)}) apply on overdue amounts.</p>`
       : "";
 
   await sendFirmEmail({
     orgId: inv.org_id,
     to,
-    subject: `Invoice ${inv.invoice_number}${period} · due ${dmy(inv.due_date)}`,
+    subject: `Invoice ${inv.invoice_number}${period} · due ${formatDate(inv.due_date, "-")}`,
     html: emailShell(
       firmName,
       `<p>Dear ${escapeHtml(inv.clients?.name || "Client")},</p>
-       <p>Please find attached invoice <strong>${escapeHtml(inv.invoice_number)}</strong>${escapeHtml(period)} for <strong>${inr(inv.total)}</strong>, payable by <strong>${dmy(inv.due_date)}</strong>.</p>
+       <p>Please find attached invoice <strong>${escapeHtml(inv.invoice_number)}</strong>${escapeHtml(period)} for <strong>${rupees(inv.total)}</strong>, payable by <strong>${formatDate(inv.due_date, "-")}</strong>.</p>
        ${paymentBlock(firm, balance)}
        ${late}
        <p>Please ignore this message if you have already paid.</p>`
     ),
-    text: `Invoice ${inv.invoice_number}${period} for ${inr(inv.total)}, due ${dmy(inv.due_date)}. PDF attached.`,
+    text: `Invoice ${inv.invoice_number}${period} for ${rupees(inv.total)}, due ${formatDate(inv.due_date, "-")}. PDF attached.`,
     attachments: [{ filename: pdfFileName(inv.invoice_number, "Invoice"), content: pdf, contentType: "application/pdf" }],
   });
 
@@ -97,7 +95,7 @@ export async function issueAndEmailInvoice(
  * Pass onlyOrgId to limit the run to one firm (the "Run billing now" button).
  */
 export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: string | null): Promise<number> {
-  const today = istToday();
+  const today = istDate();
   const rules = [
     { kind: "due_in_2", due: addDays(today, 2), subject: "Payment reminder: due in 2 days", lead: "This is a friendly reminder that the invoice below is due in 2 days." },
     { kind: "due_today", due: today, subject: "Payment due today", lead: "The invoice below is due for payment today." },
@@ -142,11 +140,11 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
             firm?.firm_name || "Our firm",
             `<p>Dear ${escapeHtml(inv.clients?.name || "Client")},</p>
              <p>${rule.lead}</p>
-             <p><strong>Invoice:</strong> ${escapeHtml(inv.invoice_number)} · <strong>Due date:</strong> ${dmy(inv.due_date)}</p>
+             <p><strong>Invoice:</strong> ${escapeHtml(inv.invoice_number)} · <strong>Due date:</strong> ${formatDate(inv.due_date, "-")}</p>
              ${paymentBlock(firm, balance)}
              <p>Please ignore this message if you have already paid.</p>`
           ),
-          text: `${rule.lead} Invoice ${inv.invoice_number}, balance ${inr(balance)}, due ${dmy(inv.due_date)}.`,
+          text: `${rule.lead} Invoice ${inv.invoice_number}, balance ${rupees(balance)}, due ${formatDate(inv.due_date, "-")}.`,
         });
         sent++;
       } catch (e) {

@@ -6,8 +6,8 @@ import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, 
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { escalateTicket } from "@/lib/help/supportServer";
 import { buildSummary, loadProblems } from "@/lib/help/troubleshooter";
+import { UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Actions a user can take on their own support conversation. */
 export async function POST(request: NextRequest) {

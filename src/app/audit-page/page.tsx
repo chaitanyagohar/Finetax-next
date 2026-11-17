@@ -161,7 +161,7 @@ export default function AuditLogsPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Activity className="h-5 w-5 text-navy" /> System Audit Logs
+            <Activity className="h-5 w-5 text-navy" /> System audit logs
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
             <Lock className="h-3 w-3" /> Tamper-proof record: entries cannot be edited or deleted, and times are set by the server.
@@ -190,10 +190,10 @@ export default function AuditLogsPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
-          { label: "Entries Shown", value: stats.total, icon: Activity, style: "bg-navy/10 text-navy", valueClass: "text-navy", sub: hasMore ? "More available below" : "All entries in range" },
-          { label: "Security Events", value: stats.security, icon: ShieldAlert, style: "bg-rose-50 text-rose-600", valueClass: "text-rose-600", sub: "Passwords, users, bank, mailboxes" },
+          { label: "Entries shown", value: stats.total, icon: Activity, style: "bg-navy/10 text-navy", valueClass: "text-navy", sub: hasMore ? "More available below" : "All entries in range" },
+          { label: "Security events", value: stats.security, icon: ShieldAlert, style: "bg-rose-50 text-rose-600", valueClass: "text-rose-600", sub: "Passwords, users, bank, mailboxes" },
           { label: "Deletions", value: stats.deletes, icon: Trash2, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700", sub: "Records removed" },
-          { label: "Email Activity", value: stats.emails, icon: Mail, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700", sub: "Sent or changed" },
+          { label: "Email activity", value: stats.emails, icon: Mail, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700", sub: "Sent or changed" },
         ].map((k) => {
           const Icon = k.icon;
           return (

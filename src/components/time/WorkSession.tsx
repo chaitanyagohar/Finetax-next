@@ -29,6 +29,19 @@ function elapsedOf(timer: any, nowMs: number): number {
 }
 
 /** Global work-session manager: presence, the timer bar, idle detection and the end-of-day review. */
+// Activity is shared between this person's open Duesk tabs, so a background tab doesn't pause the timer (B-13)
+function activityKey(userId: string) {
+  return `duesk:last-activity:${userId}`;
+}
+
+function sharedLastActivity(userId: string, own: number): number {
+  try {
+    return Math.max(own, Number(window.localStorage.getItem(activityKey(userId))) || 0);
+  } catch {
+    return own;
+  }
+}
+
 export default function WorkSession({ userId }: { userId: string }) {
   const [supabase] = useState(() => createClient());
   const [timer, setTimer] = useState<any | null>(null);
@@ -76,11 +89,11 @@ export default function WorkSession({ userId }: { userId: string }) {
       .subscribe();
 
     const onOpenReview = () => setReviewOpen(true);
-    window.addEventListener("finetax:open-day-review", onOpenReview);
+    window.addEventListener("duesk:open-day-review", onOpenReview);
 
     return () => {
       supabase.removeChannel(channel);
-      window.removeEventListener("finetax:open-day-review", onOpenReview);
+      window.removeEventListener("duesk:open-day-review", onOpenReview);
     };
   }, [userId]);
 
@@ -92,6 +105,11 @@ export default function WorkSession({ userId }: { userId: string }) {
       if (t - lastMark < 5000) return;
       lastMark = t;
       lastActivity.current = t;
+      try {
+        window.localStorage.setItem(activityKey(userId), String(t));
+      } catch {
+        // Storage can be blocked; this tab then judges idleness on its own
+      }
       const current = timerRef.current;
       if (idlePausedRef.current && current?.paused_at) {
         setIdlePrompt((p) => p || { since: current.paused_at });
@@ -105,7 +123,7 @@ export default function WorkSession({ userId }: { userId: string }) {
       events.forEach((ev) => window.removeEventListener(ev, mark));
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [userId]);
 
   /* ---------- Heartbeat + idle check ---------- */
   useEffect(() => {
@@ -118,8 +136,9 @@ export default function WorkSession({ userId }: { userId: string }) {
     const idleCheck = window.setInterval(async () => {
       const current = timerRef.current;
       if (!current || current.paused_at) return;
-      if (Date.now() - lastActivity.current > IDLE_MS) {
-        await supabase.rpc("pause_timer", { p_since: new Date(lastActivity.current).toISOString() });
+      const last = sharedLastActivity(userId, lastActivity.current);
+      if (Date.now() - last > IDLE_MS) {
+        await supabase.rpc("pause_timer", { p_since: new Date(last).toISOString() });
         idlePausedRef.current = true;
         loadTimer();
       }
@@ -145,14 +164,14 @@ export default function WorkSession({ userId }: { userId: string }) {
       const d = new Date();
       const today = localISODate(d);
       if (d.getHours() * 60 + d.getMinutes() < REVIEW_AFTER_MINUTES) return;
-      if (window.localStorage.getItem(`finetax:day-review:${userId}:${today}`)) return;
+      if (window.localStorage.getItem(`duesk:day-review:${userId}:${today}`)) return;
       const [{ data: day }, { count }] = await Promise.all([
         supabase.from("user_activity_days").select("confirmed_at").eq("user_id", userId).eq("day", today).maybeSingle(),
         supabase.from("time_logs").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("log_date", today),
       ]);
       if (day?.confirmed_at) return;
       if ((count || 0) === 0 && !timerRef.current) return;
-      window.localStorage.setItem(`finetax:day-review:${userId}:${today}`, "shown");
+      window.localStorage.setItem(`duesk:day-review:${userId}:${today}`, "shown");
       setReviewOpen(true);
     };
     const first = window.setTimeout(check, 15000);
@@ -421,7 +440,7 @@ function DayReview({ userId, timer, onStopTimer, onClose }: { userId: string; ti
 
         {loading ? (
           <div className="flex items-center gap-2 text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading today's entries...
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading today&apos;s entries...
           </div>
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border p-4 text-center text-text-muted">Nothing logged today yet. Add anything you worked on below.</p>
@@ -483,7 +502,7 @@ function DayReview({ userId, timer, onStopTimer, onClose }: { userId: string; ti
         </form>
 
         <p className="flex items-center gap-1 text-[10px] text-text-muted">
-          <CheckCircle2 className="h-3 w-3" /> Confirming tells your administrator today's timesheet is accurate. You can still correct entries for the next 7 days.
+          <CheckCircle2 className="h-3 w-3" /> Confirming tells your administrator today&apos;s timesheet is accurate. You can still correct entries for the next 7 days.
         </p>
       </div>
     </Modal>

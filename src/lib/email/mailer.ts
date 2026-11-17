@@ -6,8 +6,8 @@ import nodemailer from "nodemailer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, getAdminClient } from "@/lib/api/guard";
 import { assertPublicMailHost } from "@/lib/email/mailHost";
+import { EMAIL_RE } from "@/lib/validate";
 
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MAX_RECIPIENTS = 20;
 export const MAX_ATTACHMENTS = 10;
 export const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -90,11 +90,12 @@ export function imapSettingsFor(account: any): { host: string; port: number; use
   };
 }
 
-export function createSmtpTransport(account: any, password: string) {
+/** `address` is the IP returned by assertPublicMailHost; the certificate is still checked against the host name. */
+export function createSmtpTransport(account: any, password: string, address: string) {
   const port = Number(account.smtp_port) || 587;
   const secure = port === 465;
   return nodemailer.createTransport({
-    host: account.smtp_host || "smtp.gmail.com",
+    host: address,
     port,
     secure,
     requireTLS: !secure,
@@ -105,7 +106,7 @@ export function createSmtpTransport(account: any, password: string) {
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 30000,
-    tls: { minVersion: "TLSv1.2" },
+    tls: { minVersion: "TLSv1.2", servername: account.smtp_host || "smtp.gmail.com" },
   });
 }
 
@@ -170,9 +171,9 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
   }
 
   // 3. Send over an encrypted connection with the decrypted password
-  await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
+  const address = await assertPublicMailHost(account.smtp_host || "smtp.gmail.com", Number(account.smtp_port) || 587, "smtp");
   const password = await getAccountPassword(supabase, account);
-  const transporter = createSmtpTransport(account, password);
+  const transporter = createSmtpTransport(account, password, address);
 
   const displayName = String(account.display_name || "").replace(/["\r\n]/g, "").trim() || account.email_address;
   const fromString = `"${displayName}" <${account.email_address}>`;

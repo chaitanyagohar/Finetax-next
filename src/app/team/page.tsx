@@ -10,7 +10,6 @@ import {
   Trash2,
   X,
   Check,
-  Lock,
   Phone,
   Briefcase,
   Zap,
@@ -34,6 +33,7 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import PasswordInput from "@/components/ui/PasswordInput";
 import { formatDate, getInitials } from "@/lib/format";
 import { validatePassword } from "@/lib/password";
+import { EMAIL_RE } from "@/lib/validate";
 
 const MODULE_OPTIONS = [
   { id: "leads", short: "Leads", label: "Clients & leads", desc: "Client master, enquiries and follow-ups" },
@@ -54,7 +54,6 @@ const ROLE_PRESETS = [
   { label: "Administrator", role: "admin", isReviewer: true, modules: [] as string[] },
 ];
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Member = {
   id: string;
@@ -682,7 +681,7 @@ export default function TeamPage() {
                   <option value="staff">Staff: only the modules you choose below</option>
                   <option value="admin">Administrator: everything, including billing and settings</option>
                 </select>
-                {isSelf(editingMember) && <p className="mt-1 text-[11px] text-text-muted">You can't change your own role, so the firm never loses its administrator.</p>}
+                {isSelf(editingMember) && <p className="mt-1 text-[11px] text-text-muted">You can&apos;t change your own role, so the firm never loses its administrator.</p>}
               </div>
             </div>
 
@@ -869,7 +868,7 @@ export default function TeamPage() {
         <Modal title={`Delete ${deleteTarget.name} permanently?`} onClose={() => !deleting && setDeleteTarget(null)} maxWidth="max-w-md">
           <form onSubmit={submitDelete} className="space-y-3 text-xs">
             <p className="text-text-main">
-              Removes their login completely. It's only possible if they have no tasks, time logs or other history, and only if they don't work with another firm. Otherwise, keep their access removed instead.
+              Removes their login completely. It&apos;s only possible if they have no tasks, time logs or other history, and only if they don&apos;t work with another firm. Otherwise, keep their access removed instead.
             </p>
             <PasswordInput label="Your password" value={delAdminPassword} onChange={setDelAdminPassword} autoComplete="current-password" />
             {delError && <ErrorBox message={delError} />}

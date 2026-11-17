@@ -31,10 +31,9 @@ import { Lead, Profile, Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/lib/format";
 import { toWhatsAppNumber } from "@/lib/phone";
+import { EMAIL_RE } from "@/lib/validate";
 
 type LeadRow = Lead & Record<string, any>;
 type ProfileRow = Profile & Record<string, any>;
@@ -77,7 +76,6 @@ const EVENT_LABELS: Record<string, string> = {
   SEND_CHECKLIST_EMAIL: "emailed the document checklist",
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -630,7 +628,7 @@ export default function LeadsPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <UserPlus className="h-5 w-5 text-navy" /> Enquiries & Leads
+            <UserPlus className="h-5 w-5 text-navy" /> Enquiries & leads
           </h2>
           <p className="mt-1 text-xs text-text-muted">
             Track every prospect from first enquiry to signed client, with follow-ups and document checklists.
@@ -638,10 +636,11 @@ export default function LeadsPage() {
         </div>
         <button
           type="button"
+          data-tour="leads-new"
           onClick={() => openModal()}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
-          <Plus className="h-4 w-4" /> Add Enquiry / Lead
+          <Plus className="h-4 w-4" /> Add enquiry / lead
         </button>
       </div>
 
@@ -650,7 +649,7 @@ export default function LeadsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open Leads</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open leads</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.open}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
@@ -667,7 +666,7 @@ export default function LeadsPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Follow-ups Due</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Follow-ups due</p>
               <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.dueCount > 0 ? "text-amber-700" : "text-emerald-700"}`}>
                 {stats.dueCount}
               </p>
@@ -684,7 +683,7 @@ export default function LeadsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Win Rate</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Win rate</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-700">{stats.winRate}%</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -699,7 +698,7 @@ export default function LeadsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Pipeline Value</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Pipeline value</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-violet-700">{compactINR(stats.pipelineValue)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
@@ -713,7 +712,7 @@ export default function LeadsPage() {
       {/* Pipeline stages + Source performance */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm lg:col-span-2">
-          <p className="mb-3 text-xs font-semibold text-text-main">Pipeline Stages</p>
+          <p className="mb-3 text-xs font-semibold text-text-main">Pipeline stages</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {STATUSES.map((s) => {
               const active = filterStatus === s;
@@ -738,7 +737,7 @@ export default function LeadsPage() {
 
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-text-main">
-            <TrendingUp className="h-3.5 w-3.5 text-navy" /> Lead Sources
+            <TrendingUp className="h-3.5 w-3.5 text-navy" /> Lead sources
           </p>
           {sourcePerformance.length === 0 ? (
             <p className="py-4 text-center text-xs text-text-muted">No leads yet.</p>
@@ -845,13 +844,13 @@ export default function LeadsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Name & Organisation</th>
+                  <th>Name & organisation</th>
                   <th>Service</th>
                   <th>Source</th>
                   <th>Status</th>
-                  <th>Assigned To</th>
+                  <th>Assigned to</th>
                   <th>Follow-up</th>
-                  <th className="text-right">Est. Value</th>
+                  <th className="text-right">Est. value</th>
                   <th>Created</th>
                 </tr>
               </thead>
@@ -951,7 +950,7 @@ export default function LeadsPage() {
                     disabled={saving || actionBusy}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    <ArrowRightLeft className="h-3.5 w-3.5" /> Convert to Active Client
+                    <ArrowRightLeft className="h-3.5 w-3.5" /> Convert to active client
                   </button>
                 )}
                 {editingLead && isConverted && (
@@ -959,7 +958,7 @@ export default function LeadsPage() {
                     href="/clients"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5" /> View in Clients
+                    <CheckCircle2 className="h-3.5 w-3.5" /> View in clients
                   </Link>
                 )}
                 {editingLead && isAdmin && (
@@ -1011,7 +1010,7 @@ export default function LeadsPage() {
                     <input required type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. Amit Verma" />
                   </div>
                   <div>
-                    <label className={labelClass}>Organisation Name</label>
+                    <label className={labelClass}>Organisation name</label>
                     <input type="text" value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} className={inputClass} placeholder="e.g. Verma Traders" />
                   </div>
                   <div>
@@ -1019,7 +1018,7 @@ export default function LeadsPage() {
                     <input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="98765 43210" />
                   </div>
                   <div>
-                    <label className={labelClass}>Email Address</label>
+                    <label className={labelClass}>Email address</label>
                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="name@example.com" />
                   </div>
 
@@ -1054,7 +1053,7 @@ export default function LeadsPage() {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Current Status</label>
+                    <label className={labelClass}>Current status</label>
                     <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
                       {STATUSES.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -1062,7 +1061,7 @@ export default function LeadsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Next Follow-up Date</label>
+                    <label className={labelClass}>Next follow-up date</label>
                     <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} className={inputClass} />
                   </div>
                   <div>
@@ -1081,7 +1080,7 @@ export default function LeadsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className={labelClass}>Assigned To</label>
+                    <label className={labelClass}>Assigned to</label>
                     <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
                       <option value="">— Unassigned —</option>
                       {activeTeam.map((t) => (
@@ -1097,7 +1096,7 @@ export default function LeadsPage() {
                   <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-surface-alt p-3 sm:col-span-2 sm:grid-cols-2">
                     <div>
                       <label className={`${labelClass} flex items-center gap-1`}>
-                        <ArrowRightLeft className="h-3 w-3" /> Referred By (Source)
+                        <ArrowRightLeft className="h-3 w-3" /> Referred by (source)
                       </label>
                       <select
                         value={referralSource}
@@ -1135,7 +1134,7 @@ export default function LeadsPage() {
                 </div>
 
                 <div>
-                  <label className={labelClass}>Initial Brief / Notes</label>
+                  <label className={labelClass}>Initial brief / notes</label>
                   <textarea
                     rows={3}
                     value={notes}
@@ -1185,7 +1184,7 @@ export default function LeadsPage() {
             {editingLead && (
               <div className="flex h-[520px] flex-col border-t border-border pt-6 lg:h-auto lg:min-h-[520px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
                 <div className="mb-4 flex items-center gap-2 border-b border-border pb-2 text-xs font-bold text-navy">
-                  <Activity className="h-4 w-4" /> Discussion & Follow-up Log
+                  <Activity className="h-4 w-4" /> Discussion & follow-up log
                 </div>
 
                 <div className="mb-4 flex-1 space-y-4 overflow-y-auto pr-2">

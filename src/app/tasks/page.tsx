@@ -42,7 +42,7 @@ import ChatConversation from "@/components/chat/ChatConversation";
 import ReminderSettingsButton from "@/components/tasks/ReminderSettings";
 import { TransferDialog, TransferHistory, TransferRequestsBanner } from "@/components/tasks/TaskTransfer";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatDate, getInitials, localISODate } from "@/lib/format";
+import { formatDate, getInitials, localISODate, ordinal } from "@/lib/format";
 import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
 import Combobox, { type ComboOption } from "@/components/ui/Combobox";
 import ClientContact from "@/components/ui/ClientContact";
@@ -114,11 +114,6 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return `${formatDate(localISODate(d))} ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
-}
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 function parsePeriodMonth(p: string): { y: number; m: number } | null {
   const mm = String(p || "").trim().match(/^([A-Za-z]{3}) (\d{4})$/);
@@ -1010,7 +1005,7 @@ export default function TasksPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <CheckSquare className="h-5 w-5 text-navy" /> Tasks & Compliance
+            <CheckSquare className="h-5 w-5 text-navy" /> Tasks & compliance
           </h2>
           <p className="mt-1 text-xs text-text-muted">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
         </div>
@@ -1045,7 +1040,7 @@ export default function TasksPage() {
               }}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt"
             >
-              <ListChecks className="h-4 w-4 text-navy" /> Task List
+              <ListChecks className="h-4 w-4 text-navy" /> Task list
             </button>
           )}
           {isAdmin && (
@@ -1066,7 +1061,7 @@ export default function TasksPage() {
               onClick={() => openModal()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
             >
-              <Plus className="h-4 w-4" /> Add Task
+              <Plus className="h-4 w-4" /> Add task
             </button>
           )}
         </div>
@@ -1089,7 +1084,7 @@ export default function TasksPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open Tasks</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open tasks</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.open}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
@@ -1108,7 +1103,7 @@ export default function TasksPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue (Internal)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue (internal)</p>
               <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
@@ -1144,7 +1139,7 @@ export default function TasksPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting Review</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting review</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-violet-700">{stats.awaitingReview}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
@@ -1163,8 +1158,8 @@ export default function TasksPage() {
               <div data-tour="tasks-scope" className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
                 {(
                   [
-                    { key: "mine", label: "My Work" },
-                    { key: "review", label: "Review Queue" },
+                    { key: "mine", label: "My work" },
+                    { key: "review", label: "Review queue" },
                     { key: "all", label: isAdmin ? "All Tasks" : "All Mine" },
                   ] as const
                 ).map((s) => (
@@ -1297,13 +1292,13 @@ export default function TasksPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Deadlines (Int / Statutory)</th>
+                  <th>Deadlines (int / statutory)</th>
                   <th>Task</th>
                   <th>Category</th>
-                  <th>Organisation / Client</th>
+                  <th>Organisation / client</th>
                   <th>Assignee</th>
                   <th>Reviewer</th>
-                  <th className="text-right">Time / Est.</th>
+                  <th className="text-right">Time / est.</th>
                   <th>Stage</th>
                 </tr>
               </thead>
@@ -1429,7 +1424,7 @@ export default function TasksPage() {
                     disabled={saving}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
                   >
-                    <Play className="h-3.5 w-3.5" /> Start Work
+                    <Play className="h-3.5 w-3.5" /> Start work
                   </button>
                 )}
                 {editingTask && isTaskAssignee && ["Assigned", "In Progress", "Changes Required"].includes(editingTask.stage) && (
@@ -1439,7 +1434,7 @@ export default function TasksPage() {
                     disabled={saving}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
                   >
-                    <Send className="h-3.5 w-3.5" /> Submit for Review
+                    <Send className="h-3.5 w-3.5" /> Submit for review
                   </button>
                 )}
                 {editingTask && canReview && editingTask.stage === "Submitted for Review" && (
@@ -1450,7 +1445,7 @@ export default function TasksPage() {
                       disabled={saving}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" /> Request Changes
+                      <RotateCcw className="h-3.5 w-3.5" /> Request changes
                     </button>
                     <button
                       type="button"
@@ -1576,7 +1571,7 @@ export default function TasksPage() {
                     />
                   </div>
                   <div>
-                    <label className={`${labelClass} text-rose-700`}>Statutory Deadline</label>
+                    <label className={`${labelClass} text-rose-700`}>Statutory deadline</label>
                     <input
                       disabled={!canEditCoreDetails}
                       type="date"
@@ -1614,7 +1609,7 @@ export default function TasksPage() {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Assign Execution To</label>
+                    <label className={labelClass}>Assign execution to</label>
                     <select disabled={!canEditCoreDetails} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
                       <option value="">— Unassigned —</option>
                       {team
@@ -1625,7 +1620,7 @@ export default function TasksPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Assign Reviewer (Checker)</label>
+                    <label className={labelClass}>Assign reviewer (checker)</label>
                     <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className={inputClass}>
                       <option value="">— No Reviewer —</option>
                       {reviewers
@@ -1654,7 +1649,7 @@ export default function TasksPage() {
                 )}
 
                 <div>
-                  <label className={labelClass}>Execution Notes</label>
+                  <label className={labelClass}>Execution notes</label>
                   <TemplateChips
                     templates={feedbackTemplates}
                     box="notes"
@@ -1667,7 +1662,7 @@ export default function TasksPage() {
                 </div>
 
                 <div className="rounded-lg border border-border bg-surface-alt p-3">
-                  <label className={`${labelClass} text-navy`}>Reviewer Feedback / Required Changes</label>
+                  <label className={`${labelClass} text-navy`}>Reviewer feedback / required changes</label>
                   {canReview && (
                     <TemplateChips
                       templates={feedbackTemplates}
@@ -1736,7 +1731,7 @@ export default function TasksPage() {
                 <div className="space-y-3 border-t border-border pt-4">
                   <div className="flex items-center justify-between">
                     <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
-                      <Timer className="h-4 w-4 text-navy" /> Time Logged
+                      <Timer className="h-4 w-4 text-navy" /> Time logged
                     </h4>
                     <span className={`text-xs font-semibold ${estimateNow && loggedMinutes > estimateNow ? "text-rose-600" : "text-navy"}`}>
                       {formatMinutes(loggedMinutes)}
@@ -1804,7 +1799,7 @@ export default function TasksPage() {
             {editingTask && (
               <div className="border-t border-border pt-6 lg:max-h-[70vh] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
                 <div className="sticky top-0 mb-4 flex items-center gap-2 border-b border-border bg-surface pb-2 text-xs font-bold text-navy">
-                  <Activity className="h-4 w-4" /> Task Timeline
+                  <Activity className="h-4 w-4" /> Task timeline
                 </div>
 
                 {loadingTimeline ? (
@@ -1887,7 +1882,7 @@ export default function TasksPage() {
       {/* ================= Task List Manager (admin) ================= */}
       {typesOpen && (
         <Modal
-          title="Task List"
+          title="Task list"
           subtitle="Staff can only choose task titles from this list. Rules fill in deadlines and estimates automatically."
           onClose={() => !typeSaving && setTypesOpen(false)}
           maxWidth="max-w-5xl"
@@ -1953,11 +1948,11 @@ export default function TasksPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Statutory Day</label>
+                    <label className={labelClass}>Statutory day</label>
                     <input type="number" min={1} max={31} value={tDay} onChange={(e) => setTDay(e.target.value)} className={inputClass} placeholder="None" />
                   </div>
                   <div>
-                    <label className={labelClass}>Of Which Month</label>
+                    <label className={labelClass}>Of which month</label>
                     <select value={tOffset} onChange={(e) => setTOffset(Number(e.target.value))} className={inputClass} disabled={!tDay}>
                       <option value={0}>Same month</option>
                       <option value={1}>Next month</option>
@@ -1968,7 +1963,7 @@ export default function TasksPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Internal Buffer</label>
+                    <label className={labelClass}>Internal buffer</label>
                     <select value={tBuffer} onChange={(e) => setTBuffer(Number(e.target.value))} className={inputClass} disabled={!tDay}>
                       {[0, 1, 2, 3, 5, 7, 10, 15].map((d) => (
                         <option key={d} value={d}>{d === 0 ? "Same day" : `${d} day${d === 1 ? "" : "s"} before`}</option>
@@ -1976,7 +1971,7 @@ export default function TasksPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Default Estimate</label>
+                    <label className={labelClass}>Default estimate</label>
                     <div className="flex gap-1">
                       <input type="number" min={0} max={999} placeholder="h" value={tEstH} onChange={(e) => setTEstH(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate hours" />
                       <input type="number" min={0} max={59} step={5} placeholder="m" value={tEstM} onChange={(e) => setTEstM(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate minutes" />
@@ -1984,7 +1979,7 @@ export default function TasksPage() {
                   </div>
                 </div>
                 <p className="text-[10px] text-text-muted">
-                  Example: GSTR-3B for period "Sep 2026", day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
+                  Example: GSTR-3B for period &quot;Sep 2026&quot;, day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
                 </p>
                 <div className="flex gap-2">
                   <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
@@ -2005,7 +2000,7 @@ export default function TasksPage() {
                     <th>Task</th>
                     <th>Category</th>
                     <th>Recurrence</th>
-                    <th>Statutory Rule</th>
+                    <th>Statutory rule</th>
                     <th>Estimate</th>
                     <th className="text-right">Tasks</th>
                     <th className="text-right">Actions</th>
@@ -2064,7 +2059,7 @@ export default function TasksPage() {
             {mergeFrom && (
               <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-3">
                 <p className="font-semibold text-violet-800">
-                  Merge "{mergeFrom.name}" into another task. Its open tasks move over and "{mergeFrom.name}" is archived.
+                  Merge &quot;{mergeFrom.name}&quot; into another task. Its open tasks move over and &quot;{mergeFrom.name}&quot; is archived.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} className={`${inputClass} max-w-sm`}>

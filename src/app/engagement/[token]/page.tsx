@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { getAdminClient } from "@/lib/api/guard";
 import { verifyProposalToken } from "@/lib/publicLinks";
+import { formatDate, formatINRExact, istDate, ordinal } from "@/lib/format";
 import AcceptForm from "./AcceptForm";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Engagement Letter", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Engagement letter", robots: { index: false, follow: false } };
 
-const inr = (n: unknown) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const dmy = (v?: string | null) => (v ? String(v).slice(0, 10).split("-").reverse().join("/") : "-");
 const per = (c: string) => ({ Monthly: "month", Quarterly: "quarter", "Half-Yearly": "half-year", Yearly: "year" } as Record<string, string>)[c] || "month";
 
 function Shell({ firmName, children }: { firmName?: string; children: React.ReactNode }) {
@@ -20,7 +19,7 @@ function Shell({ firmName, children }: { firmName?: string; children: React.Reac
         </div>
         <div className="p-6 sm:p-8">{children}</div>
       </div>
-      <p className="mt-4 text-center text-[11px] text-slate-500">This page is private to you. Please don't forward the link.</p>
+      <p className="mt-4 text-center text-[11px] text-slate-500">This page is private to you. Please don&apos;t forward the link.</p>
     </div>
   );
 }
@@ -65,7 +64,7 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
 
   const firmName = firm?.firm_name || "";
   const clientOrg = client?.organization_name || client?.name || "your organisation";
-  const todayIST = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const todayIST = istDate();
   const expired = ["Sent", "Viewed", "Draft"].includes(p.status) && p.expires_at && p.expires_at < todayIST;
   const services: any[] = Array.isArray(p.services) ? p.services : [];
   const pdfHref = `/engagement/${token}/pdf`;
@@ -77,7 +76,7 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Engagement letter {p.number}</p>
           <h1 className="mt-1 text-xl font-bold text-[#10233f]">{pkg?.name || "Professional services"}</h1>
-          <p className="text-sm text-slate-600">For {clientOrg} · starting {dmy(p.start_date)}</p>
+          <p className="text-sm text-slate-600">For {clientOrg} · starting {formatDate(p.start_date, "-")}</p>
         </div>
         <a href={pdfHref} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-[#10233f] hover:bg-slate-50">
           View full letter (PDF)
@@ -88,17 +87,17 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-[11px] font-semibold uppercase text-slate-500">Professional fee</p>
           <p className="text-lg font-bold text-[#10233f]">
-            {inr(p.price)} <span className="text-sm font-medium text-slate-500">per {per(p.billing_cycle)} + GST {Number(p.gst_rate)}%</span>
+            {formatINRExact(p.price)} <span className="text-sm font-medium text-slate-500">per {per(p.billing_cycle)} + GST {Number(p.gst_rate)}%</span>
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <p className="text-[11px] font-semibold uppercase text-slate-500">Billing</p>
           <p>
-            Billed on the {p.bill_day}th of the following month · due in {p.due_days} days
+            Billed on the {ordinal(Number(p.bill_day))} of the following month · due in {p.due_days} days
           </p>
           {Number(p.late_fee_percent) > 0 && (
             <p className="text-xs text-slate-500">
-              Late payment: {Number(p.late_fee_percent)}% per month (min {inr(p.late_fee_min)})
+              Late payment: {Number(p.late_fee_percent)}% per month (min {formatINRExact(p.late_fee_min)})
             </p>
           )}
         </div>
@@ -127,15 +126,15 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
 
       <div className="mt-8 border-t border-slate-200 pt-6">
         {p.status === "Accepted" ? (
-          <Notice title="Thank you, this engagement is accepted" text={`Accepted by ${p.accepted_name} on ${dmy(p.accepted_at)}. A confirmation with the signed letter has been emailed to you.`} />
+          <Notice title="Thank you, this engagement is accepted" text={`Accepted by ${p.accepted_name} on ${formatDate(p.accepted_at, "-")}. If we have your email address, a copy of the accepted letter is sent there. If it doesn't arrive, ask us for one.`} />
         ) : p.status === "Declined" ? (
           <Notice title="This proposal was declined" text={`If you'd like to reconsider, please contact us${contact ? `: ${contact}` : "."}`} />
         ) : p.status === "Withdrawn" ? (
           <Notice title="This proposal has been withdrawn" text={`Please contact us for an updated letter${contact ? `: ${contact}` : "."}`} />
         ) : expired ? (
-          <Notice title="This proposal has expired" text={`It was valid until ${dmy(p.expires_at)}. Please contact us for an updated letter${contact ? `: ${contact}` : "."}`} />
+          <Notice title="This proposal has expired" text={`It was valid until ${formatDate(p.expires_at, "-")}. Please contact us for an updated letter${contact ? `: ${contact}` : "."}`} />
         ) : (
-          <AcceptForm token={token} clientOrg={clientOrg} firmName={firmName} expiresAt={p.expires_at ? dmy(p.expires_at) : null} />
+          <AcceptForm token={token} clientOrg={clientOrg} firmName={firmName} expiresAt={p.expires_at ? formatDate(p.expires_at, "-") : null} />
         )}
       </div>
     </Shell>

@@ -5,8 +5,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { verifyTurnstile } from "@/lib/auth/turnstile";
+import { EMAIL_RE } from "@/lib/validate";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type EmailStatus = { exists?: boolean; user_id?: string; confirmed?: boolean; has_membership?: boolean };
 

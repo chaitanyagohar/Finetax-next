@@ -16,7 +16,6 @@ import {
   Timer,
   TrendingUp,
   Users,
-  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
@@ -37,8 +36,7 @@ function rangeFor(p: Period, today: string, cFrom: string, cTo: string): [string
   if (p === "lastMonth") return [localISODate(new Date(y, m - 2, 1)), localISODate(new Date(y, m - 1, 0))];
   if (p === "quarter") {
     const fyQStart = [4, 7, 10, 1][Math.floor(((m - 4 + 12) % 12) / 3)];
-    const qy = fyQStart === 1 && m < 4 ? y : fyQStart === 1 ? y + 1 : y;
-    return [localISODate(new Date(fyQStart === 1 ? (m < 4 ? y : y) : y, fyQStart - 1, 1)), today];
+    return [localISODate(new Date(y, fyQStart - 1, 1)), today];
   }
   if (p === "fy") return [`${m >= 4 ? y : y - 1}-04-01`, today];
   return [cFrom || today, cTo || today];
@@ -158,7 +156,7 @@ export default function PerformancePage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Gauge className="h-5 w-5 text-navy" /> Performance Scorecards
+            <Gauge className="h-5 w-5 text-navy" /> Performance scorecards
           </h2>
           <p className="mt-1 text-xs text-text-muted">
             {isAdmin ? "Timeliness, quality, volume and activeness for every team member." : "Your own performance. Only you and your administrators can see it."}
@@ -215,11 +213,11 @@ export default function PerformancePage() {
           {/* Team summary */}
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {[
-              { label: "Team Average Score", value: team.avg === null ? "—" : Math.round(team.avg), icon: Award, tone: scoreTone(team.avg) },
-              { label: "On-Time Submission", value: team.onTime === null ? "—" : `${team.onTime}%`, icon: Clock, tone: scoreTone(team.onTime) },
-              { label: "First-Pass Approval", value: team.firstPass === null ? "—" : `${team.firstPass}%`, icon: Target, tone: scoreTone(team.firstPass) },
+              { label: "Team average score", value: team.avg === null ? "—" : Math.round(team.avg), icon: Award, tone: scoreTone(team.avg) },
+              { label: "On-time submission", value: team.onTime === null ? "—" : `${team.onTime}%`, icon: Clock, tone: scoreTone(team.onTime) },
+              { label: "First-pass approval", value: team.firstPass === null ? "—" : `${team.firstPass}%`, icon: Target, tone: scoreTone(team.firstPass) },
               {
-                label: "Statutory Breaches",
+                label: "Statutory breaches",
                 value: team.breaches,
                 icon: AlertCircle,
                 tone: team.breaches ? { text: "text-rose-700", bg: "bg-rose-50", ring: "", label: "" } : { text: "text-emerald-700", bg: "bg-emerald-50", ring: "", label: "" },
@@ -244,18 +242,18 @@ export default function PerformancePage() {
 
           {/* Team table */}
           <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
-            <table className="w-full text-xs">
+            <table data-tour="perf-scores" className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Team Member</th>
+                  <th>Team member</th>
                   <th>Score</th>
                   <th className="min-w-[180px]">Breakdown</th>
                   <th className="text-right">Completed</th>
-                  <th className="text-right">On Time</th>
-                  <th className="text-right">First Pass</th>
-                  <th className="text-right">Statutory Breaches</th>
+                  <th className="text-right">On time</th>
+                  <th className="text-right">First pass</th>
+                  <th className="text-right">Statutory breaches</th>
                   <th className="text-right">Logged</th>
-                  <th className="text-right">Active Days</th>
+                  <th className="text-right">Active days</th>
                 </tr>
               </thead>
               <tbody>
@@ -426,7 +424,7 @@ function ScorecardDetail({ card: c, weights, from, to, isAdmin, me, inline }: { 
 
       <div className="space-y-2">
         <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
-          <MessageSquarePlus className="h-4 w-4 text-navy" /> Performance Reviews
+          <MessageSquarePlus className="h-4 w-4 text-navy" /> Performance reviews
         </h4>
 
         {isAdmin && (

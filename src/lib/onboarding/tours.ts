@@ -85,7 +85,7 @@ export const TOURS: Record<string, Tour> = {
       },
       { title: "Recurring work schedules itself", body: "When a recurring task is approved, the next occurrence is created with both deadlines and the period moved forward." },
       { title: "Time, transfers and discussion", body: "Time is tracked as you work (and can be logged by hand), tasks can be transferred with handover notes, and every task has its own discussion with @mentions." },
-      { target: tag("tasks-toolbar"), adminOnly: true, title: "Task List, categories and reminders", body: "Define compliance task types with due-date rules, colour categories, and when reminders and escalations go out." },
+      { target: tag("tasks-toolbar"), adminOnly: true, title: "Task list, categories and reminders", body: "Define compliance task types with due-date rules, colour categories, and when reminders and escalations go out." },
     ],
   },
 

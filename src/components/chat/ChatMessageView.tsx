@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/ui/Modal";
 import { FileText, Loader2, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fileSize, timeLabel, type ChatAttachment, type ChatMessage } from "@/lib/chat";
@@ -108,14 +109,19 @@ export default function ChatMessageView({
     setEditing(false);
   }
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   async function remove() {
-    if (!window.confirm("Delete this message?")) return;
+    setConfirmDelete(false);
     const { error: err } = await supabase.rpc("chat_delete_message", { p_id: m.id });
     if (err) setError(err.message);
   }
 
   return (
     <div className={`group relative flex gap-3 rounded-lg px-2 ${showHeader ? "pt-2" : ""} pb-0.5 hover:bg-surface-alt/60`}>
+      {confirmDelete && (
+        <ConfirmDialog title="Delete message" message="Delete this message? This can't be undone." confirmLabel="Delete" onConfirm={remove} onCancel={() => setConfirmDelete(false)} />
+      )}
       <div className="w-8 shrink-0">
         {showHeader && (
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold text-navy">{getInitials(sender)}</span>
@@ -179,7 +185,7 @@ export default function ChatMessageView({
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          <button type="button" onClick={remove} className="p-1.5 text-text-muted hover:text-rose-600" aria-label="Delete message">
+          <button type="button" onClick={() => setConfirmDelete(true)} className="p-1.5 text-text-muted hover:text-rose-600" aria-label="Delete message">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>

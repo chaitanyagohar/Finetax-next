@@ -4,12 +4,12 @@ export const runtime = "nodejs";
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
-import { EMAIL_RE, escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { loadProposalBundle, renderEngagementLetter } from "@/lib/pdf/engagementLetter";
 import { pdfFileName } from "@/lib/pdf/firmDocuments";
 import { proposalUrl } from "@/lib/publicLinks";
+import { EMAIL_RE, UUID_RE } from "@/lib/validate";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   try {

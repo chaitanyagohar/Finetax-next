@@ -71,25 +71,25 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Overview",
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard, moduleId: "dashboard" },
-      { name: "Unified Inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard" },
-      { name: "Team Chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true, platform: true },
+      { name: "Unified inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard" },
+      { name: "Team chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true, platform: true },
     ],
   },
   {
-    label: "Clients & Sales",
+    label: "Clients & sales",
     items: [
       { name: "Clients", href: "/clients", icon: Users, moduleId: "leads" },
-      { name: "Enquiries & Leads", href: "/leads", icon: UserPlus, moduleId: "leads" },
+      { name: "Enquiries & leads", href: "/leads", icon: UserPlus, moduleId: "leads" },
       { name: "Quotations", href: "/quotations", icon: FileText, moduleId: "quotations" },
-      { name: "Client Discussions", href: "/client-discussions", icon: MessageSquare, moduleId: "discussions" },
+      { name: "Client discussions", href: "/client-discussions", icon: MessageSquare, moduleId: "discussions" },
     ],
   },
   {
-    label: "Compliance & Work",
+    label: "Compliance & work",
     items: [
-      { name: "Tasks & Compliance", href: "/tasks", icon: CheckSquare, moduleId: "tasks" },
-      { name: "Compliance Calendar", href: "/calendar", icon: Calendar, moduleId: "calendar" },
-      { name: "Time Tracking", href: "/time-tracking", icon: Clock, moduleId: "time_tracking" },
+      { name: "Tasks & compliance", href: "/tasks", icon: CheckSquare, moduleId: "tasks" },
+      { name: "Compliance calendar", href: "/calendar", icon: Calendar, moduleId: "calendar" },
+      { name: "Time tracking", href: "/time-tracking", icon: Clock, moduleId: "time_tracking" },
       { name: "Performance", href: "/performance", icon: Gauge, moduleId: "performance", everyone: true },
       { name: "Documents", href: "/documents", icon: Folder, moduleId: "documents" },
     ],
@@ -101,29 +101,29 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Support",
     items: [
-      { name: "Help & Support", href: "/help", icon: LifeBuoy, moduleId: "help", everyone: true },
-      { name: "Support Inbox", href: "/support", icon: Headphones, moduleId: "support", supportOnly: true, platform: true },
+      { name: "Help & support", href: "/help", icon: LifeBuoy, moduleId: "help", everyone: true },
+      { name: "Support inbox", href: "/support", icon: Headphones, moduleId: "support", supportOnly: true, platform: true },
     ],
   },
   {
     label: "Duesk",
-    items: [{ name: "Owner Console", href: "/owner", icon: Building2, moduleId: "owner", ownerOnly: true, platform: true }],
+    items: [{ name: "Owner console", href: "/owner", icon: Building2, moduleId: "owner", ownerOnly: true, platform: true }],
   },
   {
     label: "Administration",
     items: [
-      { name: "Team Management", href: "/team", icon: UserCheck, adminOnly: true, moduleId: "team" },
-      { name: "Service Packages", href: "/packages", icon: Package, adminOnly: true, moduleId: "packages" },
+      { name: "Team management", href: "/team", icon: UserCheck, adminOnly: true, moduleId: "team" },
+      { name: "Service packages", href: "/packages", icon: Package, adminOnly: true, moduleId: "packages" },
       { name: "Logs", href: "/audit-page", icon: ShieldAlert, adminOnly: true, moduleId: "audit-page" },
-      { name: "Firm Settings", href: "/settings", icon: Settings, adminOnly: true, moduleId: "settings" },
+      { name: "Firm settings", href: "/settings", icon: Settings, adminOnly: true, moduleId: "settings" },
     ],
   },
 ];
 
 export const REVIEWER_SUB_TABS = [
-  { name: "Pending Approvals", href: "/reviewer-queue?tab=pending", tab: "pending", icon: Clock3 },
-  { name: "Revision Requests", href: "/reviewer-queue?tab=revisions", tab: "revisions", icon: AlertTriangle },
-  { name: "Quality Analytics", href: "/reviewer-queue?tab=analytics", tab: "analytics", icon: BarChart3 },
+  { name: "Pending approvals", href: "/reviewer-queue?tab=pending", tab: "pending", icon: Clock3 },
+  { name: "Revision requests", href: "/reviewer-queue?tab=revisions", tab: "revisions", icon: AlertTriangle },
+  { name: "Quality analytics", href: "/reviewer-queue?tab=analytics", tab: "analytics", icon: BarChart3 },
 ];
 
 /** UI-level visibility only. Real enforcement must happen in Supabase RLS + middleware. */

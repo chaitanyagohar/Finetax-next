@@ -34,9 +34,10 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
-import { compactINR, formatDate, formatINR, getInitials } from "@/lib/format";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
+import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/lib/format";
 import { GSTIN_RE, PAN_RE, STATE_OPTIONS, stateCodeFromGstin, stateCodeFromName, stateName } from "@/lib/gst";
+import { EMAIL_RE } from "@/lib/validate";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -53,7 +54,6 @@ const CLIENT_TYPES = [
   "Other",
 ];
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_IMPORT_ROWS = 5000;
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
@@ -652,7 +652,7 @@ export default function ClientsPage() {
         .map(csvCell)
         .join(",")
     );
-    downloadFile([headers.map(csvCell).join(","), ...lines].join("\r\n"), `clients_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadFile([headers.map(csvCell).join(","), ...lines].join("\r\n"), `clients_${localISODate()}.csv`);
     logAuditEvent("EXPORT_CLIENTS", "CLIENTS", undefined, { count: filteredClients.length });
   }
 
@@ -820,7 +820,7 @@ export default function ClientsPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <Building2 className="h-5 w-5 text-navy" /> Client Master
+            <Building2 className="h-5 w-5 text-navy" /> Client master
           </h2>
           <p className="mt-1 text-xs text-text-muted">Verified PAN and GSTIN records, relationship managers and receivables for every client.</p>
         </div>
@@ -832,7 +832,7 @@ export default function ClientsPage() {
               onClick={openPairs}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
             >
-              <Copy className="h-4 w-4 text-violet-600" /> Find Duplicates
+              <Copy className="h-4 w-4 text-violet-600" /> Find duplicates
             </button>
           )}
           <button
@@ -849,7 +849,7 @@ export default function ClientsPage() {
             onClick={openImport}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
           >
-            <Upload className="h-4 w-4 text-navy" /> Bulk Import (CSV)
+            <Upload className="h-4 w-4 text-navy" /> Bulk import (CSV)
           </button>
           <button
             type="button"
@@ -857,7 +857,7 @@ export default function ClientsPage() {
             onClick={() => openModal()}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light lg:flex-none"
           >
-            <Plus className="h-4 w-4" /> Add Client
+            <Plus className="h-4 w-4" /> Add client
           </button>
         </div>
       </div>
@@ -865,9 +865,9 @@ export default function ClientsPage() {
       {/* KPI cards */}
       <div data-tour="clients-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
-          { label: "Total Clients", value: String(stats.total), sub: "In the client master", icon: Users, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
-          { label: "Active Clients", value: String(stats.active), sub: `${stats.total - stats.active} inactive`, icon: UserCheck, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
-          { label: "GST Registered", value: String(stats.gstRegistered), sub: "Clients with a GSTIN", icon: BadgeCheck, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+          { label: "Total clients", value: String(stats.total), sub: "In the client master", icon: Users, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
+          { label: "Active clients", value: String(stats.active), sub: `${stats.total - stats.active} inactive`, icon: UserCheck, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
+          { label: "GST registered", value: String(stats.gstRegistered), sub: "Clients with a GSTIN", icon: BadgeCheck, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
           { label: "Receivables", value: compactINR(stats.outstandingTotal), sub: `${stats.withDues} clients with dues`, icon: Wallet, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
         ].map((k) => {
           const Icon = k.icon;
@@ -951,7 +951,7 @@ export default function ClientsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th>Organisation / Client</th>
+                  <th>Organisation / client</th>
                   <th>Type</th>
                   <th>PAN</th>
                   <th>GSTIN</th>
@@ -1029,7 +1029,7 @@ export default function ClientsPage() {
       {/* ================= CSV Import ================= */}
       {isImportModalOpen && (
         <Modal
-          title="Client Database Import"
+          title="Client database import"
           subtitle="Columns are matched by header name, so their order does not matter."
           onClose={() => !importing && setIsImportModalOpen(false)}
           maxWidth="max-w-3xl"
@@ -1065,9 +1065,9 @@ export default function ClientsPage() {
           {importCount !== null ? (
             <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center">
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-              <p className="text-base font-bold text-emerald-800">Import Successful</p>
+              <p className="text-base font-bold text-emerald-800">Import successful</p>
               <p className="text-sm text-emerald-700">{importCount} clients have been added to your master database.</p>
-              {isAdmin && <p className="text-xs text-emerald-700">Tip: run "Find Duplicates" to check the imported records.</p>}
+              {isAdmin && <p className="text-xs text-emerald-700">Tip: run &quot;Find Duplicates&quot; to check the imported records.</p>}
               <button
                 type="button"
                 onClick={() => setIsImportModalOpen(false)}
@@ -1090,7 +1090,7 @@ export default function ClientsPage() {
                   onClick={downloadCSVTemplate}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-navy transition hover:bg-surface-alt"
                 >
-                  <Download className="h-4 w-4" /> Download Template
+                  <Download className="h-4 w-4" /> Download template
                 </button>
                 <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-navy/40 px-3 py-2 text-xs font-semibold text-navy transition hover:bg-navy/5">
                   <FileSpreadsheet className="h-4 w-4" />
@@ -1112,7 +1112,7 @@ export default function ClientsPage() {
                     <thead>
                       <tr>
                         <th>Row</th>
-                        <th>Organisation / Name</th>
+                        <th>Organisation / name</th>
                         <th>PAN</th>
                         <th>GSTIN</th>
                         <th>Result</th>
@@ -1170,7 +1170,7 @@ export default function ClientsPage() {
                     onClick={() => setConfirm("inactive")}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt"
                   >
-                    <UserX className="h-3.5 w-3.5" /> Mark Inactive
+                    <UserX className="h-3.5 w-3.5" /> Mark inactive
                   </button>
                 )}
                 {editingClient && isAdmin && !editingMerged && (
@@ -1267,7 +1267,7 @@ export default function ClientsPage() {
                     </div>
                   ))}
                   <p className="text-[11px] text-amber-800">
-                    If this really is a different client (for example a proprietor and their firm sharing a PAN), click <strong>Save Anyway</strong>.
+                    If this really is a different client (for example a proprietor and their firm sharing a PAN), click <strong>Save anyway</strong>.
                   </p>
                 </div>
               )}
@@ -1275,7 +1275,7 @@ export default function ClientsPage() {
               <fieldset disabled={editingMerged} className="min-w-0 space-y-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Organisation Name</label>
+                    <label className={labelClass}>Organisation name</label>
                     <input type="text" placeholder="e.g. Moonvita Foods Pvt Ltd" value={organizationName} onChange={(e) => setOrganizationName(e.target.value)} className={inputClass} />
                   </div>
                   <div>
@@ -1362,7 +1362,7 @@ export default function ClientsPage() {
                     <p className="mt-1 text-[10px] text-text-muted">Decides the place of supply on this client&apos;s invoices.</p>
                   </div>
                   <div>
-                    <label className={labelClass}>Relationship Manager</label>
+                    <label className={labelClass}>Relationship manager</label>
                     <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
                       <option value="">— Unassigned —</option>
                       {team
@@ -1388,7 +1388,7 @@ export default function ClientsPage() {
             {/* Client snapshot */}
             {editingClient && (
               <div className="space-y-4 lg:col-span-2 lg:border-l lg:border-border lg:pl-6">
-                <h4 className="text-xs font-bold text-text-main">Client Snapshot</h4>
+                <h4 className="text-xs font-bold text-text-main">Client snapshot</h4>
                 {loadingSnapshot || !snap ? (
                   <div className="flex items-center gap-2 text-xs text-text-muted">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading activity...
@@ -1413,7 +1413,7 @@ export default function ClientsPage() {
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
                         <p className="flex items-center gap-1 text-[11px] font-semibold text-text-main">
-                          <Receipt className="h-3.5 w-3.5 text-navy" /> Recent Invoices
+                          <Receipt className="h-3.5 w-3.5 text-navy" /> Recent invoices
                         </p>
                         <Link href="/invoices" className="text-[11px] font-semibold text-navy hover:underline">View all</Link>
                       </div>
@@ -1466,7 +1466,7 @@ export default function ClientsPage() {
 
                     {hasLinkedRecords && !editingMerged && (
                       <p className="text-[10px] text-text-muted">
-                        This client has linked records, so it can't be deleted. Mark it Inactive instead{isAdmin ? ", or merge it into the correct record" : ""}.
+                        This client has linked records, so it can&apos;t be deleted. Mark it Inactive instead{isAdmin ? ", or merge it into the correct record" : ""}.
                       </p>
                     )}
                   </>
@@ -1520,7 +1520,7 @@ export default function ClientsPage() {
       {/* ================= Possible duplicates (admin) ================= */}
       {pairsOpen && (
         <Modal
-          title="Possible Duplicate Clients"
+          title="Possible duplicate clients"
           subtitle="Matched on PAN, mobile, email and similar names. Merge real duplicates, or hide pairs that are genuinely different."
           onClose={() => setPairsOpen(false)}
           maxWidth="max-w-5xl"

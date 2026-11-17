@@ -143,7 +143,7 @@ export default function WorkQueue({
               ))}
             </select>
           ) : (
-            <span className="text-sm font-semibold text-text-main">My Queue</span>
+            <span className="text-sm font-semibold text-text-main">My queue</span>
           )}
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${hasRanks ? "bg-violet-50 text-violet-700" : "bg-surface-alt text-text-muted"}`}>
             {hasRanks ? "Custom order" : "Automatic order"}

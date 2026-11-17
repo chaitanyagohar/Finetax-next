@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Eye, FileSignature, Loader2, Mail, MessageCircle, Plus, Send, Trash2, X, XCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { toWhatsAppNumber } from "@/lib/phone";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
@@ -25,12 +26,6 @@ const STATUS_STYLES: Record<string, string> = {
 function addDays(iso: string, n: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   return localISODate(new Date(y, m - 1, d + n));
-}
-function waNumber(raw?: string | null): string | null {
-  let d = String(raw || "").replace(/\D/g, "");
-  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
-  if (d.length === 10) d = "91" + d;
-  return d.length >= 11 && d.length <= 15 ? d : null;
 }
 
 /* =========================================================
@@ -359,7 +354,7 @@ export default function ProposalsPanel({
 
   async function whatsapp(p: any) {
     const c = clientById[p.client_id];
-    const n = waNumber(c?.phone);
+    const n = toWhatsAppNumber(c?.phone);
     if (!n) return showToast("error", "This client has no valid mobile number.");
     const win = window.open("", "_blank");
     setBusyId(p.id);
@@ -552,7 +547,7 @@ export default function ProposalsPanel({
               <label className={labelClass}>Note</label>
               <input value={accNote} onChange={(e) => setAccNote(e.target.value)} className={inputClass} placeholder="e.g. Signed copy received by email on 18/10" />
             </div>
-            <p className="text-[11px] text-text-muted">Upload the signed copy to Documents for the client's records.</p>
+            <p className="text-[11px] text-text-muted">Upload the signed copy to Documents for the client&apos;s records.</p>
           </div>
         </Modal>
       )}

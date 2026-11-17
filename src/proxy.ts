@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { CSP_HEADER, contentSecurityPolicy } from "@/lib/csp";
 
 // Pages anyone may open without being signed in
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/confirm", "/engagement"];
@@ -55,7 +56,23 @@ function matchesPath(pathname: string, base: string) {
 }
 
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // A fresh nonce per request; Next reads it from the request's policy header and puts it on its own scripts
+  const nonce = btoa(crypto.randomUUID());
+  const csp = contentSecurityPolicy(nonce);
+  const result = await guard(request, nonce, csp);
+  result.headers.set(CSP_HEADER, csp);
+  return result;
+}
+
+async function guard(request: NextRequest, nonce: string, csp: string) {
+  function forward() {
+    const headers = new Headers(request.headers);
+    headers.set("x-nonce", nonce);
+    headers.set("Content-Security-Policy", csp);
+    return NextResponse.next({ request: { headers } });
+  }
+
+  let response = forward();
 
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
@@ -64,7 +81,7 @@ export async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = forward();
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },

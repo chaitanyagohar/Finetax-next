@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./onboarding.css";
 import AppShell from "@/components/layout/AppShell";
@@ -10,8 +10,10 @@ import SignOutButton from "@/components/layout/SignOutButton";
 import type { SessionUser } from "@/components/layout/navConfig";
 import { createClient } from "@/lib/supabase/server";
 
-const inter = Inter({
-  subsets: ["latin"],
+// Served from the repo so builds and pages never depend on fonts.googleapis.com.
+const inter = localFont({
+  src: "../fonts/inter-latin-variable.woff2",
+  weight: "100 900",
   variable: "--font-inter",
   display: "swap",
 });
@@ -98,7 +100,8 @@ export default async function RootLayout({
       : "Please ask your firm administrator to contact Duesk. Your firm's data is kept safe.";
     const screen =
       blocked?.status === "expired"
-        ? { title: "Free trial has ended", text: `The free trial for ${blocked.org_name} has ended. ${nextStep}` }
+        ? // Trials move to the free Starter plan; "expired" is only set by Duesk by hand (B-07)
+          { title: "Firm account expired", text: `Access for ${blocked.org_name} has expired. ${nextStep}` }
         : blocked?.status === "suspended"
           ? { title: "Firm account paused", text: `Access for ${blocked.org_name} has been paused. ${nextStep}` }
           : blocked?.status === "cancelled"

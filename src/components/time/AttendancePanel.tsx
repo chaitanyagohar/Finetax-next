@@ -55,7 +55,7 @@ export default function AttendancePanel({ from, to, team }: { from: string; to: 
     <div className="rounded-xl border border-border bg-surface shadow-sm">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
-          <UserCheck className="h-4 w-4 text-navy" /> Attendance & Activity
+          <UserCheck className="h-4 w-4 text-navy" /> Attendance & activity
         </h3>
         <span className="text-[11px] text-text-muted">Activity inside the app only</span>
       </div>
@@ -71,12 +71,12 @@ export default function AttendancePanel({ from, to, team }: { from: string; to: 
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Team Member</th>
-                <th>First Seen</th>
-                <th>Last Seen</th>
+                <th>Team member</th>
+                <th>First seen</th>
+                <th>Last seen</th>
                 <th className="text-right">Active</th>
                 <th className="text-right">Logged</th>
-                <th>Day Confirmed</th>
+                <th>Day confirmed</th>
               </tr>
             </thead>
             <tbody>
@@ -104,7 +104,7 @@ export default function AttendancePanel({ from, to, team }: { from: string; to: 
         </div>
       )}
       <p className="border-t border-border px-4 py-2 text-[10px] text-text-muted">
-        "Logged" shown in amber is more than an hour above active time in the app. That's normal for calls and client visits, but worth a glance.
+        &quot;Logged&quot; shown in amber is more than an hour above active time in the app. That&apos;s normal for calls and client visits, but worth a glance.
       </p>
     </div>
   );

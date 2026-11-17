@@ -1,5 +1,6 @@
 /** Signed public links (no login). SERVER ONLY. */
 import { createHmac, timingSafeEqual } from "crypto";
+import { UUID_RE } from "@/lib/validate";
 
 /** Public address of the app, used in links sent to clients. */
 function siteUrl(): string {
@@ -9,7 +10,6 @@ function siteUrl(): string {
   return url.replace(/\/+$/, "");
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Dedicated signing secret for public links (never the service-role key). */
 function secret(): string {

@@ -1,6 +1,6 @@
 import HelpCenter from "@/components/help/HelpCenter";
 
-export const metadata = { title: "Help & Support" };
+export const metadata = { title: "Help & support" };
 
 export default function HelpPage() {
   return (

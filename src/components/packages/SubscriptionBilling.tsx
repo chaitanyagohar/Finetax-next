@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Edit2, Loader2, MessageCircle, PlayCircle, Printer, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { toWhatsAppNumber } from "@/lib/phone";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal } from "@/components/ui/Modal";
@@ -22,12 +23,6 @@ function nextBill(sub: any): { start: string; end: string; bill: string } | null
   const end = new Date(y, m - 1 + months, 0);
   const bill = new Date(end.getFullYear(), end.getMonth() + 1, Number(sub.bill_day || 5));
   return { start: localISODate(new Date(y, m - 1, d)), end: localISODate(end), bill: localISODate(bill) };
-}
-function waNumber(raw?: string | null): string | null {
-  let d = String(raw || "").replace(/\D/g, "");
-  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
-  if (d.length === 10) d = "91" + d;
-  return d.length >= 11 && d.length <= 15 ? d : null;
 }
 
 export default function SubscriptionBilling({
@@ -126,7 +121,7 @@ export default function SubscriptionBilling({
 
   function whatsappReminder(b: any) {
     const c = clientById[b.client_id];
-    const n = waNumber(c?.phone);
+    const n = toWhatsAppNumber(c?.phone);
     if (!n) return showToast("error", "This client has no valid mobile number.");
     const bal = Math.max(0, Number(b.total || 0) - Number(b.amount_paid || 0));
     const text = `Dear ${c?.name || "Client"},\n\nInvoice ${b.invoice_number} for ${formatDate(b.billing_period_start)} to ${formatDate(b.billing_period_end)}: balance ${formatINR(bal)}, due ${formatDate(b.due_date)}.\nThe PDF has been emailed to you.\n\nPlease ignore if already paid. Thank you!`;
@@ -145,7 +140,7 @@ export default function SubscriptionBilling({
     <div className="space-y-5">
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-text-muted">
-          Bills are created automatically every morning when a period's bill date arrives.{" "}
+          Bills are created automatically every morning when a period&apos;s bill date arrives.{" "}
           {drafts.length > 0 ? <span className="font-semibold text-amber-700">{drafts.length} bill(s) waiting for your approval.</span> : "Nothing waiting for approval."}
         </p>
         <button type="button" onClick={runNow} disabled={running} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt disabled:opacity-60">
@@ -273,7 +268,7 @@ export default function SubscriptionBilling({
             </tbody>
           </table>
         )}
-        <p className="border-t border-border px-4 py-2 text-[10px] text-text-muted">To change a draft's line items before sending, open it from Invoices. Payments are recorded in Invoices as usual.</p>
+        <p className="border-t border-border px-4 py-2 text-[10px] text-text-muted">To change a draft&apos;s line items before sending, open it from Invoices. Payments are recorded in Invoices as usual.</p>
       </div>
 
       {editing && (

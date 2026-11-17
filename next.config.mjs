@@ -2,42 +2,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const isDev = process.env.NODE_ENV !== "production";
 
 /* ---------------------------------------------------------
-   Content Security Policy
-   Restricts where scripts, styles, images and network
-   requests can come from. Supabase (REST + Realtime) is
-   allowed explicitly.
-   If a feature breaks after enabling this, set
-   CSP_REPORT_ONLY = true, reproduce the issue, and send me
-   the red "Content-Security-Policy" messages from the
-   browser console (F12).
+   The Content Security Policy is set per request in src/proxy.ts
+   (src/lib/csp.ts), with a fresh nonce for Next's own scripts.
    --------------------------------------------------------- */
-const CSP_REPORT_ONLY = false;
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseHosts = supabaseUrl
-  ? `${supabaseUrl} ${supabaseUrl.replace(/^https:\/\//, "wss://")}`
-  : "https://*.supabase.co wss://*.supabase.co";
-
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  `connect-src 'self' ${supabaseHosts} https://challenges.cloudflare.com${isDev ? " ws: wss:" : ""}`,
-  "frame-src 'self' blob: https://challenges.cloudflare.com",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
 
 const securityHeaders = [
-  { key: CSP_REPORT_ONLY ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy", value: csp },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -65,6 +36,11 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // API responses are data, never pages: nothing in them may run or load (pages get theirs in src/proxy.ts)
+        source: "/api/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "default-src 'none'; frame-ancestors 'none'" }],
       },
     ];
   },

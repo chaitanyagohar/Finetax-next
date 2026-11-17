@@ -158,7 +158,7 @@ export function TaskCategoriesManager({
   }
 
   return (
-    <Modal title="Task Categories" subtitle="Used across tasks, the task list, packages and the calendar." onClose={() => !busy && onClose()} maxWidth="max-w-2xl">
+    <Modal title="Task categories" subtitle="Used across tasks, the task list, packages and the calendar." onClose={() => !busy && onClose()} maxWidth="max-w-2xl">
       <div className="space-y-4 text-xs">
         <form onSubmit={add} className="space-y-2 rounded-lg border border-border bg-surface-alt p-3">
           <div className="flex flex-wrap gap-2">
@@ -267,7 +267,7 @@ export function TaskCategoriesManager({
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-text-muted">Renaming updates every task, task-list entry, package service and calendar event that uses the category. Archived categories stay on old tasks but can't be chosen for new ones.</p>
+        <p className="text-[10px] text-text-muted">Renaming updates every task, task-list entry, package service and calendar event that uses the category. Archived categories stay on old tasks but can&apos;t be chosen for new ones.</p>
       </div>
     </Modal>
   );

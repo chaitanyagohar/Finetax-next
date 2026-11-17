@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { HELP_ARTICLES } from "@/lib/help/articles";
 import RichText from "./RichText";
+import { formatDate } from "@/lib/format";
 
 type Msg = { id: string; ticket_id: string; sender_id: string | null; role: string; body: string; attachments: any[]; created_at: string; meta?: any };
 type Ticket = { id: string; number: string; subject: string; status: string; kind: string; rating: number | null; updated_at: string; escalated_at: string | null };
@@ -350,7 +351,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
             <LifeBuoy className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-sm font-bold text-text-main">Help & Support</p>
+            <p className="text-sm font-bold text-text-main">Help & support</p>
             <p className="text-[10px] text-text-muted">Instant answers, and a real person when you need one</p>
           </div>
         </div>
@@ -418,7 +419,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                 <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-[13px] text-text-main">
                   <p className="font-semibold">Hi{firstName ? ` ${firstName}` : ""}! What can I help with?</p>
                   <p className="mt-1 text-text-muted">
-                    Describe what you're trying to do or what went wrong. Adding a screenshot helps a lot. If I can't fix it, I'll connect you to the support team.
+                    Describe what you&apos;re trying to do or what went wrong. Adding a screenshot helps a lot. If I can&apos;t fix it, I&apos;ll connect you to the support team.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -483,7 +484,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                 )}
               </div>
             )}
-            {ticket?.status === "resolved" && ticket.rating ? <p className="text-center text-[11px] text-emerald-700">Thanks for your rating! Write below if you need anything else.</p> : null}
+            {ticket?.status === "resolved" && ticket.rating ? <p className="text-center text-[11px] text-emerald-700">Thanks for your rating. Write below if you need anything else.</p> : null}
             <div ref={bottomRef} />
           </div>
 
@@ -602,7 +603,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                   <span className="min-w-0">
                     <span className="block truncate text-[12px] font-semibold text-text-main">{t.subject}</span>
                     <span className="text-[10px] text-text-muted">
-                      {t.number} · {t.kind === "feedback" ? "Feedback" : "Help"} · {new Date(t.updated_at).toLocaleDateString("en-IN")}
+                      {t.number} · {t.kind === "feedback" ? "Feedback" : "Help"} · {formatDate(t.updated_at)}
                     </span>
                   </span>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${s.tone}`}>{t.status === "ai" ? "Assistant" : s.label.split(" ")[0]}</span>
@@ -618,7 +619,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
         <div className="flex-1 overflow-y-auto p-3">
           {fbDone ? (
             <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-[12px] text-emerald-800">
-              <p className="font-semibold">Thank you! Your feedback ({fbDone}) has reached the team.</p>
+              <p className="font-semibold">Thank you. Your feedback ({fbDone}) has reached the team.</p>
               <button type="button" onClick={() => setFbDone("")} className="font-semibold underline">
                 Send more feedback
               </button>

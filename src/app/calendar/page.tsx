@@ -32,7 +32,6 @@ import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { formatDate, localISODate } from "@/lib/format";
 
-const CATEGORIES = ["GST", "Income Tax", "TDS", "ROC", "Audit", "Accounting", "Payroll", "Other"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -449,7 +448,7 @@ export default function ComplianceCalendarPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <CalendarIcon className="h-5 w-5 text-navy" /> Compliance & Workload Calendar
+            <CalendarIcon className="h-5 w-5 text-navy" /> Compliance & workload calendar
           </h2>
           <p className="mt-1 text-xs text-text-muted">Statutory due dates, task deadlines and team workload in one view.</p>
         </div>
@@ -486,7 +485,7 @@ export default function ComplianceCalendarPage() {
               onClick={() => openEventModal()}
               className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light"
             >
-              <Plus className="h-3.5 w-3.5" /> Add Statutory Deadline
+              <Plus className="h-3.5 w-3.5" /> Add statutory deadline
             </button>
           )}
         </div>
@@ -541,7 +540,7 @@ export default function ComplianceCalendarPage() {
                 <div key={d}>{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 text-xs">
+            <div data-tour="cal-grid" className="grid grid-cols-7 text-xs">
               {Array.from({ length: leadingBlanks }).map((_, i) => (
                 <div key={`blank-${i}`} className="min-h-[112px] border-b border-r border-border bg-surface-alt/40" />
               ))}
@@ -680,7 +679,7 @@ export default function ComplianceCalendarPage() {
 
             <div className="border-t border-border p-4">
               <Link href="/tasks" className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light">
-                <CheckSquare className="h-4 w-4" /> Open Task Board <ArrowRight className="h-3.5 w-3.5" />
+                <CheckSquare className="h-4 w-4" /> Open task board <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>
@@ -801,11 +800,11 @@ export default function ComplianceCalendarPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className={labelClass}>Task Title</label>
+                <label className={labelClass}>Task title</label>
                 <input value={genTitle} onChange={(e) => setGenTitle(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Internal Deadline</label>
+                <label className={labelClass}>Internal deadline</label>
                 <select value={genBuffer} onChange={(e) => setGenBuffer(Number(e.target.value))} className={inputClass}>
                   {[0, 1, 2, 3, 5, 7, 10].map((d) => (
                     <option key={d} value={d}>
@@ -823,7 +822,7 @@ export default function ComplianceCalendarPage() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Assign To</label>
+                <label className={labelClass}>Assign to</label>
                 <select value={genAssignMode === "rm" ? "__rm" : genAssignee} onChange={(e) => {
                   if (e.target.value === "__rm") setGenAssignMode("rm");
                   else {
@@ -831,7 +830,7 @@ export default function ComplianceCalendarPage() {
                     setGenAssignee(e.target.value);
                   }
                 }} className={inputClass}>
-                  <option value="__rm">Each client's relationship manager</option>
+                  <option value="__rm">Each client&apos;s relationship manager</option>
                   {activeTeam.map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
@@ -879,7 +878,7 @@ export default function ComplianceCalendarPage() {
                 )}
               </div>
               <p className="flex items-center gap-1 text-[10px] text-text-muted">
-                <CheckCircle2 className="h-3 w-3" /> Clients that already have "{genTitle}" for this statutory date are skipped automatically.
+                <CheckCircle2 className="h-3 w-3" /> Clients that already have &quot;{genTitle}&quot; for this statutory date are skipped automatically.
               </p>
             </div>
           </div>

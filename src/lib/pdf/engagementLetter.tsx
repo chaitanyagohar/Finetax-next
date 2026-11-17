@@ -2,6 +2,7 @@
 import React from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { formatDate, ordinal, rupees } from "@/lib/format";
 
 Font.registerHyphenationCallback((word) => [word]);
 
@@ -40,17 +41,6 @@ const s = StyleSheet.create({
 });
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
-const money = (n: unknown) => `Rs. ${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-function dmy(v?: string | null): string {
-  if (!v) return "-";
-  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : new Date(v).toLocaleDateString("en-IN");
-}
-function ordinal(n: number): string {
-  const sfx = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (sfx[(v - 20) % 10] || sfx[v] || sfx[0]);
-}
 const paragraphs = (t?: string | null) =>
   str(t)
     .split(/\n\s*\n|\r\n\s*\r\n/)
@@ -83,7 +73,7 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
           <View style={s.docSide}>
             <Text style={s.docTitle}>ENGAGEMENT LETTER</Text>
             <Text style={s.docMeta}>Ref: {str(p?.number)}</Text>
-            <Text style={s.docMeta}>Date: {dmy(p?.sent_at || p?.created_at)}</Text>
+            <Text style={s.docMeta}>Date: {formatDate(p?.sent_at || p?.created_at, "-")}</Text>
           </View>
         </View>
 
@@ -99,8 +89,8 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
           <Text style={s.subject}>Subject: Engagement for {str(pkg?.name) || "professional services"}</Text>
 
           <Text style={s.para}>
-            We are pleased to confirm the terms on which {firmName} ("we", "us") will provide professional services to {clientOrg} ("you") with effect from{" "}
-            {dmy(p?.start_date)}. Please read this letter carefully. Your acceptance confirms your agreement to these terms.
+            We are pleased to confirm the terms on which {firmName} (&quot;we&quot;, &quot;us&quot;) will provide professional services to {clientOrg} (&quot;you&quot;) with effect from{" "}
+            {formatDate(p?.start_date, "-")}. Please read this letter carefully. Your acceptance confirms your agreement to these terms.
           </Text>
 
           <H>Scope of Services</H>
@@ -150,7 +140,7 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
             <View style={s.feeRow}>
               <Text>Professional fee</Text>
               <Text style={s.bold}>
-                {money(p?.price)} per {cycleWord(cycle)} + GST @ {str(p?.gst_rate)}%
+                {rupees(p?.price)} per {cycleWord(cycle)} + GST @ {str(p?.gst_rate)}%
               </Text>
             </View>
             <View style={s.feeRow}>
@@ -167,7 +157,7 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
               <View style={s.feeRow}>
                 <Text>Late payment</Text>
                 <Text>
-                  {str(p?.late_fee_percent)}% per month (minimum {money(p?.late_fee_min)}) on overdue amounts
+                  {str(p?.late_fee_percent)}% per month (minimum {rupees(p?.late_fee_min)}) on overdue amounts
                 </Text>
               </View>
             ) : null}
@@ -181,7 +171,7 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
 
           <H>Term and Termination</H>
           <Text style={s.para}>
-            This engagement continues until terminated by either party giving {notice} days' written notice. Fees for services rendered up to the date of termination
+            This engagement continues until terminated by either party giving {notice} days&apos; written notice. Fees for services rendered up to the date of termination
             remain payable. We may suspend services if fees remain unpaid beyond the due date.
           </Text>
 
@@ -220,13 +210,13 @@ export function EngagementLetterPdf({ proposal: p, client, pkg, firm, terms }: {
             <View style={s.signCol}>
               <Text style={s.bold}>Accepted for {clientOrg}</Text>
               <Text style={{ marginTop: 26 }}>Name: {str(p?.accepted_name) || "________________________"}</Text>
-              <Text style={s.small}>Designation: {str(p?.accepted_designation) || "______________"} · Date: {p?.accepted_at ? dmy(p.accepted_at) : "__________"}</Text>
+              <Text style={s.small}>Designation: {str(p?.accepted_designation) || "______________"} · Date: {p?.accepted_at ? formatDate(p.accepted_at, "-") : "__________"}</Text>
             </View>
           </View>
 
           {p?.status === "Accepted" ? (
             <Text style={s.accepted}>
-              Accepted on {dmy(p?.accepted_at)} by {str(p?.accepted_name)}
+              Accepted on {formatDate(p?.accepted_at, "-")} by {str(p?.accepted_name)}
               {p?.accepted_designation ? ` (${str(p.accepted_designation)})` : ""}
               {p?.accepted_method === "online" ? ` · online${p?.accepted_ip ? `, IP ${str(p.accepted_ip)}` : ""}` : " · acceptance recorded"}.
             </Text>

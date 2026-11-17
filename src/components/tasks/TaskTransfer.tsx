@@ -99,7 +99,7 @@ export function TransferDialog({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          {task.reviewer_id && <p className="mt-1 text-[10px] text-text-muted">The task's reviewer isn't listed (maker-checker rule).</p>}
+          {task.reviewer_id && <p className="mt-1 text-[10px] text-text-muted">The task&apos;s reviewer isn&apos;t listed (maker-checker rule).</p>}
         </div>
         <div>
           <label className={labelClass}>Reason *</label>

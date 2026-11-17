@@ -2,9 +2,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError, type AuthContext } from "@/lib/api/guard";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
+import { EMAIL_RE } from "@/lib/validate";
 
 export const ROLES = ["staff", "reviewer", "admin"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MODULE_ID_RE = /^[a-z0-9_-]{1,40}$/i;
 
 export type MemberInput = {

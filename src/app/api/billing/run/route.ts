@@ -6,13 +6,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { issueAndEmailInvoice, sendPaymentReminders } from "@/lib/billing/invoiceMailer";
+import { istDate } from "@/lib/format";
 
 const SEND_BUDGET_MS = 40_000; // stop starting new emails after this; the rest go next run
 const REMINDER_BUDGET_MS = 50_000;
 
-function istToday(): string {
-  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 /**
  * 1. Creates due subscription bills (one firm for the button, every firm for the daily job).
@@ -44,7 +42,7 @@ async function runBilling(onlyOrgId?: string) {
       .select("id")
       .eq("status", "Draft")
       .in("client_package_id", subIds)
-      .lte("date", istToday())
+      .lte("date", istDate())
       .order("date", { ascending: true })
       .limit(100);
     if (onlyOrgId) invQuery = invQuery.eq("org_id", onlyOrgId);

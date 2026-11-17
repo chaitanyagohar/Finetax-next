@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Mail } from "lucide-react";
 import AuthLayout from "@/components/auth/AuthLayout";
+import { EMAIL_RE } from "@/lib/validate";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RESEND_COOLDOWN_MS = 60000;
 
 export default function ForgotPasswordPage() {
@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="space-y-1">
               <p className="font-semibold">If an account exists for {email.trim().toLowerCase()}, a reset link is on its way.</p>
-              <p className="text-emerald-700">The link can only be used once and expires shortly. Check your spam folder if you don't see it.</p>
+              <p className="text-emerald-700">The link can only be used once and expires shortly. Check your spam folder if you don&apos;t see it.</p>
             </div>
           </div>
 

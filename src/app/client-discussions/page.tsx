@@ -28,7 +28,7 @@ import { Client } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 type ClientRow = Client & Record<string, any>;
@@ -45,7 +45,7 @@ const MODE_ICON: Record<string, LucideIcon> = Object.fromEntries(MODES.map((m) =
 
 const VIEWS = [
   { key: "all", label: "All" },
-  { key: "pending", label: "Pending Follow-ups" },
+  { key: "pending", label: "Pending follow-ups" },
   { key: "overdue", label: "Overdue" },
   { key: "done", label: "Done" },
 ] as const;
@@ -358,7 +358,7 @@ export default function ClientDiscussionsPage() {
       <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-            <MessageSquare className="h-5 w-5 text-navy" /> Client Discussions
+            <MessageSquare className="h-5 w-5 text-navy" /> Client discussions
           </h2>
           <p className="mt-1 text-xs text-text-muted">Every call, meeting and message with clients, with follow-ups that never slip.</p>
         </div>
@@ -367,7 +367,7 @@ export default function ClientDiscussionsPage() {
           onClick={() => openModal()}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light sm:w-auto"
         >
-          <Plus className="h-4 w-4" /> Log Discussion
+          <Plus className="h-4 w-4" /> Log discussion
         </button>
       </div>
 
@@ -376,7 +376,7 @@ export default function ClientDiscussionsPage() {
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">This Month</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">This month</p>
               <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.thisMonth}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
@@ -393,7 +393,7 @@ export default function ClientDiscussionsPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Due Today</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Due today</p>
               <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.dueToday ? "text-amber-700" : "text-text-main"}`}>{stats.dueToday}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
@@ -410,7 +410,7 @@ export default function ClientDiscussionsPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue Follow-ups</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue follow-ups</p>
               <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
@@ -523,7 +523,7 @@ export default function ClientDiscussionsPage() {
                   <th>Date</th>
                   <th>Client</th>
                   <th>Discussion</th>
-                  <th>Handled By</th>
+                  <th>Handled by</th>
                   <th>Follow-up</th>
                   <th className="text-right">Action</th>
                 </tr>
@@ -647,7 +647,7 @@ export default function ClientDiscussionsPage() {
               </div>
 
               <div>
-                <label className={labelClass}>Mode of Contact</label>
+                <label className={labelClass}>Mode of contact</label>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                   {MODES.map((m) => {
                     const Icon = m.icon;
@@ -683,13 +683,13 @@ export default function ClientDiscussionsPage() {
               </div>
 
               <div>
-                <label className={labelClass}>Notes / Details</label>
+                <label className={labelClass}>Notes / details</label>
                 <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="Decisions, documents requested, amounts quoted..." />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Handled By</label>
+                  <label className={labelClass}>Handled by</label>
                   <select value={handledBy} onChange={(e) => setHandledBy(e.target.value)} className={inputClass}>
                     <option value="">— Select team member —</option>
                     {team
@@ -699,11 +699,11 @@ export default function ClientDiscussionsPage() {
                       ))}
                   </select>
                   {editingItem && !editingItem.handled_by && editingItem.staff && (
-                    <p className="mt-1 text-[10px] text-text-muted">Previously recorded as "{editingItem.staff}"</p>
+                    <p className="mt-1 text-[10px] text-text-muted">Previously recorded as &quot;{editingItem.staff}&quot;</p>
                   )}
                 </div>
                 <div>
-                  <label className={labelClass}>Follow-up Date</label>
+                  <label className={labelClass}>Follow-up date</label>
                   <input
                     type="date"
                     min={date || undefined}

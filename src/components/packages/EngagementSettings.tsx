@@ -15,7 +15,7 @@ export default function EngagementSettingsButton() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt">
-        <FileSignature className="h-4 w-4 text-navy" /> Engagement Terms
+        <FileSignature className="h-4 w-4 text-navy" /> Engagement terms
       </button>
       {open && <EngagementSettingsModal onClose={() => setOpen(false)} />}
     </>

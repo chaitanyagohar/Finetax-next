@@ -5,8 +5,8 @@ import Link from "next/link";
 import { AlertCircle, Building2, CheckCircle2, Loader2, Mail, Phone, User } from "lucide-react";
 import AuthLayout from "@/components/auth/AuthLayout";
 import Turnstile from "@/components/auth/Turnstile";
+import { EMAIL_RE } from "@/lib/validate";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const inputClass =
   "w-full rounded-lg border border-border bg-surface py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
 const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-muted";
@@ -73,9 +73,9 @@ export default function SignupPage() {
           <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="space-y-1">
-              <p className="font-semibold">We've sent a confirmation link to {sentTo}.</p>
+              <p className="font-semibold">We&apos;ve sent a confirmation link to {sentTo}.</p>
               <p className="text-emerald-700">
-                Open it to choose your password and start your 14-day free trial. Check your spam folder if you don't see it in a few minutes.
+                Open it to choose your password and start your 14-day free trial. Check your spam folder if you don&apos;t see it in a few minutes.
               </p>
 
             </div>

@@ -33,7 +33,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Webhook not configured." }, { status: 503 });
     }
 
-    const provided = request.headers.get("x-webhook-secret") || request.nextUrl.searchParams.get("token") || "";
+    // Header only: a secret in the URL ends up in request logs (S-16).
+    if (request.nextUrl.searchParams.has("token")) {
+      console.error("[webhook] Secret sent in the URL; send it in the x-webhook-secret header instead.");
+    }
+    const provided = request.headers.get("x-webhook-secret") || "";
     if (!safeEqual(provided, secret)) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }

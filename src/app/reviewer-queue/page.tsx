@@ -35,9 +35,9 @@ import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@
 const ANALYTICS_DAYS = 180;
 
 const TABS = [
-  { key: "pending", label: "Pending Approvals", icon: Clock3 },
-  { key: "revisions", label: "Revision Requests", icon: AlertTriangle },
-  { key: "analytics", label: "Quality Analytics", icon: BarChart3 },
+  { key: "pending", label: "Pending approvals", icon: Clock3 },
+  { key: "revisions", label: "Revision requests", icon: AlertTriangle },
+  { key: "analytics", label: "Quality analytics", icon: BarChart3 },
 ] as const;
 
 /* ---------------- Helpers ---------------- */
@@ -97,7 +97,8 @@ export default function ReviewerQueuePage() {
   const [reviewComments, setReviewComments] = useState("");
   const { templates: feedbackTemplates, reload: reloadFeedbackTemplates } = useFeedbackTemplates();
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [notifyClient, setNotifyClient] = useState(true);
+  // Off by default: the client is emailed only when the reviewer chooses to (B-14)
+  const [notifyClient, setNotifyClient] = useState(false);
   const [deciding, setDeciding] = useState<null | "Approved" | "Changes Required">(null);
   const [decisionError, setDecisionError] = useState("");
 
@@ -124,7 +125,12 @@ export default function ReviewerQueuePage() {
       fetchAll((from, to) =>
         mine(supabase.from("tasks").select("*").in("stage", ["Submitted for Review", "Changes Required"])).order("due_date", { ascending: true }).order("id").range(from, to)
       ),
-      fetchAll((from, to) => mine(supabase.from("tasks").select("*").eq("stage", "Approved").gte("created_at", since)).order("id").range(from, to)),
+      // Counted by approval date, not by when the task was created (B-14)
+      fetchAll((from, to) =>
+        mine(supabase.from("tasks").select("*").eq("stage", "Approved").or(`stage_changed_at.gte.${since},and(stage_changed_at.is.null,created_at.gte.${since})`))
+          .order("id")
+          .range(from, to)
+      ),
       fetchAll((from, to) =>
         supabase
           .from("audit_logs")
@@ -251,7 +257,7 @@ export default function ReviewerQueuePage() {
   function openInspect(t: any) {
     setInspectTask(t);
     setReviewComments(t.review_comments || "");
-    setNotifyClient(true);
+    setNotifyClient(false);
     setDecisionError("");
   }
 
@@ -358,7 +364,7 @@ export default function ReviewerQueuePage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
-              <ShieldCheck className="h-5 w-5 text-navy" /> Reviewer Verification Hub
+              <ShieldCheck className="h-5 w-5 text-navy" /> Reviewer verification hub
             </h2>
             <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-700">
               {isAdmin && scope === "all" ? "Entire Firm" : "My Queue"}
@@ -484,7 +490,7 @@ export default function ReviewerQueuePage() {
                         onClick={() => openInspect(t)}
                         className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light"
                       >
-                        <ShieldCheck className="h-4 w-4" /> Inspect & Sign Off
+                        <ShieldCheck className="h-4 w-4" /> Inspect & sign off
                       </button>
                     </div>
                   );
@@ -507,10 +513,10 @@ export default function ReviewerQueuePage() {
                       <th>Deadlines</th>
                       <th>Task</th>
                       <th>Client</th>
-                      <th>Executed By</th>
-                      <th>With Staff</th>
+                      <th>Executed by</th>
+                      <th>With staff</th>
                       <th>Rounds</th>
-                      <th>Required Changes</th>
+                      <th>Required changes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -545,9 +551,9 @@ export default function ReviewerQueuePage() {
               <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
                 {[
                   { label: "Approved", value: String(analytics.approved), sub: `Last ${ANALYTICS_DAYS} days`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
-                  { label: "First-Pass Approval", value: `${analytics.firstPassRate}%`, sub: "Approved without any return", icon: Target, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
-                  { label: "Avg Revision Rounds", value: analytics.avgRounds.toFixed(1), sub: "Returns per approved task", icon: RotateCcw, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
-                  { label: "Avg Review Turnaround", value: formatDuration(analytics.avgTurnaround), sub: `${analytics.decisions} decisions measured`, icon: Hourglass, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
+                  { label: "First-pass approval", value: `${analytics.firstPassRate}%`, sub: "Approved without any return", icon: Target, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
+                  { label: "Avg revision rounds", value: analytics.avgRounds.toFixed(1), sub: "Returns per approved task", icon: RotateCcw, style: "bg-amber-50 text-amber-600", valueClass: "text-amber-700" },
+                  { label: "Avg review turnaround", value: formatDuration(analytics.avgTurnaround), sub: `${analytics.decisions} decisions measured`, icon: Hourglass, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
                 ].map((k) => {
                   const Icon = k.icon;
                   return (
@@ -570,7 +576,7 @@ export default function ReviewerQueuePage() {
               <div className="rounded-xl border border-border bg-surface shadow-sm">
                 <div className="border-b border-border px-4 py-3">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
-                    <Users className="h-4 w-4 text-navy" /> Quality by Team Member
+                    <Users className="h-4 w-4 text-navy" /> Quality by team member
                   </h3>
                   <p className="text-[11px] text-text-muted">Based on tasks approved in the last {ANALYTICS_DAYS} days.</p>
                 </div>
@@ -581,11 +587,11 @@ export default function ReviewerQueuePage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr>
-                          <th>Team Member</th>
+                          <th>Team member</th>
                           <th className="text-right">Approved</th>
-                          <th className="text-right">First-Pass</th>
-                          <th className="text-right">Total Returns</th>
-                          <th>First-Pass Rate</th>
+                          <th className="text-right">First-pass</th>
+                          <th className="text-right">Total returns</th>
+                          <th>First-pass rate</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -685,14 +691,14 @@ export default function ReviewerQueuePage() {
                 <p className="font-semibold text-text-main">{recurrenceLabel(inspectTask.recurrence)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase text-text-muted">Time Logged</p>
+                <p className="text-[10px] font-semibold uppercase text-text-muted">Time logged</p>
                 <p className="font-semibold text-text-main">{inspectTask.time_spent_minutes ? formatMinutes(inspectTask.time_spent_minutes) : "—"}</p>
               </div>
             </div>
 
             <div>
               <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                <FileText className="h-3.5 w-3.5" /> Staff Execution Notes
+                <FileText className="h-3.5 w-3.5" /> Staff execution notes
               </p>
               <div className="whitespace-pre-wrap rounded-lg border border-border p-3 text-text-main">
                 {inspectTask.notes || <span className="italic text-text-muted">No notes were added.</span>}
@@ -701,7 +707,7 @@ export default function ReviewerQueuePage() {
 
             {inspectHistory.length > 0 && (
               <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Previous Feedback Rounds</p>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Previous feedback rounds</p>
                 <div className="space-y-1.5">
                   {inspectHistory.map((h) => (
                     <div key={h.id} className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5">

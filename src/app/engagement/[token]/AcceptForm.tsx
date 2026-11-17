@@ -55,20 +55,20 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
           <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#10233f]" />
             <span>
-              I have read the engagement letter and, on behalf of <strong>{clientOrg}</strong>, I agree to engage {firmName || "the firm"} on these terms. I'm authorised to accept for{" "}
+              I have read the engagement letter and, on behalf of <strong>{clientOrg}</strong>, I agree to engage {firmName || "the firm"} on these terms. I&apos;m authorised to accept for{" "}
               {clientOrg}.
             </span>
           </label>
           {error && <p className="rounded-lg bg-rose-50 p-2 text-sm font-medium text-rose-700">{error}</p>}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" onClick={() => setMode("decline")} className="text-sm text-slate-500 underline">
-              I don't want to proceed
+              I don&apos;t want to proceed
             </button>
             <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
               {busy ? "Confirming..." : "Accept engagement"}
             </button>
           </div>
-          <p className="text-[11px] text-slate-400">Your name, the date and time, and your device's IP address are recorded as confirmation of acceptance.</p>
+          <p className="text-[11px] text-slate-400">Your name, the date and time, and your device&apos;s IP address are recorded as confirmation of acceptance.</p>
         </>
       ) : (
         <>
