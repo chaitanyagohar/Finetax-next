@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Folder,
-  Plus,
   Search,
   Trash2,
   ExternalLink,
@@ -29,12 +28,14 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import ClientPicker from "@/components/ui/ClientPicker";
+import TaskPicker from "@/components/tasks/TaskPicker";
 import { formatDate, localISODate } from "@/lib/format";
 
 const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
 const BUCKET = "firm-documents";
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const INTERNAL_FILTER = [{ id: "internal", label: "Internal (no client)" }];
 const ALLOWED_EXT = ["pdf", "xls", "xlsx", "csv", "doc", "docx", "ppt", "pptx", "txt", "jpg", "jpeg", "png", "zip", "xml", "json"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -71,7 +72,6 @@ export default function DocumentsPage() {
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -117,16 +117,14 @@ export default function DocumentsPage() {
 
   async function loadData() {
     setLoading(true);
-    const [dRes, cRes, tRes, pRes] = await Promise.all([
+    const [dRes, cRes, pRes] = await Promise.all([
       supabase.from("documents").select("*").order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name, organization_name, email, phone, pan, gstin, status").order("name", { ascending: true }),
-      supabase.from("tasks").select("id, title, client_id, stage").neq("stage", "Approved").order("due_date", { ascending: true }),
       supabase.from("profiles").select("id, name").order("name", { ascending: true }),
     ]);
     if (dRes.error) showToast("error", "Could not load the document vault.");
     setDocuments(dRes.data || []);
     setClients(cRes.data || []);
-    setTasks(tRes.data || []);
     setTeam(pRes.data || []);
     setLoading(false);
   }
@@ -417,7 +415,6 @@ export default function DocumentsPage() {
     loadData();
   }
 
-  const taskOptions = tasks.filter((t) => !clientId || t.client_id === clientId || t.id === taskId);
 
   /* ---------------- Render ---------------- */
 
@@ -488,13 +485,16 @@ export default function DocumentsPage() {
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="max-w-[200px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-              <option value="all">All clients</option>
-              <option value="internal">Internal (no client)</option>
-              {sortByLabel(clients.filter((c) => c.status !== "Merged")).map((c) => (
-                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
-              ))}
-            </select>
+            <ClientPicker
+              clients={clients}
+              value={clientFilter === "all" ? "" : clientFilter}
+              onChange={(id) => setClientFilter(id || "all")}
+              noneLabel="All clients"
+              extraOptions={INTERNAL_FILTER}
+              includeInactive
+              compact
+              className="w-[200px]"
+            />
             <select value={uploaderFilter} onChange={(e) => setUploaderFilter(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="all">Anyone</option>
               <option value="mine">Uploaded by me</option>
@@ -693,12 +693,7 @@ export default function DocumentsPage() {
 
             <div>
               <label className={labelClass}>Related Task</label>
-              <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className={inputClass}>
-                <option value="">— Optional —</option>
-                {taskOptions.map((t) => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-              </select>
+              <TaskPicker value={taskId} onChange={(id) => setTaskId(id)} clientId={clientId || undefined} noneLabel="No task" />
             </div>
 
             <div>

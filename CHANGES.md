@@ -1,96 +1,93 @@
-# Duesk batch 2: security
+# Duesk batch 3: team requests
 
-Built on `main` with batch 1 deployed, and tested against `supabase/schema_2026-11-13.sql`.
-
-Findings fixed: **S-02**, **S-12**, **S-06**, **S-21**, **S-22**, **D-05**. Also: migration 041 can now be run again safely.
+Built on `main` with batches 1 and 2 deployed, and tested against `supabase/schema_2026-11-13.sql` with migrations 041 to 046 applied.
 
 ## What changes for users
 
-**Mailboxes (S-02, S-12, D-05)**
-- Mail forwarded to Duesk for an address reaches a firm only after that firm confirms it owns the address. To confirm, an administrator clicks **Confirm address** on the mailbox; Duesk emails a six-digit code to the address, and the administrator enters it. A successful connection test no longer counts as proof.
-- Mailboxes already tested before this change are confirmed automatically, unless another firm has connected the same address.
-- Each mailbox now has **Who can use it**. Administrators can always use every mailbox. Other staff see a mailbox and its emails only when it is shared with them, and they still need the Firm inbox module.
-- On the first run, every mailbox is shared with every non-admin who had the Firm inbox module, so nobody loses access on the day. Administrators then remove people mailbox by mailbox.
-- A mailbox that has emails in Duesk can no longer be removed; **Disable** keeps it and its emails. Previously, removing it deleted every email.
+**1. Searchable task picker**
+- Wherever a task is chosen from a list, you now type to search: Manual Time Entry, the timer, and the Related Task field on a document. Every word you type must match the task name, period, category, client or organisation, so "3b sharma oct" finds GSTR-3B for Sharma for Oct 2026.
+- Each option shows the task and period, then the client, due date and stage, so similar tasks can be told apart.
+- Search runs on the server, so every task can be found. Previously the list was loaded in one go and stopped at 1,000 tasks, which is why some tasks were missing.
+- Time entries now load the names of only the tasks they refer to, so a task name no longer goes missing from older entries.
+- The task choice in the Add Task window (the Task List, 47 entries at Finetax) is searchable too.
+- The client filters on Tasks, Time Tracking and Documents are now the same searchable client picker used in forms.
+- Task transfer is opened from a task that is already chosen, and its only list is of people, so it needed no task picker.
 
-**Team (S-06, S-21, S-22)**
-- Inviting someone who already has a Duesk login no longer adds them straight away. They see the invitation when they next sign in, and can accept or decline. Until they accept they have no access, the firm sees only the name the administrator typed, and they don't use a seat on the plan.
-- The reply to an invitation is the same whether or not the email already has a Duesk login, so the Team page no longer reveals who uses Duesk.
-- An unanswered invitation gives the inviting firm no say over that person's login: no password reset or email change.
-- People lists and pickers show only people in the firm you are working in. Previously, someone in two firms saw both firms' staff.
-- Tasks, leads and clients can be given only to an active member of their own firm. A recurring task or other system-made record whose assignee has left is left unassigned rather than failing.
-- An administrator can change only people in the firm they are working in.
+**2. Task List search**
+- The search box was already there, but below the "Add a task" form, so it was easy to miss. The window now opens with the search box (cursor in it) and the list first. The form appears only after **Add a task** or **Edit**. The count shows how many entries match.
 
-**Records that can no longer be deleted (D-05)**
+**3. Daily recurrence**
+- **Daily** is now offered for tasks, Task List entries and package services, alongside Weekly, Monthly, Quarterly and Yearly.
+- When a daily task is approved, the next one is created for the firm's next working day. Working days are the setting under **Performance → Weights → Working days**: Monday to Saturday (the default), Monday to Friday, or all seven days. This is the same setting the KPI scores use.
+- A daily task approved late continues from today rather than from its old due date, so no backlog of past days is created.
+- If the daily task has a period, the next one's period is its date (for example "18 Nov 2026"). A daily package service starts on the first working day from its start date.
+- Holidays are not known to Duesk; only the weekly working days are skipped.
 
-| Record | Can't be deleted when | Do instead |
-|---|---|---|
-| Task | It has time recorded, or messages in its discussion | Change its status |
-| Quotation | It isn't a draft, or an invoice was made from it | Change its status |
-| Engagement letter | It isn't a draft | Withdraw it |
-| Package | Any client is, or was, on it | Archive it |
-| Mailbox | It has emails in Duesk | Disable it |
+**4. Client mobile on tasks**
+- The client's mobile number shows as a tap-to-call link with a WhatsApp button:
+  - on each task card on the board
+  - in the task window header
+  - on each row of the work queue
+  - in the reviewer queue's task window
+- Nothing new is exposed: anyone who can see a task could already read its client's number, and the tasks page already loaded it.
 
-The database enforces these rules for everyone, including the server, and the page shows the reason. The quotations page now offers Delete only on drafts. The packages page deletes a package in one step, so a refused delete no longer loses the package's service list on the way.
+**5. Feedback templates**
+- One-click lines appear above the **Execution Notes** and **Reviewer Feedback** boxes in the task window, and above **Review Feedback** in the reviewer queue.
+- Clicking a line adds it on a new line. Several can be added, and the text stays editable. A line already in the box shows a tick and isn't added twice.
+- Administrators see **Manage templates** next to the lines. There they can add, edit, reorder or delete templates. Each template can be shown above both boxes or just one, and can be tied to one task in the Task List. A tied template shows first on that task and is hidden on others.
+- Every firm starts with the five examples you gave. New firms get them as part of set-up.
 
 ## Files
 
 | File | Status | Reason |
 |---|---|---|
-| `supabase/migrations/041_invoice_issue_gst.sql` | MODIFIED | Runs safely more than once: the temporary table the SQL Editor lost between statements is replaced by a single statement. A pre-041 invoice whose client had no state now takes the buyer state on a re-run. Has the same effect as the version you ran. |
-| `supabase/migrations/042_mailbox_ownership.sql` | NEW | Confirmed owner per address, code table, guard trigger, one confirmed owner per address (S-02) |
-| `supabase/migrations/043_mailbox_access.sql` | NEW | `email_account_members`, `can_use_mailbox`, mailbox and email visibility rules (S-12) |
-| `supabase/migrations/044_invitation_consent.sql` | NEW | Pending memberships, `my_invitations`, `respond_to_invitation`, signup state and Team list for pending invitations (S-06) |
-| `supabase/migrations/045_firm_scoped_people.sql` | NEW | People visible and editable only within the current firm; assignees must be members of the record's firm (S-21, S-22) |
-| `supabase/migrations/046_delete_protections.sql` | NEW | Delete guards on tasks, mailboxes, quotations, engagement letters, packages; package foreign key changed to restrict (D-05) |
-| `supabase/undo/042_046_security_undo.sql` | NEW | Tested rollback for 042 to 046 |
-| `src/lib/email/ownership.ts` | NEW | Sends and checks the six-digit ownership code (S-02) |
-| `src/app/api/email-accounts/ownership/route.ts` | NEW | Admin route to send and confirm the code (S-02) |
-| `src/components/inbox/ConfirmOwnership.tsx` | NEW | Confirm address dialog (S-02) |
-| `src/lib/email/access.ts` | NEW | Per-mailbox check for server routes, which bypass row-level security (S-12) |
-| `src/components/inbox/MailboxAccess.tsx` | NEW | Who can use it dialog (S-12) |
-| `src/components/team/PendingInvitations.tsx` | NEW | Accept or decline bar for invitations (S-06) |
-| `src/app/api/webhooks/incoming-emails/route.ts` | MODIFIED | Delivers only to the firm that confirmed the address (S-02) |
-| `src/app/api/email-accounts/test/route.ts` | MODIFIED | Comment: a passing test records a working connection, not ownership (S-02) |
-| `src/lib/email/mailer.ts` | MODIFIED | `record: false` keeps one-time code emails out of the sending firm's Sent list (S-02) |
-| `src/app/api/send-email/route.ts` | MODIFIED | A chosen mailbox must be one the sender may use; the account ID is validated (S-12) |
-| `src/app/api/sync-emails/route.ts` | MODIFIED | Sync only mailboxes the caller may use (S-12) |
-| `src/app/inbox/page.tsx` | MODIFIED | Confirm address, Who can use it, confirmed badge; remove no longer deletes emails first (S-02, S-12, D-05) |
-| `src/app/api/admin/invite-member/route.ts` | MODIFIED | Existing logins get a pending invitation; same reply either way (S-06) |
-| `src/lib/team/members.ts` | MODIFIED | `inviteExistingPerson`, `sendInvitationNotice` (S-06) |
-| `src/app/api/admin/update-member/route.ts` | MODIFIED | Edit, resend and cancel work on pending invitations; their login is not touched (S-06) |
-| `src/app/api/admin/manage-user/route.ts` | MODIFIED | Login changes only for people who have accepted (S-06) |
-| `src/app/api/auth/complete-signup/route.ts` | MODIFIED | An unanswered invitation doesn't stop a new signup creating their own firm (S-06) |
-| `src/app/layout.tsx` | MODIFIED | Shows the invitation bar (S-06) |
-| `src/app/team/page.tsx` | MODIFIED | One message for every invitation (S-06) |
-| `src/app/tasks/page.tsx` | MODIFIED | Shows why a delete was refused (D-05) |
-| `src/app/quotations/page.tsx` | MODIFIED | Delete only on drafts; shows why a delete was refused (D-05) |
-| `src/app/packages/page.tsx` | MODIFIED | Deletes a package in one step (D-05) |
+| `supabase/migrations/047_daily_recurrence_feedback_templates.sql` | NEW | `next_working_day`, Daily in `tasks_after_approve` and `compute_service_schedule`, `feedback_templates` table with rules and seed, new firms seeded in `platform_seed_firm`, `search_tasks` |
+| `supabase/undo/047_daily_recurrence_feedback_templates_undo.sql` | NEW | Tested rollback for 047 |
+| `src/components/ui/Combobox.tsx` | NEW | Shared searchable dropdown (keyboard, search box, none option) used by the pickers below |
+| `src/components/tasks/TaskPicker.tsx` | NEW | Searchable task choice backed by `search_tasks` (request 1) |
+| `src/components/tasks/FeedbackTemplates.tsx` | NEW | Template lines, loader and the Manage templates window (request 5) |
+| `src/components/ui/ClientContact.tsx` | NEW | Call and WhatsApp links for a client's mobile (request 4) |
+| `src/lib/phone.ts` | NEW | WhatsApp/tel number formatting, moved from the Leads page |
+| `src/lib/tasks/recurrence.ts` | NEW | One list of recurrence options, including Daily, and their wording (request 3) |
+| `src/components/ui/ClientPicker.tsx` | MODIFIED | Rebuilt on `Combobox`; same props and look, plus `compact` and `extraOptions` for filter bars |
+| `src/app/time-tracking/page.tsx` | MODIFIED | Task picker for the timer and Manual Time Entry; loads only the task names its entries need; searchable client filter |
+| `src/app/documents/page.tsx` | MODIFIED | Task picker for Related Task (limited to the chosen client); searchable client filter; unused import removed |
+| `src/app/tasks/page.tsx` | MODIFIED | Searchable task choice; Task List search first; Daily; contact links on cards and header; template lines; searchable client filter |
+| `src/components/tasks/WorkQueue.tsx` | MODIFIED | Contact links on each row |
+| `src/app/reviewer-queue/page.tsx` | MODIFIED | Template lines above Review Feedback; contact links in the header; Daily wording |
+| `src/app/packages/page.tsx` | MODIFIED | Uses the shared recurrence list, so services can be Daily |
+| `src/app/leads/page.tsx` | MODIFIED | Uses the shared WhatsApp number helper instead of its own copy |
+| `src/lib/help/articles.ts` | MODIFIED | Help on recurring tasks explains Daily and working days |
+| `src/lib/help/troubleshooting.ts` | MODIFIED | "Next recurring task wasn't created" covers Daily |
 
 No files deleted. No dependency changes; `package.json` and `package-lock.json` are untouched.
 
-## Overlap with fixes already on main
+## Overlap with earlier fixes
 
-- **`src/app/api/send-email/route.ts` (S-01, `isVaultPathAllowed`):** untouched. The mailbox check sits just before sending, after the vault check.
-- **`src/app/api/admin/update-member/route.ts` (B-01, moved to its own folder):** kept at its new path; edits only.
-- **`src/app/layout.tsx` (`onboarding.css` import):** kept; one import and three render lines added.
-- **`src/app/quotations/page.tsx` (batch 1, B-29):** the reload after a failed email is kept.
-- **Not touched:** `api/billing/run`, `api/billing/send`, `api/invoices/send`, `api/quotations/send`, login, the lock file.
+- `src/app/tasks/page.tsx` and `src/app/documents/page.tsx` carry batch 2's delete-refusal messages (D-05); untouched.
+- `src/app/packages/page.tsx` carries batch 2's one-step package delete (D-05); untouched.
+- `src/app/reviewer-queue/page.tsx`: only the additions listed above.
 
-## Notes
+## Decisions taken
 
-- **Where the code email comes from:** the ownership code is emailed from Duesk's own mailbox (the Oddlambda workspace, `platform_config.support_org_id`), the same mailbox that sends support escalations. It is never sent through the server the firm typed in. `APPLY.md` checks that this mailbox works.
-- **S-22 scope:** pickers read `profiles`, which the database now limits to the current firm, so the pages needed no change.
-- **D-05 scope:** a person can still delete their own time entries and then the task. The guard covers the common case the audit found, an administrator deleting a task with history.
+- **Daily after a late approval** continues from today, not from the missed due date.
+- **Statutory deadline on a daily task**, if set, moves by the same number of days as the internal one.
+- **Templates for the reviewer feedback box** show only to the person who can review that task, like the box itself.
+- **Templates are firm-wide lines.** There are no personal templates.
+- **Other copies of the WhatsApp number code**, on the invoices, billing and engagement letter pages, are left for batch 5 with the other duplicates. They behave the same.
 
 ## How it was checked
 
-- `npx tsc --noEmit`: 0 errors, on a fresh copy of `main` (batch 1 deployed) with this zip extracted over it.
+- `npx tsc --noEmit`: 0 errors, on a fresh copy of `main` (batch 2 deployed) with this zip extracted over it.
 - `npm run build`: passes, 64 routes. The two Google Font downloads were stubbed for the check (batch 5 removes the need).
-- **Database:** a local copy of your 13 Nov schema, with two firms, staff in both, mailboxes (including a rival copy of the same address in the second firm), emails, tasks, quotations, engagement letters and a retainer.
-  - Migrations 041 to 046 were each run twice in order; 51 checks passed. They cover row-level security as staff, admin and a person in two firms.
-  - The new 041 was run twice over the old 041, as you have it in production; invoices and counters were unchanged.
-  - Your NZIE situation was reproduced on the copy: adding the client's state and re-running 041 fills its place of supply and nothing else.
-  - The undo script restored every policy, function, trigger, constraint and index of the pre-batch schema; the only difference is a trailing newline in four function bodies, which has no effect.
-- ESLint on the touched files: no new problems. One warning in `PendingInvitations.tsx` is the same deliberate full-page reload the firm switcher in `Topbar.tsx` uses.
-- Not checked: the pages in a browser, and sending a real code email. The checklist in `APPLY.md` covers both.
+- Database: migrations 041 to 047 were each run twice on a local copy of your schema with two test firms, then 32 checks passed:
+  - working days for Monday-to-Saturday, Monday-to-Friday and a firm with no setting
+  - daily tasks approved late and early
+  - a monthly task, to confirm it is unchanged
+  - daily package services
+  - templates: seeded once per firm, visible within the firm only, staff read-only, admin add/edit/delete, a task type from another firm refused, new firms seeded once
+  - task search: multi-word matching, approved tasks only when asked, "my tasks", by client, and another firm finding nothing
+- The batch 2 suite (51 checks) still passes with 047 applied.
+- The undo script was run twice and restored the earlier functions exactly.
+- ESLint on the touched files: 124 problems before, 115 after, none new.
+- Not checked: the pages in a browser. The checklist in `APPLY.md` covers them.

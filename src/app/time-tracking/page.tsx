@@ -25,11 +25,13 @@ import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import AttendancePanel from "@/components/time/AttendancePanel";
+import TaskPicker, { taskLabel, type PickedTask } from "@/components/tasks/TaskPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 
 const LOCK_DAYS = 7; // must match v_lock_days in the database rule
+const TASK_TITLE_BATCH = 200;
 
 type Period = "today" | "week" | "month" | "lastMonth" | "custom";
 
@@ -96,7 +98,7 @@ export default function TimeTrackingPage() {
 
   const [logs, setLogs] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [taskTitles, setTaskTitles] = useState<Record<string, string>>({});
   const [team, setTeam] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -163,13 +165,11 @@ export default function TimeTrackingPage() {
   }
 
   async function loadReferenceData() {
-    const [cRes, tRes, pRes] = await Promise.all([
+    const [cRes, pRes] = await Promise.all([
       supabase.from("clients").select("id, name, organization_name, pan, gstin, phone, status").order("name", { ascending: true }),
-      supabase.from("tasks").select("id, title, client_id, stage, assigned_to, reviewer_id").order("title", { ascending: true }),
       supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true }),
     ]);
     if (cRes.data) setClients(cRes.data);
-    if (tRes.data) setTasks(tRes.data);
     if (pRes.data) setTeam(pRes.data);
   }
 
@@ -189,6 +189,18 @@ export default function TimeTrackingPage() {
     if (error) showToast("error", "Could not load time logs. Please refresh the page.");
     setLogs(data || []);
     setLoading(false);
+    loadTaskTitles(data || []);
+  }
+
+  // Names only for the tasks these entries refer to
+  async function loadTaskTitles(rows: { task_id?: string | null }[]) {
+    const ids = Array.from(new Set(rows.map((l) => l.task_id).filter((id): id is string => !!id)));
+    const titles: Record<string, string> = {};
+    for (let i = 0; i < ids.length; i += TASK_TITLE_BATCH) {
+      const { data } = await supabase.from("tasks").select("id, title, period").in("id", ids.slice(i, i + TASK_TITLE_BATCH));
+      for (const t of data || []) titles[t.id] = taskLabel(t);
+    }
+    setTaskTitles(titles);
   }
 
   async function loadTimers() {
@@ -205,18 +217,7 @@ export default function TimeTrackingPage() {
   }
 
   const clientById = useMemo(() => Object.fromEntries(clients.map((c) => [String(c.id), c])), [clients]);
-  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [String(t.id), t])), [tasks]);
   const nameOf = (id?: string) => team.find((t) => String(t.id) === String(id))?.name || "";
-
-  // Open tasks the user can log against
-  const taskOptions = useMemo(
-    () =>
-      tasks.filter(
-        (t) =>
-          t.stage !== "Approved" && (isAdmin || t.assigned_to === me || t.reviewer_id === me)
-      ),
-    [tasks, isAdmin, me]
-  );
 
   /* ---------------- Timer ---------------- */
 
@@ -224,11 +225,10 @@ export default function TimeTrackingPage() {
     ? ((myTimer.paused_at ? new Date(myTimer.paused_at).getTime() : now) - new Date(myTimer.started_at).getTime()) / 1000 - Number(myTimer.paused_seconds || 0)
     : 0;
 
-  function handleTimerTask(id: string) {
+  function handleTimerTask(id: string, t: PickedTask | null) {
     setTimerTaskId(id);
-    const t = taskById[id];
     if (t?.client_id) setTimerClientId(t.client_id);
-    if (t && !timerDescription.trim()) setTimerDescription(t.title);
+    if (t && !timerDescription.trim()) setTimerDescription(taskLabel(t));
   }
 
   async function handleStartTimer() {
@@ -322,11 +322,10 @@ export default function TimeTrackingPage() {
     setIsModalOpen(true);
   }
 
-  function handleTaskChange(id: string) {
+  function handleTaskChange(id: string, t: PickedTask | null) {
     setTaskId(id);
-    const t = taskById[id];
     if (t?.client_id) setClientId(t.client_id);
-    if (t && !description.trim()) setDescription(t.title);
+    if (t && !description.trim()) setDescription(taskLabel(t));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -404,11 +403,11 @@ export default function TimeTrackingPage() {
       if (filterBillable === "billable" && l.is_billable === false) return false;
       if (filterBillable === "non" && l.is_billable !== false) return false;
       if (!q) return true;
-      return [l.description, nameOf(l.user_id), clientById[l.client_id]?.name, taskById[l.task_id]?.title]
+      return [l.description, nameOf(l.user_id), clientById[l.client_id]?.name, taskTitles[l.task_id]]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(q));
     });
-  }, [logs, search, filterUser, filterClient, filterBillable, clientById, taskById, team]);
+  }, [logs, search, filterUser, filterClient, filterBillable, clientById, taskTitles, team]);
 
   const stats = useMemo(() => {
     const total = filteredLogs.reduce((s, l) => s + Number(l.hours || 0), 0);
@@ -467,7 +466,7 @@ export default function TimeTrackingPage() {
         formatDate(l.log_date),
         nameOf(l.user_id),
         clientLabel(clientById[l.client_id]),
-        taskById[l.task_id]?.title || "",
+        taskTitles[l.task_id] || "",
         l.description,
         Number(l.hours || 0).toFixed(2),
         l.is_billable === false ? "No" : "Yes",
@@ -522,12 +521,7 @@ export default function TimeTrackingPage() {
             maxLength={300}
             className={`${inputClass} md:col-span-4`}
           />
-          <select value={timerTaskId} onChange={(e) => handleTimerTask(e.target.value)} disabled={!!myTimer} className={`${inputClass} md:col-span-3`}>
-            <option value="">— Task (optional) —</option>
-            {taskOptions.map((t) => (
-              <option key={t.id} value={t.id}>{t.title}</option>
-            ))}
-          </select>
+          <TaskPicker value={timerTaskId} onChange={handleTimerTask} mineOnly noneLabel="No task" disabled={!!myTimer} className="md:col-span-3" />
           <ClientPicker clients={clients as any} value={timerClientId} onChange={setTimerClientId} disabled={!!myTimer} noneLabel="No client" className="md:col-span-3" />
           {!myTimer ? (
             <button
@@ -798,12 +792,7 @@ export default function TimeTrackingPage() {
                 ))}
               </select>
             )}
-            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[180px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-              <option value="">All clients</option>
-              {sortByLabel(clients.filter((c) => c.status !== "Merged")).map((c) => (
-                <option key={c.id} value={c.id}>{clientLabel(c)}</option>
-              ))}
-            </select>
+            <ClientPicker clients={clients} value={filterClient} onChange={setFilterClient} noneLabel="All clients" includeInactive compact className="w-[200px]" />
             <select value={filterBillable} onChange={(e) => setFilterBillable(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
               <option value="">Billable & non-billable</option>
               <option value="billable">Billable only</option>
@@ -857,7 +846,7 @@ export default function TimeTrackingPage() {
                           {log.edited_at && <span className="ml-1 rounded bg-surface-alt px-1.5 py-0.5 text-[9px] font-bold uppercase text-text-muted">Edited</span>}
                           {log.needs_review && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">Check</span>}
                         </p>
-                        {taskById[log.task_id]?.title && <p className="text-[10px] text-text-muted">Task: {taskById[log.task_id].title}</p>}
+                        {taskTitles[log.task_id] && <p className="text-[10px] text-text-muted">Task: {taskTitles[log.task_id]}</p>}
                       </td>
                       <td className="whitespace-nowrap text-right font-bold text-text-main">{formatHours(Number(log.hours))}</td>
                       <td>
@@ -926,12 +915,7 @@ export default function TimeTrackingPage() {
 
             <div>
               <label className={labelClass}>Task</label>
-              <select value={taskId} onChange={(e) => handleTaskChange(e.target.value)} className={inputClass}>
-                <option value="">— Optional —</option>
-                {(taskId && !taskOptions.some((t) => t.id === taskId) && taskById[taskId] ? [taskById[taskId], ...taskOptions] : taskOptions).map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-              </select>
+              <TaskPicker value={taskId} onChange={handleTaskChange} mineOnly noneLabel="No task" />
             </div>
 
             <div>

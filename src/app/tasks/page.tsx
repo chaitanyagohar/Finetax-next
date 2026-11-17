@@ -34,7 +34,7 @@ import { Task, Client, Profile, TaskStage } from "@/types/database";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
-import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
+import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
 import WorkQueue from "@/components/tasks/WorkQueue";
 import ChatConversation from "@/components/chat/ChatConversation";
@@ -42,6 +42,10 @@ import ReminderSettingsButton from "@/components/tasks/ReminderSettings";
 import { TransferDialog, TransferHistory, TransferRequestsBanner } from "@/components/tasks/TaskTransfer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
+import Combobox, { type ComboOption } from "@/components/ui/Combobox";
+import ClientContact from "@/components/ui/ClientContact";
+import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@/components/tasks/FeedbackTemplates";
 
 type TaskRow = Omit<Task, "category"> & Record<string, any>;
 type ClientRow = Client & Record<string, any>;
@@ -59,7 +63,6 @@ type TaskType = {
 };
 
 const STAGES: TaskStage[] = ["Assigned", "In Progress", "Submitted for Review", "Changes Required", "Approved"];
-const RECURRENCE_OPTIONS = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
 const PRIORITIES = ["Low", "Medium", "High"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -247,6 +250,10 @@ export default function TasksPage() {
   // Task list manager (admin)
   const [typesOpen, setTypesOpen] = useState(false);
   const [typeEditingId, setTypeEditingId] = useState<string | null>(null);
+  const [typeFormOpen, setTypeFormOpen] = useState(false);
+  const { templates: feedbackTemplates, reload: reloadFeedbackTemplates } = useFeedbackTemplates();
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [typeQuery, setTypeQuery] = useState("");
   const [tName, setTName] = useState("");
   const [tCategory, setTCategory] = useState("GST");
   const [tRecurrence, setTRecurrence] = useState("Monthly");
@@ -766,6 +773,7 @@ export default function TasksPage() {
   /* ---------------- Task list manager (admin) ---------------- */
 
   function resetTypeForm() {
+    setTypeFormOpen(false);
     setTypeEditingId(null);
     setTName("");
     setTCategory(CATEGORIES[0] || "Other");
@@ -778,7 +786,13 @@ export default function TasksPage() {
     setTypeError("");
   }
 
+  function startNewType() {
+    resetTypeForm();
+    setTypeFormOpen(true);
+  }
+
   function editType(t: TaskType) {
+    setTypeFormOpen(true);
     setTypeEditingId(t.id);
     setTName(t.name);
     setTCategory(t.category || "Other");
@@ -884,58 +898,73 @@ export default function TasksPage() {
     const internal = dueInfo(t.due_date, done);
     const statutory = dueInfo(t.official_due_date, done);
     const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
+    const phone = clientById[t.client_id]?.phone;
     return (
-      <button
-        type="button"
-        onClick={() => openModal(t)}
-        className={`w-full rounded-lg border bg-surface p-3 text-left shadow-sm transition hover:border-navy/30 hover:shadow-md ${
+      <div
+        className={`rounded-lg border bg-surface shadow-sm transition hover:border-navy/30 hover:shadow-md ${
           needsAction ? "border-amber-300" : "border-border"
         }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold leading-snug text-navy">
-            {t.title}
-            {t.period && <span className="ml-1 font-normal text-text-muted">· {t.period}</span>}
-          </p>
-          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
-        </div>
-        <p className="mt-1 truncate text-[11px] text-text-muted">{clientTextOf(t)}</p>
-        <div className="mt-2 space-y-0.5 text-[10px]">
-          <p className={`font-semibold ${internal.cls}`}>
-            Int: {t.due_date ? formatDate(t.due_date) : "—"}
-            {internal.label && ` · ${internal.label}`}
-          </p>
-          <p className={t.official_due_date ? `font-semibold ${statutory.cls === "text-text-muted" ? "text-text-main" : statutory.cls}` : "text-text-muted"}>
-            Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
-            {t.official_due_date && statutory.label && ` · ${statutory.label}`}
-          </p>
-          {(t.estimated_minutes || t.time_spent_minutes) && (
-            <p>
-              <Timer className="mr-0.5 inline h-3 w-3 text-text-muted" />
-              <TimeCell t={t} />
+        <button type="button" onClick={() => openModal(t)} className="w-full p-3 text-left">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold leading-snug text-navy">
+              {t.title}
+              {t.period && <span className="ml-1 font-normal text-text-muted">· {t.period}</span>}
             </p>
-          )}
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {t.recurrence && t.recurrence !== "None" ? (
-            <span className="flex items-center gap-1 text-[10px] text-text-muted">
-              <RefreshCw className="h-3 w-3" /> {t.recurrence}
-            </span>
-          ) : (
-            <span />
-          )}
-          {t.assigned_to && (
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy" title={nameOf(t.assigned_to)}>
-              {getInitials(nameOf(t.assigned_to))}
-            </span>
-          )}
-        </div>
-      </button>
+            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
+          </div>
+          <p className="mt-1 truncate text-[11px] text-text-muted">{clientTextOf(t)}</p>
+          <div className="mt-2 space-y-0.5 text-[10px]">
+            <p className={`font-semibold ${internal.cls}`}>
+              Int: {t.due_date ? formatDate(t.due_date) : "—"}
+              {internal.label && ` · ${internal.label}`}
+            </p>
+            <p className={t.official_due_date ? `font-semibold ${statutory.cls === "text-text-muted" ? "text-text-main" : statutory.cls}` : "text-text-muted"}>
+              Stat: {t.official_due_date ? formatDate(t.official_due_date) : "—"}
+              {t.official_due_date && statutory.label && ` · ${statutory.label}`}
+            </p>
+            {(t.estimated_minutes || t.time_spent_minutes) && (
+              <p>
+                <Timer className="mr-0.5 inline h-3 w-3 text-text-muted" />
+                <TimeCell t={t} />
+              </p>
+            )}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            {t.recurrence && t.recurrence !== "None" ? (
+              <span className="flex items-center gap-1 text-[10px] text-text-muted">
+                <RefreshCw className="h-3 w-3" /> {t.recurrence}
+              </span>
+            ) : (
+              <span />
+            )}
+            {t.assigned_to && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy" title={nameOf(t.assigned_to)}>
+                {getInitials(nameOf(t.assigned_to))}
+              </span>
+            )}
+          </div>
+        </button>
+        {phone && <ClientContact phone={phone} className="-mt-1 px-1.5 pb-1.5" />}
+      </div>
     );
   }
 
-  const clientFilterOptions = useMemo(() => sortByLabel(clients.filter((c) => c.status !== "Merged")), [clients]);
   const isLegacyTitle = !!editingTask && !taskTypeId && !!title;
+  const legacyLabel = `${title} (not in the task list)`;
+
+  const typeOptions: ComboOption[] = useMemo(() => {
+    const q = typeQuery.trim().toLowerCase();
+    const options = typeGroups
+      .flatMap(([, list]) => list)
+      .filter((t) => !q || `${t.name} ${t.category}`.toLowerCase().includes(q))
+      .map((t) => ({
+        id: t.id,
+        label: t.is_active ? t.name : `${t.name} (archived)`,
+        detail: [t.category || "Other", recurrenceLabel(t.default_recurrence), t.statutory_day ? ruleText(t) : null].filter(Boolean).join(" · "),
+      }));
+    return isLegacyTitle && !q ? [{ id: "__legacy", label: legacyLabel }, ...options] : options;
+  }, [typeGroups, typeQuery, isLegacyTitle, legacyLabel]);
 
   /* ---------------- Render ---------------- */
 
@@ -1142,12 +1171,7 @@ export default function TasksPage() {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="max-w-[240px] rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
-                <option value="">All clients</option>
-                {clientFilterOptions.map((c) => (
-                  <option key={c.id} value={c.id}>{clientLabel(c)}</option>
-                ))}
-              </select>
+              <ClientPicker clients={clients} value={filterClient} onChange={setFilterClient} noneLabel="All clients" includeInactive compact className="w-[220px]" />
               {isAdmin && (
                 <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-sm outline-none focus:border-navy">
                   <option value="">All staff</option>
@@ -1188,6 +1212,7 @@ export default function TasksPage() {
               me={me}
               isAdmin={isAdmin}
               clientText={(t) => clientTextOf(t as TaskRow)}
+              clientPhone={(t) => clientById[t.client_id]?.phone}
               onOpen={(t) => openModal(t as TaskRow)}
               onChanged={() => loadData(false)}
               showToast={showToast}
@@ -1314,6 +1339,7 @@ export default function TasksPage() {
                 <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[editingTask.stage] || STAGE_STYLES.Assigned}`}>
                   {editingTask.stage}
                 </span>
+                <ClientContact phone={clientById[editingTask.client_id]?.phone} />
                 {!canEditCoreDetails && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-text-muted">
                     <Lock className="h-3 w-3" /> Details are managed by the reviewer
@@ -1438,20 +1464,17 @@ export default function TasksPage() {
                         </button>
                       )}
                     </div>
-                    <select disabled={!canEditCoreDetails} value={taskTypeId || (isLegacyTitle ? "__legacy" : "")} onChange={(e) => handleTypeChange(e.target.value)} className={inputClass}>
-                      <option value="">— Choose a task —</option>
-                      {isLegacyTitle && <option value="__legacy">{title} (not in the task list)</option>}
-                      {typeGroups.map(([cat, list]) => (
-                        <optgroup key={cat} label={cat}>
-                          {list.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                              {!t.is_active ? " (archived)" : ""}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                    <Combobox
+                      value={taskTypeId || (isLegacyTitle ? "__legacy" : "")}
+                      onChange={handleTypeChange}
+                      selectedLabel={taskTypeId ? typeById[taskTypeId]?.name || "" : isLegacyTitle ? legacyLabel : ""}
+                      options={typeOptions}
+                      onQueryChange={setTypeQuery}
+                      disabled={!canEditCoreDetails}
+                      emptyLabel="— Choose a task —"
+                      searchPlaceholder="Type task name or category, e.g. 3B or TDS"
+                      noMatchText={(q) => `No task in the list matches "${q}".`}
+                    />
                     {taskTypeId && typeById[taskTypeId]?.statutory_day ? (
                       <p className="mt-1 text-[10px] text-text-muted">
                         Statutory rule: {ruleText(typeById[taskTypeId])} · internal deadline {typeById[taskTypeId].internal_buffer_days} day(s) earlier
@@ -1490,7 +1513,7 @@ export default function TasksPage() {
                   <div>
                     <label className={labelClass}>Recurrence</label>
                     <select disabled={!canEditCoreDetails} value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className={inputClass}>
-                      {RECURRENCE_OPTIONS.map((r) => (
+                      {RECURRENCES.map((r) => (
                         <option key={r} value={r}>{r === "None" ? "None (one-time task)" : r}</option>
                       ))}
                     </select>
@@ -1580,18 +1603,37 @@ export default function TasksPage() {
                 {recurrence !== "None" && (
                   <div className="flex items-center gap-2 rounded-lg border border-navy/20 bg-navy/5 p-2.5 text-xs text-navy">
                     <RefreshCw className="h-4 w-4 shrink-0" />
-                    When this task is approved, the next {recurrence.toLowerCase()} occurrence is created automatically with both deadlines
-                    {period ? " and the period" : ""} moved forward.
+                    {recurrence === "Daily"
+                      ? `When this task is approved, the next one is created for the firm's next working day${period ? ", with the date as its period" : ""}.`
+                      : `When this task is approved, the next ${recurrence.toLowerCase()} occurrence is created automatically with both deadlines${period ? " and the period" : ""} moved forward.`}
                   </div>
                 )}
 
                 <div>
                   <label className={labelClass}>Execution Notes</label>
+                  <TemplateChips
+                    templates={feedbackTemplates}
+                    box="notes"
+                    taskTypeId={taskTypeId}
+                    value={notes}
+                    onChange={setNotes}
+                    onManage={isAdmin ? () => setTemplatesOpen(true) : undefined}
+                  />
                   <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="Work done, documents pending, ARN / acknowledgement numbers..." />
                 </div>
 
                 <div className="rounded-lg border border-border bg-surface-alt p-3">
                   <label className={`${labelClass} text-navy`}>Reviewer Feedback / Required Changes</label>
+                  {canReview && (
+                    <TemplateChips
+                      templates={feedbackTemplates}
+                      box="feedback"
+                      taskTypeId={taskTypeId}
+                      value={reviewComments}
+                      onChange={setReviewComments}
+                      onManage={isAdmin ? () => setTemplatesOpen(true) : undefined}
+                    />
+                  )}
                   <textarea
                     rows={2}
                     value={reviewComments}
@@ -1807,92 +1849,110 @@ export default function TasksPage() {
           maxWidth="max-w-5xl"
         >
           <div className="space-y-5 text-xs">
-            <form onSubmit={saveType} className="space-y-3 rounded-lg border border-border bg-surface-alt p-4">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-navy">{typeEditingId ? "Edit task" : "Add a task to the list"}</p>
-              {typeError && (
-                <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-2.5 font-medium text-danger">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{typeError}</span>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="col-span-2">
-                  <label className={labelClass}>Task Name *</label>
-                  <input value={tName} onChange={(e) => setTName(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B Return" maxLength={120} />
-                </div>
-                <div>
-                  <label className={labelClass}>Category</label>
-                  <select value={tCategory} onChange={(e) => setTCategory(e.target.value)} className={inputClass}>
-                    {(CATEGORIES.includes(tCategory) ? CATEGORIES : [tCategory, ...CATEGORIES]).map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Recurrence</label>
-                  <select value={tRecurrence} onChange={(e) => setTRecurrence(e.target.value)} className={inputClass}>
-                    {RECURRENCE_OPTIONS.map((r) => (
-                      <option key={r} value={r}>{r === "None" ? "One-time" : r}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Statutory Day</label>
-                  <input type="number" min={1} max={31} value={tDay} onChange={(e) => setTDay(e.target.value)} className={inputClass} placeholder="None" />
-                </div>
-                <div>
-                  <label className={labelClass}>Of Which Month</label>
-                  <select value={tOffset} onChange={(e) => setTOffset(Number(e.target.value))} className={inputClass} disabled={!tDay}>
-                    <option value={0}>Same month</option>
-                    <option value={1}>Next month</option>
-                    <option value={2}>2 months later</option>
-                    <option value={3}>3 months later</option>
-                    <option value={4}>4 months later</option>
-                    <option value={6}>6 months later</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Internal Buffer</label>
-                  <select value={tBuffer} onChange={(e) => setTBuffer(Number(e.target.value))} className={inputClass} disabled={!tDay}>
-                    {[0, 1, 2, 3, 5, 7, 10, 15].map((d) => (
-                      <option key={d} value={d}>{d === 0 ? "Same day" : `${d} day${d === 1 ? "" : "s"} before`}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Default Estimate</label>
-                  <div className="flex gap-1">
-                    <input type="number" min={0} max={999} placeholder="h" value={tEstH} onChange={(e) => setTEstH(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate hours" />
-                    <input type="number" min={0} max={59} step={5} placeholder="m" value={tEstM} onChange={(e) => setTEstM(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate minutes" />
-                  </div>
-                </div>
-              </div>
-              <p className="text-[10px] text-text-muted">
-                Example: GSTR-3B for period "Sep 2026", day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
-              </p>
-              <div className="flex gap-2">
-                <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
-                  {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                  {typeEditingId ? "Save Changes" : "Add to List"}
-                </button>
-                {typeEditingId && (
-                  <button type="button" onClick={resetTypeForm} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface">
-                    Cancel edit
-                  </button>
-                )}
-              </div>
-            </form>
-
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full sm:max-w-xs">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
-                <input value={typeSearch} onChange={(e) => setTypeSearch(e.target.value)} placeholder="Search the list..." className={`${inputClass} py-1.5 pl-8 text-xs`} />
+                <input
+                  autoFocus
+                  value={typeSearch}
+                  onChange={(e) => setTypeSearch(e.target.value)}
+                  placeholder="Search by task name or category"
+                  className={`${inputClass} py-1.5 pl-8 text-xs`}
+                />
               </div>
               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-text-muted">
                 <input type="checkbox" checked={showInactiveTypes} onChange={(e) => setShowInactiveTypes(e.target.checked)} className="accent-navy" /> Show archived
               </label>
-              <span className="ml-auto text-[11px] text-text-muted">{taskTypes.filter((t) => t.is_active).length} active tasks in the list</span>
+              <span className="ml-auto text-[11px] text-text-muted">
+                {typeSearch ? `${visibleTypes.length} found · ` : ""}
+                {taskTypes.filter((t) => t.is_active).length} active tasks in the list
+              </span>
+              {!typeFormOpen && (
+                <button
+                  type="button"
+                  onClick={startNewType}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white transition hover:bg-navy-light"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add a task
+                </button>
+              )}
             </div>
+
+            {typeFormOpen && (
+              <form onSubmit={saveType} className="space-y-3 rounded-lg border border-border bg-surface-alt p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-navy">{typeEditingId ? "Edit task" : "Add a task to the list"}</p>
+                {typeError && (
+                  <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-2.5 font-medium text-danger">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{typeError}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="col-span-2">
+                    <label className={labelClass}>Task Name *</label>
+                    <input value={tName} onChange={(e) => setTName(e.target.value)} className={inputClass} placeholder="e.g. GSTR-3B Return" maxLength={120} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Category</label>
+                    <select value={tCategory} onChange={(e) => setTCategory(e.target.value)} className={inputClass}>
+                      {(CATEGORIES.includes(tCategory) ? CATEGORIES : [tCategory, ...CATEGORIES]).map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Recurrence</label>
+                    <select value={tRecurrence} onChange={(e) => setTRecurrence(e.target.value)} className={inputClass}>
+                      {RECURRENCES.map((r) => (
+                        <option key={r} value={r}>{recurrenceLabel(r)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Statutory Day</label>
+                    <input type="number" min={1} max={31} value={tDay} onChange={(e) => setTDay(e.target.value)} className={inputClass} placeholder="None" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Of Which Month</label>
+                    <select value={tOffset} onChange={(e) => setTOffset(Number(e.target.value))} className={inputClass} disabled={!tDay}>
+                      <option value={0}>Same month</option>
+                      <option value={1}>Next month</option>
+                      <option value={2}>2 months later</option>
+                      <option value={3}>3 months later</option>
+                      <option value={4}>4 months later</option>
+                      <option value={6}>6 months later</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Internal Buffer</label>
+                    <select value={tBuffer} onChange={(e) => setTBuffer(Number(e.target.value))} className={inputClass} disabled={!tDay}>
+                      {[0, 1, 2, 3, 5, 7, 10, 15].map((d) => (
+                        <option key={d} value={d}>{d === 0 ? "Same day" : `${d} day${d === 1 ? "" : "s"} before`}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Default Estimate</label>
+                    <div className="flex gap-1">
+                      <input type="number" min={0} max={999} placeholder="h" value={tEstH} onChange={(e) => setTEstH(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate hours" />
+                      <input type="number" min={0} max={59} step={5} placeholder="m" value={tEstM} onChange={(e) => setTEstM(e.target.value)} className={`${inputClass} px-2`} aria-label="Default estimate minutes" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-text-muted">
+                  Example: GSTR-3B for period "Sep 2026", day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
+                </p>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+                    {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    {typeEditingId ? "Save Changes" : "Add to List"}
+                  </button>
+                  <button type="button" onClick={resetTypeForm} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
 
             <div className="max-h-[45vh] overflow-auto rounded-lg border border-border">
               <table className="w-full text-xs">
@@ -1922,7 +1982,7 @@ export default function TasksPage() {
                         <td>
                           <CategoryBadge name={t.category} colorOf={colorOf} />
                         </td>
-                        <td>{t.default_recurrence === "None" ? "One-time" : t.default_recurrence}</td>
+                        <td>{recurrenceLabel(t.default_recurrence)}</td>
                         <td className="whitespace-nowrap">
                           {ruleText(t)}
                           {t.statutory_day ? <span className="text-text-muted"> · −{t.internal_buffer_days}d internal</span> : null}
@@ -1999,6 +2059,10 @@ export default function TasksPage() {
             loadData(false);
           }}
         />
+      )}
+
+      {templatesOpen && (
+        <FeedbackTemplatesManager templates={feedbackTemplates} onClose={() => setTemplatesOpen(false)} onChanged={reloadFeedbackTemplates} />
       )}
 
       {confirmDelete && editingTask && (

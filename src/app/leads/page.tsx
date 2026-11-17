@@ -33,6 +33,7 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories } from "@/components/tasks/TaskCategories";
 import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/lib/format";
+import { toWhatsAppNumber } from "@/lib/phone";
 
 type LeadRow = Lead & Record<string, any>;
 type ProfileRow = Profile & Record<string, any>;
@@ -115,14 +116,6 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return `${formatDate(localISODate(d))} ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
-}
-/** Normalises Indian numbers for wa.me (avoids "9191…" double prefixes). */
-function toWhatsAppNumber(raw: string): string | null {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("00")) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
-  if (digits.length === 10) digits = "91" + digits;
-  return digits.length >= 11 && digits.length <= 15 ? digits : null;
 }
 
 /* ---------------- Page ---------------- */
