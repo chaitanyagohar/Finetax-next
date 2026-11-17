@@ -27,6 +27,9 @@ import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import ClientContact from "@/components/ui/ClientContact";
+import { nextOccurrenceText, recurrenceLabel } from "@/lib/tasks/recurrence";
+import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@/components/tasks/FeedbackTemplates";
 
 const ANALYTICS_DAYS = 180;
 
@@ -91,6 +94,8 @@ export default function ReviewerQueuePage() {
   // Inspection State
   const [inspectTask, setInspectTask] = useState<any | null>(null);
   const [reviewComments, setReviewComments] = useState("");
+  const { templates: feedbackTemplates, reload: reloadFeedbackTemplates } = useFeedbackTemplates();
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [notifyClient, setNotifyClient] = useState(true);
   const [deciding, setDeciding] = useState<null | "Approved" | "Changes Required">(null);
   const [decisionError, setDecisionError] = useState("");
@@ -123,7 +128,7 @@ export default function ReviewerQueuePage() {
       openQuery,
       approvedQuery,
       supabase.from("audit_logs").select("id, entity_id, action, metadata, timestamp").eq("entity", "TASKS").gte("timestamp", since).order("timestamp", { ascending: true }),
-      supabase.from("clients").select("id, name, email"),
+      supabase.from("clients").select("id, name, email, phone"),
       supabase.from("profiles").select("id, name, email, is_active"),
     ]);
 
@@ -315,7 +320,7 @@ export default function ReviewerQueuePage() {
     setReviewComments("");
     showToast(
       "success",
-      `${newStage === "Approved" ? "Approved and signed off" : "Returned for changes"}.${recurring ? ` The next ${String(inspectTask.recurrence).toLowerCase()} occurrence was created.` : ""}${
+      `${newStage === "Approved" ? "Approved and signed off" : "Returned for changes"}.${recurring ? ` Created ${nextOccurrenceText(String(inspectTask.recurrence))}.` : ""}${
         sent ? ` ${sent} notification${sent === 1 ? "" : "s"} sent.` : ""
       }`
     );
@@ -620,6 +625,7 @@ export default function ReviewerQueuePage() {
         <Modal
           title={inspectTask.title}
           subtitle={`${clientById[inspectTask.client_id]?.name || "Internal"} · executed by ${personById[inspectTask.assigned_to]?.name || "staff"}`}
+          headerExtra={inspectClient?.phone ? <ClientContact phone={inspectClient.phone} className="mt-1" /> : null}
           onClose={() => !deciding && setInspectTask(null)}
           maxWidth="max-w-2xl"
           footer={
@@ -669,7 +675,7 @@ export default function ReviewerQueuePage() {
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase text-text-muted">Recurrence</p>
-                <p className="font-semibold text-text-main">{inspectTask.recurrence && inspectTask.recurrence !== "None" ? inspectTask.recurrence : "One-time"}</p>
+                <p className="font-semibold text-text-main">{recurrenceLabel(inspectTask.recurrence)}</p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase text-text-muted">Time Logged</p>
@@ -706,6 +712,14 @@ export default function ReviewerQueuePage() {
               <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                 Review Feedback <span className="normal-case">(required when requesting changes)</span>
               </label>
+              <TemplateChips
+                templates={feedbackTemplates}
+                box="feedback"
+                taskTypeId={inspectTask.task_type_id}
+                value={reviewComments}
+                onChange={setReviewComments}
+                onManage={isAdmin ? () => setTemplatesOpen(true) : undefined}
+              />
               <textarea
                 rows={4}
                 value={reviewComments}
@@ -725,7 +739,7 @@ export default function ReviewerQueuePage() {
             {inspectTask.recurrence && inspectTask.recurrence !== "None" && (
               <p className="flex items-center gap-1.5 rounded-lg bg-navy/5 p-2.5 text-navy">
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-                Approving creates the next {String(inspectTask.recurrence).toLowerCase()} occurrence automatically.
+                Approving creates {nextOccurrenceText(String(inspectTask.recurrence))} automatically.
               </p>
             )}
 
@@ -737,6 +751,10 @@ export default function ReviewerQueuePage() {
       )}
 
       {/* Toast */}
+      {templatesOpen && (
+        <FeedbackTemplatesManager templates={feedbackTemplates} onClose={() => setTemplatesOpen(false)} onChanged={reloadFeedbackTemplates} />
+      )}
+
       {toast && (
         <div
           role="status"

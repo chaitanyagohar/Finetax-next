@@ -75,8 +75,10 @@ Staff can change the stage and their notes. Other task details are managed by th
     id: "task-recurring",
     title: "Recurring tasks and periods",
     area: "Tasks",
-    keywords: "recurring monthly quarterly next occurrence period repeat",
+    keywords: "recurring daily weekly monthly quarterly next occurrence period repeat working day",
     body: `When a recurring task is **approved**, the next occurrence is created automatically, with both deadlines and the period moved forward (for example Oct 2026 → Nov 2026).
+
+A **Daily** task repeats on the firm's next working day. Working days are set under **Performance → Weights → Working days** (Monday to Saturday, or Monday to Friday). A daily task approved late continues from today, so no backlog of past days is created.
 
 If the next one doesn't appear, check that the task's **Recurrence** isn't "None" and that it was **Approved** (not just submitted).`,
   },

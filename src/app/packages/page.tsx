@@ -31,8 +31,8 @@ import EngagementSettingsButton from "@/components/packages/EngagementSettings";
 import ProposalsPanel, { ProposalComposer } from "@/components/packages/Proposals";
 import SubscriptionBilling from "@/components/packages/SubscriptionBilling";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
+import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
 
-const RECURRENCES = ["None", "Weekly", "Monthly", "Quarterly", "Yearly"];
 const CYCLES = ["Monthly", "Quarterly", "Half-Yearly", "Yearly"];
 const CYCLE_MONTHS: Record<string, number> = { Monthly: 1, Quarterly: 3, "Half-Yearly": 6, Yearly: 12 };
 
@@ -658,7 +658,7 @@ export default function PackagesPage() {
                   <input type="number" min={0} max={365} value={srv.days_due_offset} onChange={(e) => updateTemplateField(idx, "days_due_offset", Number(e.target.value))} className={`${smallInput} sm:col-span-1`} title="Due + days from start" />
                   <select value={srv.recurrence} onChange={(e) => updateTemplateField(idx, "recurrence", e.target.value)} className={`${smallInput} sm:col-span-2`}>
                     {RECURRENCES.map((r) => (
-                      <option key={r} value={r}>{r === "None" ? "One-time" : r}</option>
+                      <option key={r} value={r}>{recurrenceLabel(r)}</option>
                     ))}
                   </select>
                   <select value={srv.default_assignee_id} onChange={(e) => updateTemplateField(idx, "default_assignee_id", e.target.value)} className={`${smallInput} sm:col-span-2`}>

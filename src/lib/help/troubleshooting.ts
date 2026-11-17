@@ -183,12 +183,12 @@ If it's already **Submitted for Review**, it's waiting for the reviewer. If it's
     title: "The next recurring task wasn't created",
     area: "Tasks",
     phrases: ["next month task not created", "recurring task missing", "repeat task not generated", "agle mahine ka task nahi bana", "next period task missing"],
-    keywords: ["recurring", "repeat", "next", "month", "period", "generate", "monthly", "quarterly"],
+    keywords: ["recurring", "repeat", "next", "month", "period", "generate", "daily", "monthly", "quarterly"],
     solution: `The next occurrence is created **when the current one is Approved**, not when it's submitted.
 
 1. Check the current task's stage. If it's **Submitted for Review**, the reviewer needs to approve it.
 2. Check its **Recurrence** isn't "None".
-3. After approval, look in **All Tasks** for the next period (for example Nov 2026).`,
+3. After approval, look in **All Tasks** for the next period (for example Nov 2026). A **Daily** task moves to the next working day, so after a Saturday approval in a Monday-to-Friday firm, look for Monday.`,
   },
   {
     id: "transfer-task",

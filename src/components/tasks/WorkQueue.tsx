@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, GripVertical, ListOrdered, Loader2, Play, RotateCcw
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { formatDate, localISODate } from "@/lib/format";
+import ClientContact from "@/components/ui/ClientContact";
 
 type QTask = Record<string, any>;
 
@@ -50,6 +51,7 @@ export default function WorkQueue({
   me,
   isAdmin,
   clientText,
+  clientPhone,
   onOpen,
   onChanged,
   showToast,
@@ -59,6 +61,7 @@ export default function WorkQueue({
   me: string;
   isAdmin: boolean;
   clientText: (t: QTask) => string;
+  clientPhone?: (t: QTask) => string | null | undefined;
   onOpen: (t: QTask) => void;
   onChanged: () => void;
   showToast: (type: "success" | "error", message: string) => void;
@@ -240,6 +243,7 @@ export default function WorkQueue({
                     )}
                   </p>
                 </button>
+                <ClientContact phone={clientPhone?.(t)} className="shrink-0" />
                 <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold sm:inline ${STAGE_STYLES[t.stage] || STAGE_STYLES.Assigned}`}>{t.stage}</span>
                 {t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage) && (
                   <button
