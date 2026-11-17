@@ -11,6 +11,7 @@ import {
   writeAuditLog,
 } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
+import { assertMailboxAccess } from "@/lib/email/access";
 import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, escapeHtml, sendFirmEmail, type MailAttachment } from "@/lib/email/mailer";
 import { isVaultPathAllowed } from "@/lib/storage/vaultPath";
 
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
     if (!to || !subject || !body) {
       throw new ApiError(400, "Missing required fields");
     }
+    if (accountId && !UUID_RE.test(accountId)) throw new ApiError(400, "Invalid email account.");
 
     // Module access for system documents
     const has = (m: string) => caller.isAdmin || caller.moduleAccess.includes(m);
@@ -126,7 +128,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Dispatch via the shared mailer
+    // 3. Dispatch via the shared mailer. A mailbox chosen by the sender must be one they may use;
+    //    with none chosen, the email goes from the firm's default mailbox.
+    if (accountId) await assertMailboxAccess(getAdminClient(), caller, accountId);
     const result = await sendFirmEmail({
       to,
       subject,

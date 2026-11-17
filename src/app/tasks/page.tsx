@@ -712,7 +712,7 @@ export default function TasksPage() {
     const { error } = await supabase.from("tasks").delete().eq("id", editingTask.id);
     setActionBusy(false);
     setConfirmDelete(false);
-    if (error) return showToast("error", "Could not delete this task. Only administrators can delete tasks.");
+    if (error) return showToast("error", error.message || "Could not delete this task.");
     logAuditEvent("DELETE_TASK", "TASKS", editingTask.id, { title: titleOf(editingTask) });
     showToast("success", "Task deleted.");
     setIsModalOpen(false);
@@ -2004,7 +2004,7 @@ export default function TasksPage() {
       {confirmDelete && editingTask && (
         <ConfirmDialog
           title="Delete this task?"
-          message={`"${titleOf(editingTask)}" will be permanently removed. Its history stays in the audit log.`}
+          message={`"${titleOf(editingTask)}" will be permanently removed. A task with time recorded or messages in its discussion is kept as a record and cannot be deleted.`}
           confirmLabel="Delete task"
           tone="danger"
           loading={actionBusy}

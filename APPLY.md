@@ -1,21 +1,38 @@
-# Applying Duesk batch 1
+# Applying Duesk batch 2
 
-Preview and Production share one database, so the migration takes effect for the live site the moment it runs. Do the steps in this order, in one sitting, and not between 08:45 and 09:15 IST (the daily billing run is at 09:00).
+Preview and Production share one database, so each migration takes effect for the live site as soon as it runs. Do the steps in order, in one sitting.
 
 ## 1. Back up
 
 ```powershell
-pg_dump "<your session pooler URL>" --format=custom --file "$HOME\Downloads\duesk-before-041.dump"
+pg_dump "<your session pooler URL>" --format=custom --file "$HOME\Downloads\duesk-before-042.dump"
 ```
 
-## 2. Pre-flight check (Supabase SQL Editor)
+## 2. Pre-flight checks (Supabase SQL Editor, one statement per run)
 
-The schema dump already answered the questions about the other functions. This one query confirms the invoice rules have not changed since the dump of 13 Nov. It must return `true`; if it returns `false`, stop and tell me.
+**Check A.** The rules batch 2 replaces are still as they were in the 13 Nov dump. Must return `true`.
 
 ```sql
-select md5(regexp_replace(prosrc, '\s+', '', 'g')) = '2115e029fea7b3acb32151e3e8e50eef' as invoice_rules_unchanged
-from pg_proc where oid = 'public.invoices_before_write'::regproc;
+select bool_and(md5(regexp_replace(prosrc, '\s+', '', 'g')) = case proname
+         when 'email_accounts_guard_verified' then 'be679a9933d8d28fd53b57a768b0ea63'
+         when 'firm_members' then 'ffdce3fb6c2cbf6a519f954aa4e3d4f4'
+         when 'my_signup_state' then '4324a25dffe5065b12a7850d07c0370f'
+         when 'protect_profiles' then '4f87fe744a76f40d48481e3b4c23100d' end)
+       and count(*) = 4 as unchanged_since_dump
+from pg_proc
+where pronamespace = 'public'::regnamespace
+  and proname in ('email_accounts_guard_verified', 'firm_members', 'my_signup_state', 'protect_profiles');
 ```
+
+**Check B.** Duesk's own mailbox, which emails the ownership codes. At least one row must show `is_active = true` and `connection_tested = true`.
+
+```sql
+select a.email_address, a.is_active, a.verified_at is not null as connection_tested
+from public.email_accounts a
+where a.org_id = (select support_org_id from public.platform_config where id);
+```
+
+If it returns no rows, connect a mailbox in the Oddlambda workspace (Inbox → Connected Accounts) and test it before going on. Without it, **Confirm address** shows "Duesk could not send the confirmation code".
 
 ## 3. Create a branch and extract the zip
 
@@ -24,14 +41,12 @@ cd C:\Users\Chait\Downloads\practice-manager-next
 git status
 git checkout main
 git pull
-git checkout -b batch-1-gst
-Expand-Archive -Path "$HOME\Downloads\duesk-batch-1.zip" -DestinationPath . -Force
+git checkout -b batch-2-security
+Expand-Archive -Path "$HOME\Downloads\duesk-batch-2.zip" -DestinationPath . -Force
 git status
 ```
 
-`git status` should list 13 modified files and 5 new ones (`CHANGES.md`, `APPLY.md`, `src/lib/gst.ts`, `supabase/migrations/041_invoice_issue_gst.sql`, `supabase/undo/041_invoice_issue_gst_undo.sql`). No files are deleted in this batch, so there is nothing to `git rm`.
-
-If your repository already has a file numbered 041, tell me and I will renumber.
+`git status` should list 19 modified files and 12 new ones (including `CHANGES.md` and `APPLY.md`, which replace batch 1's). No files are deleted, so there is nothing to `git rm`.
 
 ## 4. Check the build
 
@@ -41,78 +56,129 @@ npx tsc --noEmit
 npm run build
 ```
 
-Both must finish without errors. `package-lock.json` is not in the zip; no dependency changed.
+Both must finish without errors.
 
-## 5. Run the migration
+## 5. Run the migrations
 
-Open `supabase\migrations\041_invoice_issue_gst.sql`, paste the whole file into the Supabase SQL Editor and run it once. It is wrapped in begin/commit, so an error leaves the database as it was.
+In the SQL Editor, open each file from `supabase\migrations\`, paste the whole file and run it, in this order: **042, 043, 044, 045, 046**. Each is wrapped in begin/commit, so an error leaves the database as it was; if one fails, stop and send me the message. Each can be run again safely.
 
-Then run this check:
+You do **not** need to run 041 again now; step 7 uses it.
 
-```sql
-select o.slug,
-       count(*) filter (where i.status = 'Draft' and i.invoice_number is null)                      as drafts_without_number,
-       count(*) filter (where i.status = 'Draft' and i.invoice_number is not null)                  as drafts_keeping_old_number,
-       count(*) filter (where i.status not in ('Draft', 'Cancelled') and i.invoice_number is null)  as issued_without_number,
-       count(*) filter (where i.status not in ('Draft', 'Cancelled') and i.buyer_name is null)       as issued_without_buyer,
-       count(*) filter (where i.status not in ('Draft', 'Cancelled') and i.place_of_supply is null) as issued_without_place_of_supply
-from public.invoices i join public.organizations o on o.id = i.org_id
-group by o.slug order by o.slug;
-```
+After each one, run its check (also in the comment at the end of each file):
 
-- `issued_without_number` and `issued_without_buyer` must be 0 for every firm.
-- For Finetax, expect the three drafts under either `drafts_without_number` (numbers released, the next issue continues the series) or `drafts_keeping_old_number` (a later number is already issued, so they kept theirs).
-- `issued_without_place_of_supply` above 0 means that client has no state, or the state disagrees with the tax charged. Those invoices still print as before; look at them when convenient.
-
-Clients that cannot be invoiced until a state is added (run once per firm you care about, or as is for all):
+**042.** Your two Finetax mailboxes should show `ownership_confirmed = true`.
 
 ```sql
-select o.slug, c.name, c.organization_name, c.state
-from public.clients c join public.organizations o on o.id = c.org_id
-where public.gst_place_of_supply(c.gstin, c.state) is null and coalesce(c.status, 'Active') = 'Active'
+select o.slug, a.email_address, a.is_active, a.verified_at is not null as connection_tested,
+       a.ownership_confirmed_at is not null as ownership_confirmed
+from public.email_accounts a join public.organizations o on o.id = a.org_id
 order by 1, 2;
 ```
 
-Add a state to any client on a retainer before the next billing run, or that client's bill will stay a draft.
+**043.** Each mailbox lists the non-admin staff who had the Firm inbox module. Administrators are not listed; they always have access.
+
+```sql
+select o.slug, a.email_address, count(m.user_id) as staff_with_access,
+       string_agg(p.name, ', ' order by p.name) as staff
+from public.email_accounts a
+join public.organizations o on o.id = a.org_id
+left join public.email_account_members m on m.account_id = a.id
+left join public.profiles p on p.id = m.user_id
+group by 1, 2 order by 1, 2;
+```
+
+**044.** `active_without_acceptance` must be 0 for every firm.
+
+```sql
+select o.slug,
+       count(*) filter (where m.accepted_at is not null) as members,
+       count(*) filter (where m.accepted_at is null and not m.is_active) as invitations_waiting,
+       count(*) filter (where m.accepted_at is null and m.is_active) as active_without_acceptance
+from public.memberships m join public.organizations o on o.id = m.org_id
+group by 1 order by 1;
+```
+
+**045.** Expect 0 in every row. A number above 0 is existing work already given to someone outside that firm; it is left alone and can be reassigned from the page.
+
+```sql
+select 'tasks.assigned_to' as field, count(*) as outside_firm from public.tasks t
+ where t.assigned_to is not null and not exists (select 1 from public.memberships m where m.user_id = t.assigned_to and m.org_id = t.org_id)
+union all
+select 'tasks.reviewer_id', count(*) from public.tasks t
+ where t.reviewer_id is not null and not exists (select 1 from public.memberships m where m.user_id = t.reviewer_id and m.org_id = t.org_id)
+union all
+select 'leads.assigned_to', count(*) from public.leads l
+ where l.assigned_to is not null and not exists (select 1 from public.memberships m where m.user_id = l.assigned_to and m.org_id = l.org_id)
+union all
+select 'clients.assigned_to', count(*) from public.clients c
+ where c.assigned_to is not null and not exists (select 1 from public.memberships m where m.user_id = c.assigned_to and m.org_id = c.org_id);
+```
+
+**046.** Expect `delete_guards = 5` and `package_fk_rule = r`.
+
+```sql
+select (select count(*) from pg_trigger where not tgisinternal and tgname in
+         ('tasks_before_delete', 'email_accounts_before_delete', 'quotations_before_delete',
+          'proposals_before_delete', 'service_packages_before_delete')) as delete_guards,
+       (select confdeltype from pg_constraint where conname = 'client_packages_package_id_fkey') as package_fk_rule;
+```
 
 ## 6. Deploy
 
 ```powershell
 git add -A
-git commit -m "Batch 1: invoice number on issue, stored place of supply, buyer snapshot (B-02, B-05, B-25, B-29)"
-git push -u origin batch-1-gst
+git commit -m "Batch 2: mailbox ownership and access, invitation consent, firm-scoped people, delete protections (S-02, S-12, S-06, S-21, S-22, D-05)"
+git push -u origin batch-2-security
 ```
 
 Test on the Vercel preview for the branch (checklist below), then merge:
 
 ```powershell
 git checkout main
-git merge batch-1-gst
+git merge batch-2-security
 git push
 ```
 
-Until `main` is deployed, the live site runs the old code on the new database. Creating and viewing invoices still works, but do not email or approve a draft from the live site in that gap: the old code would send it without reloading the new number.
+Until `main` is deployed, the live site runs the old code on the new database. In that gap, **don't remove a mailbox or delete a package** on the live site. The old code deletes a mailbox's emails, or a package's service list, before the step the database now refuses.
 
-## 7. Test checklist
+## 7. Fix the invoice without a place of supply (INV/2026-27/0001, N.Z.I.E)
 
-Use the test firm (`sharma-and-associates`) where you can.
+041 leaves the place of supply empty when the client record has no state, or when the client's state contradicts the tax already charged. Run this to see which it is:
 
-1. **Client state.** Open a client without a state, try to save: it asks for a state. Choose one and save.
-2. **New draft.** Invoices → New Invoice for a client in your own state. The list shows "Draft" in the number column, and the PDF says "No. Assigned on issue" with a DRAFT watermark.
-3. **Tax split.** In the editor, the hint under Place of supply says CGST + SGST for a client in your state and IGST for a client in another state, including a client with no GSTIN. The totals box matches.
-4. **Override.** As an administrator, change the place of supply on a draft and save: the tax split follows it. As a staff member with the Invoices module, the field is read-only.
-5. **Issue.** Open a draft → Issue invoice. The toast shows the new number and date. The number is the next one in the series.
-6. **Date order.** Create a draft dated before your last issued invoice, with a due date also in the past, and issue it: both dates become today.
-7. **No state.** Create a draft for a client created from a lead (no state) and try to issue: it is refused with "Add the client's state on the Clients page before issuing this invoice." No number is used up.
-8. **Email a draft.** Email a draft: the client receives a PDF with a number and no watermark, and the list shows it as Sent.
-9. **Send error (B-29).** Disconnect the test firm's mailbox, or use a firm with none, and email a draft: the error says the invoice was issued but not emailed, and the list already shows it as Sent with its number.
-10. **Buyer copy (B-25).** Note an issued invoice's Bill To block. Edit that client's address and organisation name. Reopen the invoice PDF: unchanged. A new draft for the same client shows the new details.
-11. **Cancel.** Cancel a draft: the message says no number is affected. Cancel an issued invoice with no payments: its number stays.
-12. **Quotation.** Convert a quotation: the message says a draft invoice was created, and the quotation row shows "Draft invoice" until it is issued.
-13. **Retainer bill.** Packages → Billing → Run billing now (test firm). A draft bill shows "Draft"; Approve & send issues it and the email subject carries the number.
-14. **Payments.** Record a part payment and a full payment on an issued invoice: Partially Paid, then Paid, as before.
+```sql
+select i.invoice_number, i.is_inter_state, i.cgst, i.sgst, i.igst,
+       c.organization_name, c.state, c.gstin, c.address,
+       public.gst_place_of_supply(c.gstin, c.state) as client_state_code
+from public.invoices i join public.clients c on c.id = i.client_id
+where i.status not in ('Draft', 'Cancelled') and i.place_of_supply is null;
+```
 
-## 8. How to undo
+- **`client_state_code` is empty** (most likely): the client has no state on record.
+  1. On the Clients page, set the society's state. If CGST + SGST was charged and the society is in Delhi, that is Delhi.
+  2. In the SQL Editor, run the whole of `supabase\migrations\041_invoice_issue_gst.sql` from this zip once more. It fills the place of supply on that invoice and changes nothing else; the amounts and the payment stay as they are.
+  3. Re-run the batch 1 check query: `issued_without_place_of_supply` should be 0.
+- **`client_state_code` has a value:** the client's state disagrees with the tax charged, for example CGST + SGST on a client outside Delhi. That is a tax-head question, not a data gap, so Duesk should not paper over it. Send me the row and tell me how you want it treated (for example, credit note and fresh invoice), and I'll fold it into the next batch.
+
+## 8. Test checklist
+
+Use the test firm (`sharma-and-associates`) and a second login you control where you can.
+
+1. **Confirmed mailboxes.** Inbox → Connected Accounts as a Finetax admin: both mailboxes show "Address confirmed".
+2. **Confirm an address.** In Sharma, connect a mailbox you can read and test it: it shows "Address not confirmed" with a note. Click **Confirm address** → **Email me a code**. The code arrives from Duesk's mailbox. Enter a wrong code: it is refused. Enter the right code: "Address confirmed".
+3. **Webhook.** If you forward mail to Duesk, mail to an unconfirmed address no longer appears in the inbox; after confirming, it does.
+4. **Who can use it.** As a Finetax admin, open **Who can use it** on a mailbox and untick a staff member. Signed in as that staff member: the mailbox and its emails are gone from the inbox, and the other mailboxes are still there. Tick them again: it comes back.
+5. **Remove a mailbox with emails.** It is refused with "This mailbox has emails in Duesk…". **Disable** still works.
+6. **Invite an existing login.** From Sharma, invite an email that already uses Duesk in Finetax. The toast says "Invitation sent… They join your firm once they accept." Sharma's Team page shows them as pending, under the name you typed.
+7. **Decline, then accept.** Sign in as that person: a bar shows the invitation. **Decline**: it disappears, and so does the pending row on Sharma's Team page. Invite again and **Accept**: the bar offers to open Sharma, and the firm switcher lists both firms.
+8. **Pending has no say.** Before they accept, Login security on that pending row in Sharma does nothing to their login (the person is reported as not found).
+9. **Invite a new email.** Works as before: they receive the set-password email.
+10. **People per firm.** As the person in both firms, while working in Sharma, task assignee and reviewer lists show only Sharma people. Switch to Finetax: only Finetax people.
+11. **Task delete.** Delete a task with time logged: refused, with the reason. Delete a new empty task: works.
+12. **Quotation delete.** Only draft quotations show Delete.
+13. **Package delete.** A package any client is or was on shows no Delete button; Archive works. A new unused package can be deleted.
+14. **Batch 1 still fine.** Issue a draft invoice: it gets the next number.
+
+## 9. How to undo
 
 Code:
 
@@ -122,8 +188,8 @@ git revert HEAD
 git push
 ```
 
-This works while the batch 1 commit is the latest one on `main`; otherwise use `git log --oneline` to find it and `git revert <its id>`. If the branch was not merged yet, `git checkout main` then `git branch -D batch-1-gst` is enough.
+This works while the batch 2 commit is the latest one on `main`; otherwise use `git log --oneline` to find it and `git revert <its id>`.
 
-Database: paste `supabase\undo\041_invoice_issue_gst_undo.sql` into the SQL Editor and run it. It gives released numbers back to their drafts, numbers any draft created since, and restores the previous invoice rules. The new columns stay, unused. If a released number has since been used by a newly issued invoice, the script stops with a duplicate-number error and changes nothing; in that case tell me and I will write a forward fix instead.
+Database: paste `supabase\undo\042_046_security_undo.sql` into the SQL Editor and run it. It restores the previous rules exactly. The new tables and columns stay, unused, so no data is lost. Invitations still waiting for an answer become inactive members; cancel them from the Team page. If two firms have tested the same mailbox address by then, the undo stops and changes nothing, naming the address; send me that message.
 
-Undo the code and the database together. The old code does not work correctly with the new rules, and the new code needs the new columns.
+Undo the code and the database together.

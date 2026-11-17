@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // A successful login proves this firm owns the mailbox (used by the incoming-email webhook)
+    // Records that the connection works. Ownership of the address is confirmed separately, by emailed code.
     if ((result.smtp.ok || result.imap.ok) && !account.verified_at) {
       await admin.from("email_accounts").update({ verified_at: new Date().toISOString() }).eq("id", account.id);
     }

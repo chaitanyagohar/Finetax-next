@@ -288,8 +288,7 @@ export default function TeamPage() {
       if (!res.ok) return setFormError(out.error || "Could not save. Try again.");
 
       if (editingMember) showToast("success", out.message || "Saved.");
-      else if (out.status === "added") showToast("success", `${payload.name} already uses Duesk and has been added to your firm.`);
-      else showToast("success", `Invitation sent to ${payload.email}. They'll choose their own password.`);
+      else showToast("success", `Invitation sent to ${payload.email}. They join your firm once they accept.`);
 
       setIsModalOpen(false);
       loadTeam();

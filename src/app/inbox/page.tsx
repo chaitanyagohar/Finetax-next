@@ -32,6 +32,8 @@ import {
   MessageSquare,
   Activity,
   ChevronDown,
+  MailCheck,
+  Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
@@ -39,9 +41,13 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel, sortByLabel } from "@/components/ui/ClientPicker";
 import PasswordInput from "@/components/ui/PasswordInput";
+import ConfirmOwnership from "@/components/inbox/ConfirmOwnership";
+import MailboxAccess from "@/components/inbox/MailboxAccess";
 import { formatDate, localISODate } from "@/lib/format";
 
 const PAGE_SIZE = 100;
+
+type MailboxRef = { id: string; email_address: string };
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -138,6 +144,8 @@ export default function UnifiedInboxPage() {
   const [testResults, setTestResults] = useState<Record<string, any>>({});
   const [passwordTarget, setPasswordTarget] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [ownershipTarget, setOwnershipTarget] = useState<MailboxRef | null>(null);
+  const [accessTarget, setAccessTarget] = useState<MailboxRef | null>(null);
 
   const provider = PROVIDERS.find((p) => p.key === providerKey) || PROVIDERS[0];
 
@@ -166,7 +174,7 @@ export default function UnifiedInboxPage() {
   async function loadAccounts() {
     const { data } = await supabase
       .from("email_accounts")
-      .select("id, email_address, display_name, smtp_host, smtp_port, imap_host, imap_port, is_active, smtp_secret_id, created_at")
+      .select("id, email_address, display_name, smtp_host, smtp_port, imap_host, imap_port, is_active, smtp_secret_id, ownership_confirmed_at, created_at")
       .order("created_at", { ascending: true });
     const list = data || [];
     setAccounts(list);
@@ -558,14 +566,14 @@ export default function UnifiedInboxPage() {
     const acc = confirm?.target;
     if (!acc) return;
     setActionBusy(true);
-    const { error: msgErr } = await supabase.from("email_messages").delete().eq("account_id", acc.id);
-    const { error } = msgErr ? { error: msgErr } : await supabase.from("email_accounts").delete().eq("id", acc.id);
+    // The database refuses this when the mailbox has emails in Duesk; disabling keeps them
+    const { error } = await supabase.from("email_accounts").delete().eq("id", acc.id);
     setActionBusy(false);
     setConfirm(null);
     if (error) return showToast("error", error.message);
     logAuditEvent("DELETE_EMAIL_ACCOUNT", "EMAIL_ACCOUNTS", acc.id, { email: acc.email_address });
     if (selectedAccountId === acc.id) setSelectedAccountId("all");
-    showToast("success", `${acc.email_address} removed with its synced messages.`);
+    showToast("success", `${acc.email_address} removed.`);
     loadAccounts();
   }
 
@@ -706,8 +714,21 @@ export default function UnifiedInboxPage() {
                           ) : (
                             <span className="text-[10px] font-semibold text-rose-600">No password saved</span>
                           )}
+                          {acc.ownership_confirmed_at ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
+                              <MailCheck className="h-3 w-3" /> Address confirmed
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-amber-700">Address not confirmed</span>
+                          )}
                         </div>
                       </div>
+
+                      {!acc.ownership_confirmed_at && (
+                        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+                          Sending and Sync work. Mail forwarded to Duesk for this address is not delivered until an administrator confirms the address.
+                        </p>
+                      )}
 
                       {test && (
                         <div className="space-y-1 rounded-lg border border-border bg-surface-alt p-2 text-[11px]">
@@ -754,6 +775,22 @@ export default function UnifiedInboxPage() {
                             className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-text-muted transition hover:bg-surface-alt"
                           >
                             <Power className="h-3.5 w-3.5" /> {acc.is_active === false ? "Enable" : "Disable"}
+                          </button>
+                          {!acc.ownership_confirmed_at && (
+                            <button
+                              type="button"
+                              onClick={() => setOwnershipTarget(acc)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-navy transition hover:bg-surface-alt"
+                            >
+                              <MailCheck className="h-3.5 w-3.5" /> Confirm address
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setAccessTarget(acc)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-navy transition hover:bg-surface-alt"
+                          >
+                            <Users className="h-3.5 w-3.5" /> Who can use it
                           </button>
                           <button
                             type="button"
@@ -1235,6 +1272,19 @@ export default function UnifiedInboxPage() {
         </Modal>
       )}
 
+      {ownershipTarget && (
+        <ConfirmOwnership
+          account={ownershipTarget}
+          onClose={() => setOwnershipTarget(null)}
+          onConfirmed={() => {
+            setOwnershipTarget(null);
+            showToast("success", `${ownershipTarget.email_address} is confirmed. Forwarded mail for it is now delivered to your firm.`);
+            loadAccounts();
+          }}
+        />
+      )}
+      {accessTarget && <MailboxAccess account={accessTarget} onClose={() => setAccessTarget(null)} />}
+
       {/* Confirmations */}
       {confirm?.kind === "deleteMessage" && (
         <ConfirmDialog
@@ -1250,7 +1300,7 @@ export default function UnifiedInboxPage() {
       {confirm?.kind === "deleteAccount" && (
         <ConfirmDialog
           title="Remove this email account?"
-          message={`${confirm.target.email_address} will be disconnected and all its synced messages removed from Duesk. Its encrypted password is destroyed. Consider "Disable" instead to keep history.`}
+          message={`${confirm.target.email_address} can be removed only while it has no emails in Duesk; its encrypted password is then destroyed. A mailbox with emails is kept: use Disable to stop sending and syncing without losing them.`}
           confirmLabel="Remove account"
           tone="danger"
           loading={actionBusy}

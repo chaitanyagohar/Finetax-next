@@ -465,7 +465,7 @@ export default function QuotationsPage() {
     setConfirm(null);
 
     if (error) {
-      showToast("error", "Could not delete this quotation. Only administrators can delete quotations.");
+      showToast("error", error.message || "Could not delete this quotation.");
       return;
     }
     logAuditEvent("DELETE_QUOTATION", "QUOTATIONS", q.id, { quoteNumber: getQuoteNumber(q) });
@@ -808,7 +808,7 @@ export default function QuotationsPage() {
           footer={
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
-                {editingQuotation && isAdmin && !locked && (
+                {editingQuotation && isAdmin && !locked && statusOf(editingQuotation) === "Draft" && (
                   <button
                     type="button"
                     onClick={() => setConfirm({ kind: "delete", quote: editingQuotation })}
@@ -1084,8 +1084,8 @@ export default function QuotationsPage() {
       {/* Confirmations */}
       {confirm?.kind === "delete" && (
         <ConfirmDialog
-          title="Delete this quotation?"
-          message={`Quotation ${getQuoteNumber(confirm.quote)} will be permanently removed. Its number will not be reused.`}
+          title="Delete this draft quotation?"
+          message={`Draft ${getQuoteNumber(confirm.quote)} will be permanently removed. Its number will not be reused. Quotations that have been sent are kept; change their status instead.`}
           confirmLabel="Delete quotation"
           tone="danger"
           loading={actionBusy}

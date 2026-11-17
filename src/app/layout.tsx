@@ -5,6 +5,7 @@ import "./onboarding.css";
 import AppShell from "@/components/layout/AppShell";
 import OnboardingLayer from "@/components/onboarding/OnboardingLayer";
 import PlanBanner from "@/components/billing/PlanBanner";
+import PendingInvitations from "@/components/team/PendingInvitations";
 import SignOutButton from "@/components/layout/SignOutButton";
 import type { SessionUser } from "@/components/layout/navConfig";
 import { createClient } from "@/lib/supabase/server";
@@ -80,7 +81,10 @@ export default async function RootLayout({
       if (!(signupState as { has_membership?: boolean } | null)?.has_membership) {
         return (
           <html lang="en" className={inter.variable}>
-            <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>
+            <body className="m-0 bg-background p-0 text-text-main antialiased">
+              {children}
+              <PendingInvitations />
+            </body>
           </html>
         );
       }
@@ -116,6 +120,7 @@ export default async function RootLayout({
               </div>
             </div>
           </div>
+          {profile?.is_active !== false && <PendingInvitations />}
         </body>
       </html>
     );
@@ -160,6 +165,7 @@ export default async function RootLayout({
         <AppShell user={sessionUser}>{children}</AppShell>
         <OnboardingLayer user={sessionUser} />
         <PlanBanner user={sessionUser} />
+        <PendingInvitations />
         {trialNotice && (
           <div
             role="status"

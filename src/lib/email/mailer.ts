@@ -39,6 +39,8 @@ export interface SendFirmEmailInput {
   accountId?: string | null;
   /** The firm sending the email. Required: the email is sent from that firm's own mailbox. */
   orgId: string;
+  /** False keeps the email out of the sending mailbox's Sent list (for one-time codes). */
+  record?: boolean;
 }
 
 export interface SendFirmEmailResult {
@@ -198,6 +200,8 @@ export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirm
         : "The email could not be sent. Please try again."
     );
   }
+
+  if (input.record === false) return { accountId: account.id, from: fromString, recipients };
 
   // 4. Save to the Unified Inbox (failure here does not fail the send)
   try {
