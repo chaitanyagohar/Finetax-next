@@ -48,7 +48,7 @@ test("API refuses signed-out requests", async ({ request, baseURL }) => {
   expect(res.headers()["content-security-policy"]).toContain("default-src 'none'");
 });
 
-test("the email webhook ignores a secret in the URL", async ({ request }) => {
+test("the email webhook refuses a wrong secret", async ({ request }) => {
   const res = await request.post("/api/webhooks/incoming-emails?token=guess", { data: {} });
   expect([401, 403, 500]).toContain(res.status());
 });

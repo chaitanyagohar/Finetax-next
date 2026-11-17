@@ -33,11 +33,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Webhook not configured." }, { status: 503 });
     }
 
-    // Header only: a secret in the URL ends up in request logs (S-16).
-    if (request.nextUrl.searchParams.has("token")) {
-      console.error("[webhook] Secret sent in the URL; send it in the x-webhook-secret header instead.");
+    // Prefer the header. A secret in the URL (?token=) still works, because an existing mail forwarder
+    // may send it that way, but it ends up in request logs (S-16), so move the forwarder to the header.
+    const fromUrl = request.nextUrl.searchParams.get("token");
+    if (fromUrl && !request.headers.get("x-webhook-secret")) {
+      console.warn("[webhook] Secret sent in the URL; move it to the x-webhook-secret header.");
     }
-    const provided = request.headers.get("x-webhook-secret") || "";
+    const provided = request.headers.get("x-webhook-secret") || fromUrl || "";
     if (!safeEqual(provided, secret)) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }

@@ -15,7 +15,7 @@ This batch picks up where batch 4 ended. It has one migration (049).
 - **S-08:** `/welcome` can't change your password if you signed in with one.
 - **S-14:** mail servers are connected to by the address that was checked, so a DNS trick can't reach a private address.
 - **S-15:** the security policy no longer allows inline scripts. Each page load gets a fresh nonce that only Next's own scripts carry. This was tested in Chrome against a production build: no script was blocked.
-- **S-16:** the email webhook secret is accepted only in the `x-webhook-secret` header.
+- **S-16:** the email webhook prefers the secret in the `x-webhook-secret` header. The old `?token=` address still works, because your mail forwarder may use it, and it is logged as a warning until the forwarder is moved to the header.
 - **S-17:** `/api/invoices` needs the Invoices module and copies only known fields.
 - **S-19:** `chat_can_access` answers only about yourself.
 - **S-20:** "Run check now" runs reminders for your own firm only.
@@ -189,3 +189,10 @@ This batch picks up where batch 4 ended. It has one migration (049).
 | `tests/sql/10_isolation.sql` | NEW | 16 isolation checks over every firm table. |
 | `tests/sql/run.ps1` | NEW | Runs the SQL checks on Windows. |
 | `tests/sql/run.sh` | NEW | Runs the SQL checks on Mac/Linux. |
+
+## Follow-up fix 1
+
+| File | Change | Why |
+|---|---|---|
+| `src/app/api/webhooks/incoming-emails/route.ts` | MODIFIED | Accepts the old `?token=` address again (header preferred) so an existing mail forwarder keeps working. Logs a warning when the URL form is used (S-16, partly). |
+| `tests/e2e/public.spec.ts` | MODIFIED | Webhook check renamed: it now checks that a wrong secret is refused. |
