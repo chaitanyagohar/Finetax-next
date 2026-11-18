@@ -938,7 +938,22 @@ export default function UnifiedInboxPage() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="p-6 text-center text-xs text-text-muted">
-                    {debouncedSearch ? "No emails match your search." : activeTab === "inbox" ? "Inbox is empty. Click Sync to fetch new mail." : "No sent emails yet."}
+                    {debouncedSearch ? (
+                      "No emails match your search."
+                    ) : accounts.length === 0 && isAdmin ? (
+                      <>
+                        No mailbox is connected yet.{" "}
+                        <button type="button" onClick={() => setActiveTab("settings")} className="font-semibold text-navy hover:underline">
+                          Connect a mailbox
+                        </button>
+                      </>
+                    ) : accounts.length === 0 ? (
+                      "No mailbox is shared with you yet. Ask an administrator."
+                    ) : activeTab === "inbox" ? (
+                      "Inbox is empty. Click Sync to fetch new mail."
+                    ) : (
+                      "No sent emails yet."
+                    )}
                   </div>
                 ) : (
                   <>

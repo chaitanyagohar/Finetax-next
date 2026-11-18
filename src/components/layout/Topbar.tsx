@@ -280,7 +280,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const items: PaletteItem[] = getVisibleSections(user).flatMap((s) => s.items.map((i) => ({ name: i.name, href: i.href, icon: i.icon, group: s.label })));
     if (user.isReviewer && !user.isPlatformHome) {
-      REVIEWER_SUB_TABS.forEach((t) => items.push({ name: t.name, href: t.href, icon: t.icon, group: "Review Tasks" }));
+      REVIEWER_SUB_TABS.forEach((t) => items.push({ name: t.name, href: t.href, icon: t.icon, group: "Review tasks" }));
     }
     return items;
   }, [user]);

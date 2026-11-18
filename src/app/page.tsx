@@ -299,12 +299,12 @@ function DueDate({ date, today }: { date?: string | null; today: string }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-        <div className="h-5 w-56 rounded bg-border" />
-        <div className="mt-2 h-3 w-80 rounded bg-border/70" />
+        <div className="h-5 w-56 skeleton" />
+        <div className="mt-2 h-3 w-80 skeleton" />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="kpi-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-28 rounded-xl border border-border bg-surface shadow-sm" />
         ))}
@@ -662,8 +662,8 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <ImportantNotifications />
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
-        <div className="min-w-0">
+      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
+        <div className="min-w-0 xl:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight text-text-main">
               {greeting()}, {currentUser?.name?.split(" ")[0] || "there"}
@@ -679,7 +679,7 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
-          <p className="mt-1 text-xs text-text-muted">
+          <p className="mt-1 hidden text-xs text-text-muted sm:block">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
             {" · "}
             {isAdmin
@@ -688,7 +688,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0 xl:justify-end">
           <button
             type="button"
             onClick={() => loadDashboardData()}
@@ -744,7 +744,7 @@ export default function DashboardPage() {
         /* ================= ADMIN EAGLE'S EYE VIEW ================= */
         <>
           {/* Primary KPIs */}
-          <div data-tour="dash-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div data-tour="dash-kpis" className="kpi-grid grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <KpiCard
               label={`Billed · ${DATE_FILTER_LABELS[dateFilter]}`}
               value={compactINR(totalBilled)}
@@ -803,7 +803,7 @@ export default function DashboardPage() {
               href="/leads"
               sub={
                 <span>
-                  {crm?.lead_followups_due ? <span className="font-semibold text-amber-700">{crm.lead_followups_due} follow-ups due</span> : "No follow-ups due"}
+                  {crm?.lead_followups_due ? <span className="font-semibold text-amber-700">{crm.lead_followups_due} follow-up{crm.lead_followups_due === 1 ? "" : "s"} due</span> : "No follow-ups due"}
                   {" · "}
                   {winRate}% win rate
                 </span>
@@ -1085,7 +1085,7 @@ export default function DashboardPage() {
             </Link>
           )}
 
-          <div data-tour="dash-kpis" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div data-tour="dash-kpis" className="kpi-grid grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard label="My pending tasks" value={myTasks.length} icon={CheckSquare} tone="navy" href="/tasks" />
             <KpiCard
               label="Overdue deadlines"

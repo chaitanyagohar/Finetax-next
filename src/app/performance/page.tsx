@@ -211,7 +211,7 @@ export default function PerformancePage() {
       ) : isAdmin ? (
         <>
           {/* Team summary */}
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
             {[
               { label: "Team average score", value: team.avg === null ? "—" : Math.round(team.avg), icon: Award, tone: scoreTone(team.avg) },
               { label: "On-time submission", value: team.onTime === null ? "—" : `${team.onTime}%`, icon: Clock, tone: scoreTone(team.onTime) },

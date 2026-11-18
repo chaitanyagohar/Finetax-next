@@ -38,6 +38,7 @@ import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/lib/format";
 import { GSTIN_RE, PAN_RE, STATE_OPTIONS, stateCodeFromGstin, stateCodeFromName, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -863,7 +864,7 @@ export default function ClientsPage() {
       </div>
 
       {/* KPI cards */}
-      <div data-tour="clients-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} data-tour="clients-kpis" className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Total clients", value: String(stats.total), sub: "In the client master", icon: Users, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Active clients", value: String(stats.active), sub: `${stats.total - stats.active} inactive`, icon: UserCheck, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
@@ -936,9 +937,7 @@ export default function ClientsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading client directory...
-          </div>
+          <ListSkeleton label="Loading client directory" />
         ) : filteredClients.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <Building2 className="h-6 w-6 text-text-muted" />

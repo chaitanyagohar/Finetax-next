@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Building2, CheckCircle2, Loader2, Plus, Search } from "lucide-react";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/format";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 type Firm = {
   id: string;
@@ -234,9 +235,7 @@ export default function OwnerConsolePage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading firms...
-          </div>
+          <ListSkeleton label="Loading firms" />
         ) : visible.length === 0 ? (
           <p className="p-10 text-center text-xs text-text-muted">No firms found.</p>
         ) : (

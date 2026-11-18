@@ -50,5 +50,6 @@ test("API refuses signed-out requests", async ({ request, baseURL }) => {
 
 test("the email webhook refuses a wrong secret", async ({ request }) => {
   const res = await request.post("/api/webhooks/incoming-emails?token=guess", { data: {} });
-  expect([401, 403, 500]).toContain(res.status());
+  // 503 when the webhook secret isn't configured on that deployment
+  expect([401, 403, 503]).toContain(res.status());
 });

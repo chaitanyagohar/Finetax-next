@@ -25,6 +25,7 @@ import {
   Users,
   Clock,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Lead, Profile, Client } from "@/types/database";
@@ -645,7 +646,7 @@ export default function LeadsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -831,16 +832,42 @@ export default function LeadsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading enquiries & leads...
-          </div>
+          <ListSkeleton label="Loading enquiries & leads" />
         ) : filteredLeads.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <UserPlus className="h-6 w-6 text-text-muted" />
             <p className="text-xs text-text-muted">{hasFilters ? "No leads match these filters." : "No enquiries yet. Add your first lead."}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per lead (tap to open); the table starts at tablet width */}
+          <ul className="list-in divide-y divide-border md:hidden">
+            {filteredLeads.map((l) => {
+              const follow = getFollowUp(l);
+              const open = isOpen(l);
+              const overdue = open && !!follow && follow < today;
+              return (
+                <li key={l.id}>
+                  <button type="button" onClick={() => openModal(l)} className="block w-full px-4 py-3 text-left text-xs transition hover:bg-surface-alt">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-navy">{l.name}</p>
+                        <p className="truncate text-[11px] text-text-muted">{[getOrg(l), getService(l)].filter(Boolean).join(" · ")}</p>
+                      </div>
+                      <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[l.status || "New"] || STATUS_STYLES.New}`}>
+                        {l.status || "New"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-text-muted">
+                      {follow && open && <span className={overdue ? "font-semibold text-rose-600" : ""}>Follow up {formatDate(follow)}</span>}
+                      <span>{teamName(getAssignee(l)) || "Unassigned"}</span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -922,6 +949,7 @@ export default function LeadsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

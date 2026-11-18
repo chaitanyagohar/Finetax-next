@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Activity, Filter, RefreshCw, Server, Info, ShieldAlert, Download, Loader2, ChevronDown, ChevronRight, Lock, Trash2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 const PAGE_SIZE = 100;
 
@@ -254,9 +255,7 @@ export default function AuditLogsPage() {
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading audit trail...
-          </div>
+          <ListSkeleton label="Loading audit trail" />
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface-alt">

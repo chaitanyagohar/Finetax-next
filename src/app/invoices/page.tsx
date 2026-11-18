@@ -21,6 +21,7 @@ import {
   Lock,
   TrendingUp,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
@@ -623,7 +624,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* KPI cards */}
-      <div data-tour="invoices-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} data-tour="invoices-kpis" className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -723,16 +724,74 @@ export default function InvoicesPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading billing records...
-          </div>
+          <ListSkeleton label="Loading billing records" />
         ) : filteredInvoices.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <Receipt className="h-6 w-6 text-text-muted" />
             <p className="text-xs text-text-muted">{invoices.length === 0 ? "No invoices generated yet." : "No invoices match this view."}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per invoice; the table starts at tablet width */}
+          <ul className="list-in divide-y divide-border md:hidden">
+            {filteredInvoices.map((i) => {
+              const st = statusOf(i);
+              const overdue = isOverdue(i);
+              const balance = ["Draft", "Cancelled"].includes(st) ? 0 : balanceOf(i);
+              return (
+                <li key={i.id} className={st === "Cancelled" ? "opacity-60" : ""}>
+                  <button type="button" onClick={() => openModal(i)} className="block w-full px-4 pb-2 pt-3 text-left text-xs transition hover:bg-surface-alt">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-text-main">{i.organisation || clientNameOf(i)}</p>
+                        <p className={`font-mono text-[11px] ${i.invoice_number ? "text-navy" : "text-text-muted"}`}>
+                          {numberOf(i)} · {formatDate(issueOf(i))}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-semibold">{formatINR(Number(i.total || 0))}</p>
+                        {balance > 0 && <p className={`text-[11px] font-semibold ${overdue ? "text-rose-600" : "text-amber-700"}`}>{formatINR(balance)} due</p>}
+                      </div>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[st] || STATUS_STYLES.Draft}`}>{st}</span>
+                      {overdue && <span className="font-semibold text-rose-600">Overdue since {formatDate(dueOf(i))}</span>}
+                    </div>
+                  </button>
+                  <div className="flex gap-1.5 px-4 pb-3">
+                    {balance > 0 && !["Draft", "Cancelled"].includes(st) && (
+                      <button
+                        type="button"
+                        onClick={(e) => openPayment(i, e)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                      >
+                        <Wallet className="h-3 w-3" /> Payment
+                      </button>
+                    )}
+                    {st !== "Cancelled" && (
+                      <button
+                        type="button"
+                        onClick={(e) => requestEmail(i, e)}
+                        disabled={sendingId === i.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-60"
+                      >
+                        <Mail className="h-3 w-3" /> {i.email_sent_at ? "Resend" : "Email"}
+                      </button>
+                    )}
+                    <a
+                      href={`/invoices/${i.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold"
+                    >
+                      <Printer className="h-3 w-3" /> PDF
+                    </a>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -751,7 +810,8 @@ export default function InvoicesPage() {
                 {filteredInvoices.map((i) => {
                   const st = statusOf(i);
                   const overdue = isOverdue(i);
-                  const balance = balanceOf(i);
+                  // A draft or cancelled invoice isn't owed, so it shows no balance
+                  const balance = ["Draft", "Cancelled"].includes(st) ? 0 : balanceOf(i);
                   return (
                     <tr key={i.id} className={`cursor-pointer transition hover:bg-surface-alt ${st === "Cancelled" ? "opacity-60" : ""}`} onClick={() => openModal(i)}>
                       <td className={`whitespace-nowrap font-mono font-bold ${i.invoice_number ? "text-navy" : "text-text-muted"}`}>{numberOf(i)}</td>
@@ -819,6 +879,7 @@ export default function InvoicesPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

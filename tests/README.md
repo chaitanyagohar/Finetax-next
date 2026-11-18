@@ -21,7 +21,7 @@ Neither touches live data. The SQL checks run on a copy of the *structure* only,
 
 ### What you need
 
-- A local PostgreSQL 15 or newer, running. PostgreSQL 17 matches Supabase.
+- A local PostgreSQL **17 or newer**, running. Supabase uses 17; with an older version, the dump's `MAINTAIN` permissions don't load, and one table (`audit_logs`) is then checked less strictly.
 - `psql` and `pg_dump`. On your PC, `pg_dump` is in `C:\Program Files\PostgreSQL\18\pgAdmin 4\runtime\`; `psql` is in the same folder. If you install the PostgreSQL server, both are also in `C:\Program Files\PostgreSQL\<version>\bin\`.
 
 ### Run it (Windows PowerShell)
@@ -108,4 +108,4 @@ Results: `list` output in the window, plus an HTML report in `playwright-report\
 
 ### Status
 
-The public checks pass against a production build. The signed-in checks were written against the code but haven't been run against a real account yet. On their first run, a label that reads differently on screen may need adjusting in the test.
+All 12 checks pass against a production build running on a local copy of the database with a sample firm. The Inbox check is skipped when the firm has no mailbox connected.

@@ -29,6 +29,7 @@ import {
   ListOrdered,
   ArrowRightLeft,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Task, Client, Profile, TaskStage } from "@/types/database";
@@ -357,7 +358,12 @@ export default function TasksPage() {
     ]);
 
     if (openRes.error || doneRes.error) showToast("error", "Could not load tasks. Please refresh the page.");
-    else setTasks([...openRes.data, ...doneRes.data].sort((a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999"))));
+    else {
+      // Open work first (earliest deadline on top), then completed work, most recently approved first
+      const open = [...openRes.data].sort((a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999")));
+      const done = [...doneRes.data].sort((a, b) => String(b.stage_changed_at || b.due_date || "").localeCompare(String(a.stage_changed_at || a.due_date || "")));
+      setTasks([...open, ...done]);
+    }
     if (!cRes.error) setClients(cRes.data);
     if (pRes.data) setTeam(pRes.data as ProfileRow[]);
     setLoading(false);
@@ -1002,14 +1008,14 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
-        <div>
+      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
+        <div className="min-w-0 xl:flex-1">
           <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
             <CheckSquare className="h-5 w-5 text-navy" /> Tasks & compliance
           </h2>
-          <p className="mt-1 text-xs text-text-muted">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
+          <p className="mt-1 hidden text-xs text-text-muted sm:block">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
         </div>
-        <div data-tour="tasks-toolbar" className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+        <div data-tour="tasks-toolbar" className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0 xl:justify-end">
           <div data-tour="tasks-views" className="flex rounded-lg border border-border bg-surface-alt p-0.5 text-xs font-semibold">
             {(
               [
@@ -1080,7 +1086,7 @@ export default function TasksPage() {
       />
 
       {/* KPI cards */}
-      <div data-tour="tasks-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} data-tour="tasks-kpis" className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -1160,7 +1166,7 @@ export default function TasksPage() {
                   [
                     { key: "mine", label: "My work" },
                     { key: "review", label: "Review queue" },
-                    { key: "all", label: isAdmin ? "All Tasks" : "All Mine" },
+                    { key: "all", label: isAdmin ? "All tasks" : "All Mine" },
                   ] as const
                 ).map((s) => (
                   <button
@@ -1239,9 +1245,7 @@ export default function TasksPage() {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks...
-          </div>
+          <ListSkeleton label="Loading tasks" />
         ) : view === "queue" ? (
           /* ---------- Queue view ---------- */
           <div className="p-4">
@@ -1287,8 +1291,49 @@ export default function TasksPage() {
             <p className="text-xs text-text-muted">{hasFilters ? "No tasks match these filters." : "No tasks in this view."}</p>
           </div>
         ) : (
-          /* ---------- List view ---------- */
-          <div className="overflow-x-auto">
+          /* ---------- List view: cards on phones, a table from tablet width up ---------- */
+          <>
+          <ul className="list-in divide-y divide-border md:hidden">
+            {filteredTasks.map((t) => {
+              const done = t.stage === "Approved";
+              const internal = dueInfo(t.due_date, done);
+              const statutory = dueInfo(t.official_due_date, done);
+              const needsAction = t.assigned_to === me && ["Assigned", "Changes Required"].includes(t.stage);
+              const needsReview = t.reviewer_id === me && t.stage === "Submitted for Review";
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => openModal(t)}
+                    className={`block w-full px-4 py-3 text-left text-xs transition hover:bg-surface-alt ${needsAction || needsReview ? "bg-amber-50/40" : ""} ${done ? "opacity-70" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} />
+                        <span className="truncate font-semibold text-navy">{t.title}</span>
+                        {t.period && <span className="shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">{t.period}</span>}
+                      </div>
+                      <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STAGE_STYLES[t.stage] || STAGE_STYLES.Assigned}`}>
+                        {t.stage}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-text-main">{clientById[t.client_id]?.organization_name || t.organisation || clientById[t.client_id]?.name || "Internal"}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+                      <span className={internal.cls === "text-rose-600" ? "font-semibold text-rose-600" : ""}>
+                        Due {t.due_date ? formatDate(t.due_date) : "—"}
+                        {internal.label && ` (${internal.label})`}
+                      </span>
+                      {t.official_due_date && (
+                        <span className={statutory.cls === "text-rose-600" ? "font-semibold text-rose-600" : ""}>Statutory {formatDate(t.official_due_date)}</span>
+                      )}
+                      <span>{nameOf(t.assigned_to) || "Unassigned"}</span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -1326,7 +1371,7 @@ export default function TasksPage() {
                         </p>
                       </td>
                       <td>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-[13rem] items-center gap-1.5">
                           <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOTS[t.priority || "Medium"]}`} title={`${t.priority || "Medium"} priority`} />
                           <span className="font-semibold text-navy">{t.title}</span>
                           {t.period && <span className="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">{t.period}</span>}
@@ -1358,6 +1403,7 @@ export default function TasksPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

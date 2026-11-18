@@ -24,7 +24,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
 3. Open the email (check **Spam/Promotions** if it isn't in your inbox) and click the link.
 4. Choose a new password and save it.
 
-The reset link must be opened soon after it's sent. If it says the link is invalid, request a new one. If you never receive the email, an administrator can reset your password from **Team Management**.`,
+The reset link must be opened soon after it's sent. If it says the link is invalid, request a new one. If you never receive the email, an administrator can reset your password from **Team management**.`,
   },
   {
     id: "access",
@@ -33,10 +33,10 @@ The reset link must be opened soon after it's sent. If it says the link is inval
     keywords: "access permission module missing page redirect dashboard can't see not allowed",
     body: `Each person only sees the modules an administrator has given them. Opening a page you don't have access to sends you back to the **Dashboard**. This is expected, not an error.
 
-1. Ask an administrator to give you the module in **Team Management** (for example Invoices or Documents).
+1. Ask an administrator to give you the module in **Team management** (for example Invoices or Documents).
 2. After they save it, **sign out and sign in again** so the change applies.
 
-**Review Tasks** is only for reviewers and administrators. **Team Management, Service Packages, Logs and Firm Settings** are for administrators only.`,
+**Review tasks** is only for reviewers and administrators. **Team management, Service packages, Logs and Firm settings** are for administrators only.`,
   },
   {
     id: "task-create",
@@ -44,7 +44,7 @@ The reset link must be opened soon after it's sent. If it says the link is inval
     area: "Tasks",
     adminOnly: true,
     keywords: "add task new task create assign deadline statutory period",
-    body: `1. Open [Tasks & Compliance](/tasks) and click **Add Task**.
+    body: `1. Open [Tasks & compliance](/tasks) and click **Add Task**.
 2. In **Task**, choose the work from the Task List (for example GSTR-3B Return).
 3. Enter the **Period** (for example "Oct 2026"). If the Task List entry has a statutory rule, the **Statutory Deadline**, **Internal Team Deadline** and **Estimate** fill in automatically.
 4. Choose the **Client** (search by name, organisation, PAN, GSTIN or phone).
@@ -66,7 +66,7 @@ For the person doing the work:
 3. When done, click **Submit for Review**. The timer stops and the time is saved.
 
 For the reviewer:
-1. Open the task from **Review Queue** (or [Review Tasks](/reviewer-queue)).
+1. Open the task from **Review Queue** (or [Review tasks](/reviewer-queue)).
 2. Click **Approve**, or write feedback in **Reviewer Feedback** and click **Request Changes**. Feedback is required when sending back.
 
 Staff can change the stage and their notes. Other task details are managed by the reviewer or an administrator.`,
@@ -88,7 +88,7 @@ If the next one doesn't appear, check that the task's **Recurrence** isn't "None
     area: "Tasks",
     adminOnly: true,
     keywords: "task list task types statutory day buffer estimate categories rename merge archive",
-    body: `1. In [Tasks & Compliance](/tasks), click **Task List**.
+    body: `1. In [Tasks & compliance](/tasks), click **Task List**.
 2. Add or edit an entry: name, category, recurrence, **Statutory Day** and **Of Which Month** (for example day 20 of the next month), **Internal Buffer** and **Default Estimate**.
 3. Use **Archive** to hide entries no longer used, or the merge icon to combine duplicates.
 
@@ -99,7 +99,7 @@ Click **Categories** to add, rename or recolour categories. Renaming updates eve
     title: "Your work queue (order of work)",
     area: "Tasks",
     keywords: "queue order priority drag next what to do first",
-    body: `In [Tasks & Compliance](/tasks), click **Queue** to see your open tasks in the order to do them.
+    body: `In [Tasks & compliance](/tasks), click **Queue** to see your open tasks in the order to do them.
 
 - By default the order is automatic: nearest statutory deadline first, then priority.
 - Administrators can drag tasks into a custom order and click **Save order**. You get a notification when your order changes.
@@ -129,7 +129,7 @@ Approved tasks can't be transferred, and the reviewer can't be made the person d
 
 On any reminder popup, click **Remind me later** and choose **In 1 hour**, **In 3 hours** or **Tomorrow 10 AM**. The popup comes back then.
 
-Administrators change the rules and working hours in [Tasks & Compliance](/tasks) → **Reminders**.`,
+Administrators change the rules and working hours in [Tasks & compliance](/tasks) → **Reminders**.`,
   },
   {
     id: "timer",
@@ -148,7 +148,7 @@ Administrators change the rules and working hours in [Tasks & Compliance](/tasks
     title: "Logging or correcting time",
     area: "Time",
     keywords: "manual entry time log correct edit review my day confirm locked 7 days",
-    body: `1. Open [Time Tracking](/time-tracking).
+    body: `1. Open [Time tracking](/time-tracking).
 2. Click **Manual Entry** to add time you worked without the timer.
 3. Click **Review my day** to check today's entries: correct minutes or descriptions, delete mistakes, add missed work, then **Confirm my day**. After 6:30 PM this opens by itself once.
 
@@ -186,7 +186,7 @@ Everywhere in the app, clients show as **Organisation — Contact name**, and th
     title: "Leads and quotations",
     area: "Sales",
     keywords: "lead enquiry convert quotation quote pdf email convert to invoice",
-    body: `- Record enquiries in [Enquiries & Leads](/leads) and convert a lead to a client when it's won.
+    body: `- Record enquiries in [Enquiries & leads](/leads) and convert a lead to a client when it's won.
 - In [Quotations](/quotations), create a quotation, then open its **PDF** (it opens in a new tab, where you can print or download it) or **email** it to the client.
 - A quotation can be converted into an invoice.
 
@@ -208,7 +208,7 @@ If the PDF doesn't open, allow pop-ups for this site in your browser.`,
     area: "Packages",
     adminOnly: true,
     keywords: "package retainer proposal engagement letter accept onboard contract scope exclusions",
-    body: `1. In [Service Packages](/packages), click **Create Package**. Add services (link each to a **Task List** entry for proper deadlines), the fee, engagement text and billing defaults.
+    body: `1. In [Service packages](/packages), click **Create Package**. Add services (link each to a **Task List** entry for proper deadlines), the fee, engagement text and billing defaults.
 2. Click **Engagement Terms** once to set the signatory, FRN, jurisdiction and standard clauses.
 3. On a package, click **Send Proposal**, choose the client, adjust terms if needed, and click **Save & email**. The client gets the letter as a PDF with an **accept online** link.
 4. When the client accepts online, or you click **Accepted** to record a signed copy, the client is onboarded automatically: subscription, tasks and monthly billing. A start date in the past moves to the acceptance date.
@@ -222,14 +222,14 @@ If tasks are created without a person, you get an **Unassigned tasks** alert.`,
     adminOnly: true,
     keywords: "billing subscription monthly bill late fee approve send auto reminder pro-rated",
     body: `- Every morning, bills are created for subscriptions whose bill date has arrived (for example period 01/09–30/09, bill dated 05/10, due 10/10).
-- By default a bill is a **draft**: open [Service Packages](/packages) → **Billing** and click **Approve & send**. Turn on **Auto** for a client to send automatically.
+- By default a bill is a **draft**: open [Service packages](/packages) → **Billing** and click **Approve & send**. Turn on **Auto** for a client to send automatically.
 - Clients get reminders 2 days before, on, and 3 days after the due date. Late fees are added to the next bill.
 - Subscriptions that existed before billing was added start with billing **Off**. Switch them on in the Billing tab.
 - **Run billing now** runs the check immediately.`,
   },
   {
     id: "inbox",
-    title: "Unified Inbox and email",
+    title: "Unified inbox and email",
     area: "Inbox",
     keywords: "inbox email sync not showing missing delay gmail imap app password",
     body: `- New emails are fetched automatically about every **5 minutes**. Click **Sync** to fetch immediately, then refresh the page.
@@ -251,7 +251,7 @@ If emails stop arriving, the mailbox password may have changed. For Gmail you ne
     title: "Compliance calendar",
     area: "Calendar",
     keywords: "calendar statutory deadline event create client tasks",
-    body: `- [Compliance Calendar](/calendar) shows statutory due dates in month or list view.
+    body: `- [Compliance calendar](/calendar) shows statutory due dates in month or list view.
 - Administrators can add deadlines and use **Create client tasks** on an event to create that task for many clients at once.`,
   },
   {
@@ -268,7 +268,7 @@ If emails stop arriving, the mailbox password may have changed. For Gmail you ne
     title: "Client discussions and follow-ups",
     area: "Clients",
     keywords: "discussion call meeting follow up note client",
-    body: `Record calls and meetings in [Client Discussions](/client-discussions) with a follow-up date. Mark follow-ups complete when done.`,
+    body: `Record calls and meetings in [Client discussions](/client-discussions) with a follow-up date. Mark follow-ups complete when done.`,
   },
   {
     id: "team-settings",
@@ -276,8 +276,8 @@ If emails stop arriving, the mailbox password may have changed. For Gmail you ne
     area: "Administration",
     adminOnly: true,
     keywords: "team add user modules reviewer password settings bank gstin logs support agent",
-    body: `- **Team Management:** add people, set their role and modules, mark reviewers, reset passwords. Security actions ask for your own password.
-- **Firm Settings:** firm details, GSTIN/PAN, invoice numbering and bank/UPI details. Changing bank details needs your password, and other administrators are alerted.
+    body: `- **Team management:** add people, set their role and modules, mark reviewers, reset passwords. Security actions ask for your own password.
+- **Firm settings:** firm details, GSTIN/PAN, invoice numbering and bank/UPI details. Changing bank details needs your password, and other administrators are alerted.
 - **Logs:** a full history of actions, with filters and CSV export.`,
   },
   {

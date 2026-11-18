@@ -21,6 +21,7 @@ import {
   Users,
   Timer,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { logAuditEvent } from "@/lib/audit";
@@ -494,7 +495,7 @@ export default function TimeTrackingPage() {
               <Clock className={`h-5 w-5 ${myTimer ? "animate-pulse" : ""}`} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-text-main">{myTimer ? "Timer running" : "Live Work Timer"}</h3>
+              <h3 className="text-sm font-bold text-text-main">{myTimer ? "Timer running" : "Live work timer"}</h3>
               <p className="text-[11px] text-text-muted">
                 {myTimer
                   ? `Started ${new Date(myTimer.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Keeps running even if you close this page.`
@@ -637,7 +638,7 @@ export default function TimeTrackingPage() {
       </div>
 
       {/* KPI cards */}
-      <div data-tour="time-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} data-tour="time-kpis" className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Total hours", value: formatHours(stats.total), sub: `${stats.entries} entries`, icon: Clock, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Billable hours", value: formatHours(stats.billable), sub: `${formatHours(stats.total - stats.billable)} non-billable`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
@@ -802,9 +803,7 @@ export default function TimeTrackingPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading office log sheet...
-          </div>
+          <ListSkeleton label="Loading office log sheet" />
         ) : filteredLogs.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <Clock className="h-6 w-6 text-text-muted" />
