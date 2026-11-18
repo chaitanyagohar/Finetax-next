@@ -402,7 +402,7 @@ export default function PackagesPage() {
       </div>
 
       {/* KPI cards */}
-      <div data-tour="pkg-kpis" className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} data-tour="pkg-kpis" className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Active packages", value: String(stats.packages), sub: "Available for proposals", icon: Layers, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Active subscriptions", value: String(stats.subscriptions), sub: "Clients on retainers", icon: Users, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },

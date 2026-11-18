@@ -30,6 +30,7 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -372,7 +373,7 @@ export default function ClientDiscussionsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -507,16 +508,37 @@ export default function ClientDiscussionsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading client discussions...
-          </div>
+          <ListSkeleton label="Loading client discussions" />
         ) : sortedDiscussions.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <MessageSquare className="h-6 w-6 text-text-muted" />
             <p className="text-xs text-text-muted">{discussions.length === 0 ? "No discussions logged yet." : "No discussions match this view."}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per discussion (tap to open); the table starts at tablet width */}
+          <ul className="list-in divide-y divide-border md:hidden">
+            {sortedDiscussions.map((d) => {
+              const c = clientById[clientIdOf(d)];
+              const ModeIcon = MODE_ICON[d.mode || "Call"] || MessageSquare;
+              return (
+                <li key={d.id}>
+                  <button type="button" onClick={() => openModal(d)} className="block w-full px-4 py-3 text-left text-xs transition hover:bg-surface-alt">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 truncate font-semibold text-navy">{c?.organization_name || c?.name || "—"}</p>
+                      <span className="shrink-0 text-[11px] text-text-muted">{formatDate(d.date)}</span>
+                    </div>
+                    <p className="mt-1 flex items-start gap-1.5 text-text-main">
+                      <ModeIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" aria-label={d.mode || "Call"} />
+                      <span className="line-clamp-2">{d.summary}</span>
+                    </p>
+                    <div className="mt-1.5">{followUpBadge(d)}</div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -580,6 +602,7 @@ export default function ClientDiscussionsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

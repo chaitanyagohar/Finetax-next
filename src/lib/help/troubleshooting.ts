@@ -30,11 +30,11 @@ export const PROBLEMS: Problem[] = [
     keywords: ["missing", "access", "permission", "module", "menu", "redirect", "dashboard", "hidden", "sidebar"],
     solution: `Each person only sees the modules an administrator has given them. Opening any other page sends you back to the Dashboard. That's expected, not an error.
 
-1. Ask an administrator to open **Team Management** and give you the module you need (for example **Invoices** or **Documents**).
+1. Ask an administrator to open **Team management** and give you the module you need (for example **Invoices** or **Documents**).
 2. After they save, **sign out and sign in again**.
 3. Open the page from the menu.
 
-**Review Tasks** is only for reviewers. **Team Management, Service Packages, Logs and Firm Settings** are only for administrators.`,
+**Review tasks** is only for reviewers. **Team management, Service packages, Logs and Firm settings** are only for administrators.`,
   },
   {
     id: "sign-in-failed",
@@ -46,7 +46,7 @@ export const PROBLEMS: Problem[] = [
     solution: `1. Check you're using your **work email** and that Caps Lock is off.
 2. On the sign-in page, click **Forgot password** and enter your email.
 3. Open the email (check **Spam**) and click the link, then choose a new password.
-4. If no email arrives within a few minutes, ask an administrator to reset your password from **Team Management**.`,
+4. If no email arrives within a few minutes, ask an administrator to reset your password from **Team management**.`,
   },
   {
     id: "reset-link",
@@ -57,7 +57,7 @@ export const PROBLEMS: Problem[] = [
     solution: `1. Reset links work **once** and only for a short time. Request a **new** link from **Forgot password**.
 2. Open only the **latest** email. Older links stop working.
 3. Open the link in the **same browser** you'll sign in with.
-4. Still not working? An administrator can set a new password for you from **Team Management**.`,
+4. Still not working? An administrator can set a new password for you from **Team management**.`,
   },
   {
     id: "deactivated",
@@ -65,7 +65,7 @@ export const PROBLEMS: Problem[] = [
     area: "Access",
     phrases: ["account deactivated", "access disabled", "account blocked", "account band ho gaya"],
     keywords: ["deactivated", "disabled", "blocked", "inactive"],
-    solution: `Your access has been switched off by an administrator, for example when someone leaves the firm. Ask an administrator to reactivate you in **Team Management**, then sign in again.`,
+    solution: `Your access has been switched off by an administrator, for example when someone leaves the firm. Ask an administrator to reactivate you in **Team management**, then sign in again.`,
   },
   {
     id: "blank-page",
@@ -118,7 +118,7 @@ If your message isn't listed, copy it exactly or attach a screenshot.`,
     pages: ["/tasks"],
     phrases: ["add task button missing", "how to create task", "cant create task", "new task kaise banaye", "add task nahi dikh raha"],
     keywords: ["add", "create", "new", "task", "button"],
-    solution: `1. Open **Tasks & Compliance** and click **Add Task**.
+    solution: `1. Open **Tasks & compliance** and click **Add Task**.
 2. Choose the work in **Task**, enter the **Period**, and choose the **Client**.
 3. Deadlines and the estimate fill in from the Task List. Choose the assignee and reviewer.
 4. Click **Create Task**.`,
@@ -132,7 +132,7 @@ If your message isn't listed, copy it exactly or attach a screenshot.`,
     pages: ["/tasks"],
     phrases: ["task not in list", "cant find task title", "task name not available", "custom task title", "task list mein nahi hai"],
     keywords: ["task", "list", "title", "name", "dropdown", "missing", "type"],
-    solution: `1. In **Tasks & Compliance**, click **Task List**.
+    solution: `1. In **Tasks & compliance**, click **Task List**.
 2. Add the task: name, category, recurrence and, if it has a fixed due date, **Statutory Day**, **Of Which Month** and **Internal Buffer**.
 3. Click **Add to List**. It now appears in the **Task** dropdown.`,
   },
@@ -221,7 +221,7 @@ Administrators and reviewers can use **Transfer** to move it straight away. Appr
     pages: ["/tasks"],
     phrases: ["which task first", "work order", "my queue", "priority order", "pehle kaunsa task", "what should i do next"],
     keywords: ["queue", "order", "first", "priority", "next"],
-    solution: `1. In **Tasks & Compliance**, click **Queue**.
+    solution: `1. In **Tasks & compliance**, click **Queue**.
 2. Work from **#1** downwards. The order is either set by your administrator or follows the nearest deadline.
 3. Click **Start** on a task to begin. The timer starts automatically.`,
   },
@@ -232,7 +232,7 @@ Administrators and reviewers can use **Transfer** to move it straight away. Appr
     pages: ["/tasks"],
     phrases: ["cant find my task", "task disappeared", "task not showing", "assigned task not visible", "mera task nahi dikh raha", "task gayab"],
     keywords: ["find", "missing", "disappeared", "task", "visible", "lost", "search"],
-    solution: `1. In **Tasks & Compliance**, choose **My Work**.
+    solution: `1. In **Tasks & compliance**, choose **My Work**.
 2. Click **Clear filters** if any filters are set.
 3. Search by the task name, period (e.g. "Oct 2026") or client.
 4. Check your notifications. The task may have been **transferred** to someone else.
@@ -249,7 +249,7 @@ Approved tasks show with the Approved stage. If it's still missing, it may have 
 
 To come back to a popup later, click **Remind me later** and choose **In 1 hour**, **In 3 hours** or **Tomorrow 10 AM**.
 
-Administrators can change the reminder rules under **Tasks & Compliance → Reminders**.`,
+Administrators can change the reminder rules under **Tasks & compliance → Reminders**.`,
   },
 
   /* ---------------- Time ---------------- */
@@ -279,7 +279,7 @@ Administrators can change the reminder rules under **Tasks & Compliance → Remi
     phrases: [],
     keywords: [],
     solution: `1. Refresh the page. The timer bar at the **bottom left** may simply not have updated yet.
-2. If there's still no bar, open **Time Tracking** and start a timer for the task manually.
+2. If there's still no bar, open **Time tracking** and start a timer for the task manually.
 3. Note the task name and roughly when you clicked Start.`,
   },
   {
@@ -291,7 +291,7 @@ Administrators can change the reminder rules under **Tasks & Compliance → Remi
     keywords: [],
     solution: `The timer starts only when **the assigned person** starts the task. If an administrator or reviewer changed the stage, no timer starts for you.
 
-1. Open **Time Tracking** and start the timer for the task yourself, or
+1. Open **Time tracking** and start the timer for the task yourself, or
 2. Add the time later with **Manual Entry** (or in **Review my day**).`,
   },
   {
@@ -301,7 +301,7 @@ Administrators can change the reminder rules under **Tasks & Compliance → Remi
     hidden: true,
     phrases: [],
     keywords: [],
-    solution: `1. Open **Tasks & Compliance → My Work** (or **Queue**).
+    solution: `1. Open **Tasks & compliance → My Work** (or **Queue**).
 2. Open a task assigned to you and click **Start Work**. In the Queue, click **Start**.
 3. A green bar appears at the **bottom left** with the task and running time.
 4. When you finish, click **Submit for Review**. The time is saved automatically.`,
@@ -313,7 +313,7 @@ Administrators can change the reminder rules under **Tasks & Compliance → Remi
     phrases: ["forgot to stop timer", "timer running all night", "timer still running", "wrong hours from timer", "timer band karna bhool gaya", "timer kept running"],
     keywords: ["forgot", "stop", "running", "night", "timer", "wrong", "hours"],
     solution: `1. Click **Stop** on the timer bar (bottom left).
-2. Open **Time Tracking → Review my day**, correct the minutes on that entry, and click **Save**.
+2. Open **Time tracking → Review my day**, correct the minutes on that entry, and click **Save**.
 
 You're also protected automatically: the timer pauses after **30 minutes** with no activity, and anything left running is stopped overnight and marked **Check** for you to review.`,
   },
@@ -325,11 +325,11 @@ You're also protected automatically: the timer pauses after **30 minutes** with 
     phrases: ["edit time entry", "wrong time logged", "change hours", "delete time entry", "correct timesheet", "time galat hai", "fix my hours"],
     keywords: ["edit", "correct", "change", "delete", "time", "entry", "hours", "timesheet", "wrong"],
     solution: `**Today's entries:**
-1. Open **Time Tracking** and click **Review my day**.
+1. Open **Time tracking** and click **Review my day**.
 2. Change the hours, minutes or description, then click **Save** on that row (or the bin icon to delete).
 3. Click **Confirm my day** when everything is right.
 
-**Earlier entries (last 7 days):** edit or delete them from the time log list in **Time Tracking**. Entries changed this way are marked **Edited**.`,
+**Earlier entries (last 7 days):** edit or delete them from the time log list in **Time tracking**. Entries changed this way are marked **Edited**.`,
   },
   {
     id: "time-locked",
@@ -339,7 +339,7 @@ You're also protected automatically: the timer pauses after **30 minutes** with 
     staffNote: "Time older than 7 days is locked so timesheets stay reliable. Ask an administrator to make the change for you.",
     phrases: ["older than 7 days are locked", "cant edit old time", "time locked", "old entry locked", "purani entry"],
     keywords: ["locked", "old", "seven", "days", "week", "time"],
-    solution: `Administrators can still change older entries. Open **Time Tracking**, find the entry in the log, and edit or delete it.`,
+    solution: `Administrators can still change older entries. Open **Time tracking**, find the entry in the log, and edit or delete it.`,
   },
   {
     id: "time-24h",
@@ -349,7 +349,7 @@ You're also protected automatically: the timer pauses after **30 minutes** with 
     keywords: ["24", "hours", "exceed", "limit", "day"],
     solution: `A single day can't have more than 24 hours logged, usually because of a forgotten timer.
 
-1. Open **Time Tracking → Review my day** (or the time log for that date).
+1. Open **Time tracking → Review my day** (or the time log for that date).
 2. Fix or delete the entry that's too long.
 3. Add your new entry again.`,
   },
@@ -370,7 +370,7 @@ You're also protected automatically: the timer pauses after **30 minutes** with 
     area: "Time",
     phrases: ["your day popup", "confirm my day", "review my day", "day review popup", "evening popup"],
     keywords: ["day", "review", "confirm", "evening", "timesheet"],
-    solution: `After **6:30 PM** you're asked once to check today's time: fix any minutes, delete mistakes, add work you forgot, then click **Confirm my day**. You can also open it anytime from **Time Tracking → Review my day**.`,
+    solution: `After **6:30 PM** you're asked once to check today's time: fix any minutes, delete mistakes, add work you forgot, then click **Confirm my day**. You can also open it anytime from **Time tracking → Review my day**.`,
   },
 
   /* ---------------- Performance ---------------- */
@@ -495,7 +495,7 @@ Numbers are given only when an invoice is **issued**, so drafts don't use up num
     staffNote: ASK_ADMIN,
     phrases: ["engagement link not working", "client cant accept proposal", "proposal expired", "accept link invalid", "engagement letter link"],
     keywords: ["engagement", "proposal", "link", "accept", "expired", "invalid"],
-    solution: `1. Open **Service Packages → Proposals & Engagement Letters** and check the status.
+    solution: `1. Open **Service packages → Proposals & Engagement Letters** and check the status.
 2. **Expired**, **Withdrawn** or **Declined** letters can't be accepted. Create a new proposal.
 3. For a valid letter, click the **email** icon to resend, or the **WhatsApp** icon to send the link again.
 4. If the client changed even one character of the link, it shows "This link isn't valid", so ask them to use the original link.`,
@@ -508,7 +508,7 @@ Numbers are given only when an invoice is **issued**, so drafts don't use up num
     staffNote: ASK_ADMIN,
     phrases: ["bill not generated", "monthly bill missing", "subscription invoice not created", "billing not working", "auto bill nahi bana"],
     keywords: ["bill", "billing", "monthly", "subscription", "generate", "missing", "auto"],
-    solution: `1. Open **Service Packages → Billing**.
+    solution: `1. Open **Service packages → Billing**.
 2. Check the client's **Billing** switch is **On**. Older subscriptions start Off.
 3. Check the **Next bill** date. Bills are created on the bill day after the period ends (e.g. 5 Nov for October).
 4. Look under **Subscription bills**. New bills are **drafts** until you click **Approve & send**.
@@ -524,7 +524,7 @@ Numbers are given only when an invoice is **issued**, so drafts don't use up num
     keywords: ["unassigned", "assign", "onboard", "package", "nobody"],
     solution: `Tasks are assigned to the service's default person, otherwise to the client's relationship manager.
 
-1. Open **Tasks & Compliance**, choose the **Unassigned** filter in the staff dropdown, and assign each task.
+1. Open **Tasks & compliance**, choose the **Unassigned** filter in the staff dropdown, and assign each task.
 2. To prevent it next time, set a relationship manager on the client, or a default person on each package service.`,
   },
   {
@@ -536,7 +536,7 @@ Numbers are given only when an invoice is **issued**, so drafts don't use up num
     pages: ["/calendar"],
     phrases: ["create tasks for all clients", "bulk tasks", "calendar create client tasks", "same task many clients"],
     keywords: ["bulk", "many", "all", "clients", "calendar", "create"],
-    solution: `1. Open **Compliance Calendar** and click the statutory event.
+    solution: `1. Open **Compliance calendar** and click the statutory event.
 2. Click **Create client tasks**.
 3. Tick the clients (search by name or GSTIN), check the dates, and confirm.`,
   },
@@ -544,7 +544,7 @@ Numbers are given only when an invoice is **issued**, so drafts don't use up num
   /* ---------------- Inbox & notifications ---------------- */
   {
     id: "inbox-missing",
-    title: "Emails aren't showing in the Unified Inbox",
+    title: "Emails aren't showing in the Unified inbox",
     area: "Inbox",
     escalate: true,
     pages: ["/inbox"],

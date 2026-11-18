@@ -108,9 +108,10 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <section className="rounded-xl border border-border bg-surface shadow-sm">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <header className={`flex items-center justify-between gap-3 px-4 py-3 ${list.length > 0 ? "border-b border-border" : ""}`}>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
           <Megaphone className="h-4 w-4 text-navy" /> Announcements
+          {list.length === 0 && <span className="text-xs font-normal text-text-muted">· none active</span>}
         </h3>
         {isAdmin && (
           <button
@@ -126,10 +127,9 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
         )}
       </header>
 
+      {list.length > 0 && (
       <div className="space-y-2 p-4">
-        {list.length === 0 ? (
-          <p className="text-center text-xs text-text-muted">No active announcements. Post one to inform the whole team.</p>
-        ) : (
+        {(
           list.map((a) => {
             const myAck = acks.some((k) => k.announcement_id === a.id && k.user_id === me);
             const ackedIds = new Set(acks.filter((k) => k.announcement_id === a.id).map((k) => k.user_id));
@@ -201,6 +201,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
           })
         )}
       </div>
+      )}
 
       {composeOpen && (
         <Modal

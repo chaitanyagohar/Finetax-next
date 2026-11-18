@@ -60,7 +60,9 @@ test("manual time entry opens", async ({ page }) => {
 test("inbox attachment search looks beyond the latest files", async ({ page }) => {
   await signIn(page);
   await page.goto("/inbox", { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "New message" }).filter({ visible: true }).first().click();
+  const compose = page.getByRole("button", { name: /^(Compose|New message)$/ }).filter({ visible: true }).first();
+  test.skip(await compose.isDisabled(), "No mailbox connected in this firm");
+  await compose.click();
   await page.getByTitle("Attach an invoice, quotation or vault document").click();
   await expect(page.getByPlaceholder("Search all invoices, quotations and documents")).toBeVisible();
 });

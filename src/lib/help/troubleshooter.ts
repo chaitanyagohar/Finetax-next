@@ -105,7 +105,7 @@ function getIndex(list: Problem[]) {
   return cachedIndex;
 }
 
-/** Built-in problems plus answers saved from the Support Inbox (refreshed every minute). */
+/** Built-in problems plus answers saved from the Support inbox (refreshed every minute). */
 let dbCache: { at: number; list: Problem[] } | null = null;
 export async function loadProblems(admin: SupabaseClient): Promise<Problem[]> {
   if (!dbCache || Date.now() - dbCache.at > 60_000) {

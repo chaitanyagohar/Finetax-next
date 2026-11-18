@@ -548,7 +548,7 @@ export default function ReviewerQueuePage() {
           {/* ---------- Quality Analytics ---------- */}
           {activeTab === "analytics" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+              <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
                 {[
                   { label: "Approved", value: String(analytics.approved), sub: `Last ${ANALYTICS_DAYS} days`, icon: CheckCircle2, style: "bg-emerald-50 text-emerald-600", valueClass: "text-emerald-700" },
                   { label: "First-pass approval", value: `${analytics.firstPassRate}%`, sub: "Approved without any return", icon: Target, style: "bg-navy/10 text-navy", valueClass: "text-navy" },

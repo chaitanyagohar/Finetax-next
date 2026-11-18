@@ -10,7 +10,7 @@ export function contentSecurityPolicy(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseHosts = supabaseUrl
-    ? `${supabaseUrl} ${supabaseUrl.replace(/^https:\/\//, "wss://")}`
+    ? `${supabaseUrl} ${supabaseUrl.replace(/^http/, "ws")}`
     : "https://*.supabase.co wss://*.supabase.co";
 
   return [

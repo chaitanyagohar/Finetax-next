@@ -28,6 +28,7 @@ import {
   Send,
   Clock,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import PasswordInput from "@/components/ui/PasswordInput";
@@ -428,7 +429,7 @@ export default function TeamPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           { label: "Active", value: stats.active, icon: Users, style: "bg-navy/10 text-navy" },
           { label: "Invited", value: stats.invited, icon: Clock, style: "bg-amber-50 text-amber-600" },
@@ -476,9 +477,7 @@ export default function TeamPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading your team...
-          </div>
+          <ListSkeleton label="Loading your team" />
         ) : filteredTeam.length === 0 ? (
           <div className="p-10 text-center text-xs text-text-muted">{team.length === 0 ? "No one here yet. Invite your first team member." : "No one matches this view."}</div>
         ) : (

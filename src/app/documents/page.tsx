@@ -33,6 +33,7 @@ import ClientPicker from "@/components/ui/ClientPicker";
 import TaskPicker from "@/components/tasks/TaskPicker";
 import { formatDate, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 
 const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
 const BUCKET = "firm-documents";
@@ -442,7 +443,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           { label: "Documents", value: String(stats.total), sub: "In the vault", icon: Folder, style: "bg-navy/10 text-navy", valueClass: "text-navy" },
           { label: "Storage used", value: formatBytes(stats.storage), sub: "Across all files", icon: HardDrive, style: "bg-violet-50 text-violet-600", valueClass: "text-violet-700" },
@@ -511,9 +512,7 @@ export default function DocumentsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading document vault...
-          </div>
+          <ListSkeleton label="Loading document vault" />
         ) : filteredDocuments.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <Folder className="h-6 w-6 text-text-muted" />

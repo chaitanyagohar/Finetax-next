@@ -20,6 +20,7 @@ import {
   Receipt,
   ExternalLink,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Client } from "@/types/database";
@@ -585,7 +586,7 @@ export default function QuotationsPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div aria-busy={loading} className="kpi-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -684,9 +685,7 @@ export default function QuotationsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-xs text-text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading quotations...
-          </div>
+          <ListSkeleton label="Loading quotations" />
         ) : filteredQuotations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <FileText className="h-6 w-6 text-text-muted" />
@@ -695,7 +694,36 @@ export default function QuotationsPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per quotation (tap to open); the table starts at tablet width */}
+          <ul className="list-in divide-y divide-border md:hidden">
+            {filteredQuotations.map((q) => {
+              const st = statusOf(q);
+              const expired = isExpired(q);
+              const inv = invoiceByQuote[q.id];
+              return (
+                <li key={q.id}>
+                  <button type="button" onClick={() => openModal(q)} className="block w-full px-4 py-3 text-left text-xs transition hover:bg-surface-alt">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-text-main">{q.organisation || recipientOf(q)}</p>
+                        <p className="text-[11px] text-navy">
+                          {getQuoteNumber(q)} · {formatDate(getIsoDate(q.date) || q.created_at)}
+                        </p>
+                      </div>
+                      <p className="shrink-0 font-semibold">{formatINR(Number(q.total || 0))}</p>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[st] || STATUS_STYLES.Draft}`}>{st}</span>
+                      {expired && <span className="font-semibold text-rose-600">Expired</span>}
+                      {inv && <span className="text-violet-700">{inv.invoice_number ? `Invoice ${inv.invoice_number}` : "Draft invoice"}</span>}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -791,6 +819,7 @@ export default function QuotationsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
