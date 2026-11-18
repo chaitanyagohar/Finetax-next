@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
             ? `<p>${escapeHtml(message).replace(/\n/g, "<br/>")}</p>`
             : `<p>Thank you for considering us. Please find attached our engagement letter for <strong>${escapeHtml(pkg?.name || "professional services")}</strong>, setting out the scope of work, fees and terms.</p>`
         }
-        <p style="margin:22px 0"><a href="${link}" style="background:#10233f;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">Review &amp; accept online</a></p>
+        <p style="margin:22px 0"><a href="${link}" style="background:#0f172a;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">Review &amp; accept online</a></p>
         <p style="font-size:12px;color:#64748b">Or open this link: <a href="${link}">${link}</a><br/>You can also sign the attached letter and send us a copy.${validity}</p>
         <p>Regards,<br/><strong>${escapeHtml(firmName)}</strong></p></div>`,
       text: `Engagement letter ${proposal.number} attached. Review and accept online: ${link}`,

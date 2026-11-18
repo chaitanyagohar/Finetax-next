@@ -445,9 +445,9 @@ export default function ComplianceCalendarPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <CalendarIcon className="h-5 w-5 text-navy" /> Compliance & workload calendar
           </h2>
           <p className="mt-1 text-xs text-text-muted">Statutory due dates, task deadlines and team workload in one view.</p>
@@ -497,7 +497,7 @@ export default function ComplianceCalendarPage() {
           <button type="button" onClick={() => setCursor(new Date(year, month - 1, 1))} className="rounded-lg border border-border p-1.5 text-navy transition hover:bg-surface-alt" aria-label="Previous month">
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <h3 className="min-w-[150px] text-center text-base font-bold text-navy">
+          <h3 className="min-w-[150px] text-center text-base font-semibold text-navy">
             {MONTH_NAMES[month]} {year}
           </h3>
           <button type="button" onClick={() => setCursor(new Date(year, month + 1, 1))} className="rounded-lg border border-border p-1.5 text-navy transition hover:bg-surface-alt" aria-label="Next month">
@@ -535,7 +535,7 @@ export default function ComplianceCalendarPage() {
         /* Month grid */
         <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-sm">
           <div className="min-w-[760px]">
-            <div className="grid grid-cols-7 border-b border-border bg-surface-alt py-2 text-center text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            <div className="grid grid-cols-7 border-b border-border bg-surface-alt py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-text-muted">
               {WEEKDAYS.map((d) => (
                 <div key={d}>{d}</div>
               ))}
@@ -558,15 +558,15 @@ export default function ComplianceCalendarPage() {
                     className={`min-h-[112px] space-y-1 border-b border-r border-border p-1.5 text-left align-top transition ${isToday ? "bg-navy/5" : "hover:bg-surface-alt"}`}
                   >
                     <div className="mb-1 flex items-center justify-between">
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${isToday ? "bg-navy text-white" : "text-text-main"}`}>{i + 1}</span>
-                      {items.length > 0 && <span className="rounded-full bg-surface-alt px-1.5 text-[9px] font-bold text-text-muted">{items.length}</span>}
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${isToday ? "bg-navy text-white" : "text-text-main"}`}>{i + 1}</span>
+                      {items.length > 0 && <span className="rounded-full bg-surface-alt px-1.5 text-[9px] font-semibold text-text-muted">{items.length}</span>}
                     </div>
                     {visible.map((item) => (
                       <div key={item.id} className={`truncate rounded border px-1 py-0.5 text-[10px] ${chipClass(item)}`} title={item.title}>
                         {chipPrefix(item)} {item.title}
                       </div>
                     ))}
-                    {hidden > 0 && <div className="rounded bg-navy/10 py-0.5 text-center text-[9px] font-bold text-navy">+{hidden} more</div>}
+                    {hidden > 0 && <div className="rounded bg-navy/10 py-0.5 text-center text-[9px] font-semibold text-navy">+{hidden} more</div>}
                   </button>
                 );
               })}
@@ -614,7 +614,7 @@ export default function ComplianceCalendarPage() {
           <div className="flex h-full w-full max-w-md flex-col bg-surface text-xs shadow-2xl animate-slide-in-right" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-                <h3 className="flex items-center gap-2 text-base font-bold text-navy">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-navy">
                   <Clock className="h-4 w-4" /> {longDate(selectedDayDate)}
                 </h3>
                 <p className="text-[11px] text-text-muted">{selectedItems.length} item{selectedItems.length === 1 ? "" : "s"} on this day</p>
@@ -627,7 +627,7 @@ export default function ComplianceCalendarPage() {
             <div className="flex-1 space-y-5 overflow-y-auto p-5">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Statutory Events ({dayEvents.length})</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-600">Statutory Events ({dayEvents.length})</span>
                   {isAdmin && (
                     <button type="button" onClick={() => openEventModal(undefined, selectedDayDate)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy hover:underline">
                       <Plus className="h-3 w-3" /> Add
@@ -640,8 +640,8 @@ export default function ComplianceCalendarPage() {
                   dayEvents.map((item) => (
                     <div key={item.id} className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-bold">📌 {item.title}</p>
-                        <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold uppercase">{item.category}</span>
+                        <p className="font-semibold">📌 {item.title}</p>
+                        <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase">{item.category}</span>
                       </div>
                       {item.data.description && <p className="text-[11px]">{item.data.description}</p>}
                       {isAdmin && (
@@ -667,18 +667,18 @@ export default function ComplianceCalendarPage() {
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Statutory Deadlines on Tasks ({dayStatutory.length})</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Statutory Deadlines on Tasks ({dayStatutory.length})</span>
                 {dayStatutory.length === 0 ? <p className="text-[11px] italic text-text-muted">None.</p> : dayStatutory.map((item) => <TaskRow key={item.id} item={item} />)}
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-navy">Internal Deadlines ({dayInternal.length})</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-navy">Internal Deadlines ({dayInternal.length})</span>
                 {dayInternal.length === 0 ? <p className="text-[11px] italic text-text-muted">None.</p> : dayInternal.map((item) => <TaskRow key={item.id} item={item} />)}
               </div>
             </div>
 
             <div className="border-t border-border p-4">
-              <Link href="/tasks" className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light">
+              <Link href="/tasks" className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-semibold text-white transition hover:bg-navy-light">
                 <CheckSquare className="h-4 w-4" /> Open task board <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -689,7 +689,7 @@ export default function ComplianceCalendarPage() {
       {/* ================= Add / Edit Statutory Event ================= */}
       {eventModalOpen && (
         <Modal
-          title={editingEvent ? "Edit Statutory Deadline" : "Add Statutory Deadline"}
+          title={editingEvent ? "Edit statutory deadline" : "Add statutory deadline"}
           onClose={() => !eventSaving && setEventModalOpen(false)}
           maxWidth="max-w-md"
           footer={
@@ -701,7 +701,7 @@ export default function ComplianceCalendarPage() {
                 type="submit"
                 form="event-form"
                 disabled={eventSaving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
               >
                 {eventSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
               </button>
@@ -782,7 +782,7 @@ export default function ComplianceCalendarPage() {
                   type="button"
                   onClick={generateTasks}
                   disabled={genSaving || genClients.size === 0}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
                 >
                   {genSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create {genClients.size || ""} Tasks
                 </button>

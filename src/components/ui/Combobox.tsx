@@ -125,7 +125,7 @@ export default function Combobox({
       </button>
 
       {open && (
-        <div className="absolute left-0 z-[80] mt-1 w-full min-w-[260px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+        <div className="absolute left-0 z-[80] mt-1 w-full origin-top animate-pop-in min-w-[260px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
           <div className="relative border-b border-border p-2">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
             <input

@@ -337,9 +337,9 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-24">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Building2 className="h-5 w-5 text-navy" /> Firm settings & system defaults
           </h2>
           <p className="mt-1 text-xs text-text-muted">
@@ -672,7 +672,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => handleSave()}
                 disabled={saving || hasErrors}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Save Settings
@@ -698,7 +698,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => submit(adminPassword)}
                 disabled={saving || !adminPassword}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Confirm & Save

@@ -99,7 +99,7 @@ function Modal({ title, subtitle, onClose, children, maxWidth = "max-w-xl" }: { 
       <div className={`my-8 w-full ${maxWidth} rounded-xl border border-border bg-surface shadow-2xl animate-scale-in`} role="dialog" aria-modal="true">
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-base font-bold text-text-main">{title}</h3>
+            <h3 className="text-base font-semibold text-text-main">{title}</h3>
             {subtitle && <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>}
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-1 text-text-muted transition hover:bg-surface-alt hover:text-text-main" aria-label="Close">
@@ -404,9 +404,9 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <UserCheck className="h-5 w-5 text-navy" /> Team
           </h2>
           <p className="mt-1 text-xs text-text-muted">Invite your staff, choose what each person can open, and manage reviewers and sign-in security.</p>
@@ -441,7 +441,7 @@ export default function TeamPage() {
             <div key={s.label} className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 shadow-sm">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{s.label}</p>
-                <p className="mt-1 text-2xl font-bold tracking-tight text-text-main">{s.value}</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-text-main">{s.value}</p>
               </div>
               <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${s.style}`}>
                 <Icon className="h-4 w-4" />
@@ -501,13 +501,13 @@ export default function TeamPage() {
                     <tr key={m.id} className="transition hover:bg-surface-alt">
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${st === "active" ? "bg-navy text-white" : "bg-border text-text-muted"}`}>
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${st === "active" ? "bg-navy text-white" : "bg-border text-text-muted"}`}>
                             {getInitials(m.name)}
                           </div>
                           <div className="min-w-0">
                             <p className="flex items-center gap-1.5 text-sm font-semibold text-navy">
                               <span className="truncate">{m.name}</span>
-                              {self && <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-bold uppercase text-accent">You</span>}
+                              {self && <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase text-accent">You</span>}
                             </p>
                             <p className="truncate text-[11px] text-text-muted">{m.email}</p>
                             {m.phone && (
@@ -519,24 +519,24 @@ export default function TeamPage() {
                         </div>
                       </td>
                       <td>
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${m.role === "admin" ? "border-accent/30 bg-accent-soft text-accent" : "border-border bg-surface-alt text-text-main"}`}>
+                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${m.role === "admin" ? "border-accent/30 bg-accent-soft text-accent" : "border-border bg-surface-alt text-text-main"}`}>
                           {m.role === "admin" ? "Admin" : "Staff"}
                         </span>
                         {m.is_reviewer && m.role !== "admin" && (
-                          <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                          <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                             <Shield className="h-3 w-3" /> Reviewer
                           </span>
                         )}
                         <p className="mt-1 text-[11px] text-text-muted">{m.designation || "—"}</p>
                       </td>
                       <td>
-                        {st === "active" && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Active</span>}
+                        {st === "active" && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Active</span>}
                         {st === "invited" && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                             <Clock className="h-3 w-3" /> Invited {formatDate(m.joined_at)}
                           </span>
                         )}
-                        {st === "disabled" && <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600">No access</span>}
+                        {st === "disabled" && <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600">No access</span>}
                         {st === "active" && m.last_sign_in_at && <p className="mt-1 text-[10px] text-text-muted">Last sign-in {formatDate(m.last_sign_in_at)}</p>}
                       </td>
                       <td>
@@ -687,7 +687,7 @@ export default function TeamPage() {
             {role !== "admin" && (
               <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/70 p-3">
                 <div>
-                  <p className="flex items-center gap-1 text-xs font-bold text-navy">
+                  <p className="flex items-center gap-1 text-xs font-semibold text-navy">
                     <Shield className="h-3.5 w-3.5 text-blue-600" /> Can review work
                   </p>
                   <p className="text-[11px] text-text-muted">Approves submitted tasks or sends them back with feedback.</p>
@@ -723,7 +723,7 @@ export default function TeamPage() {
                         className={`flex items-start justify-between gap-2 rounded-lg border p-2.5 text-left transition ${checked ? "border-navy bg-navy/5" : "border-border bg-surface hover:bg-surface-alt"}`}
                       >
                         <div>
-                          <p className="text-xs font-bold text-navy">{m.label}</p>
+                          <p className="text-xs font-semibold text-navy">{m.label}</p>
                           <p className="text-[10px] text-text-muted">{m.desc}</p>
                         </div>
                         <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? "border-navy bg-navy text-white" : "border-border bg-surface"}`}>
@@ -740,7 +740,7 @@ export default function TeamPage() {
               <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60">
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60">
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : editingMember ? <Check className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
                 {editingMember ? "Save changes" : "Send invitation"}
               </button>
@@ -761,7 +761,7 @@ export default function TeamPage() {
               type="button"
               onClick={runAction}
               disabled={actionBusy}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white transition disabled:opacity-60 ${CONFIRM_TEXT[confirm.action].danger ? "bg-danger hover:opacity-90" : "bg-navy hover:bg-navy-light"}`}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-60 ${CONFIRM_TEXT[confirm.action].danger ? "bg-danger hover:opacity-90" : "bg-navy hover:bg-navy-light"}`}
             >
               {actionBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {CONFIRM_TEXT[confirm.action].button}
@@ -852,7 +852,7 @@ export default function TeamPage() {
                 {secSuccess ? "Done" : "Cancel"}
               </button>
               {!secSuccess && (
-                <button type="submit" disabled={secSubmitting} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60">
+                <button type="submit" disabled={secSubmitting} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60">
                   {secSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {securityMode === "set_password" ? "Update password" : securityMode === "send_reset_link" ? "Send reset link" : "Update email"}
                 </button>
@@ -875,7 +875,7 @@ export default function TeamPage() {
               <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="submit" disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60">
+              <button type="submit" disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60">
                 {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete permanently
               </button>
             </div>

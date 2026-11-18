@@ -131,19 +131,19 @@ export default function ChatPage() {
         type="button"
         onClick={() => open(c.id)}
         className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition ${
-          isSel ? "bg-navy text-white" : u?.unread ? "font-bold text-text-main hover:bg-surface-alt" : "text-text-muted hover:bg-surface-alt"
+          isSel ? "bg-navy text-white" : u?.unread ? "font-semibold text-text-main hover:bg-surface-alt" : "text-text-muted hover:bg-surface-alt"
         }`}
       >
         {Icon ? (
           <Icon className="h-3.5 w-3.5 shrink-0" />
         ) : (
-          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold ${isSel ? "bg-white/20" : "bg-navy/10 text-navy"}`}>
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ${isSel ? "bg-white/20" : "bg-navy/10 text-navy"}`}>
             {getInitials(labelOf(c))}
           </span>
         )}
         <span className="min-w-0 flex-1 truncate">{labelOf(c)}</span>
-        {u?.mentions ? <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">@{u.mentions}</span> : null}
-        {u?.unread && !isSel ? <span className={`rounded-full px-1.5 text-[10px] font-bold ${isSel ? "bg-white/20" : "bg-navy text-white"}`}>{u.unread}</span> : null}
+        {u?.mentions ? <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold text-white">@{u.mentions}</span> : null}
+        {u?.unread && !isSel ? <span className={`rounded-full px-1.5 text-[10px] font-semibold ${isSel ? "bg-white/20" : "bg-navy text-white"}`}>{u.unread}</span> : null}
       </button>
     );
   }
@@ -171,7 +171,7 @@ export default function ChatPage() {
       <aside className={`w-full shrink-0 flex-col border-r border-border bg-surface-alt/40 lg:flex lg:w-72 ${selected ? "hidden" : "flex"}`}>
         <div className="space-y-2 border-b border-border p-3">
           <div className="flex items-center justify-between">
-            <h1 className="flex items-center gap-2 text-base font-bold text-text-main">
+            <h1 className="flex items-center gap-2 text-base font-semibold text-text-main">
               <MessagesSquare className="h-4 w-4 text-navy" /> Team chat
             </h1>
             <button type="button" onClick={() => setModal("dm")} className="rounded-md p-1.5 text-navy hover:bg-surface" title="New message">
@@ -193,7 +193,7 @@ export default function ChatPage() {
             <>
               <section>
                 <div className="flex items-center justify-between px-2 pb-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Channels</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Channels</p>
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setModal("browse")} className="text-[10px] font-semibold text-navy hover:underline">
                       Browse
@@ -209,7 +209,7 @@ export default function ChatPage() {
               </section>
               <section>
                 <div className="flex items-center justify-between px-2 pb-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Direct messages</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Direct messages</p>
                   <button type="button" onClick={() => setModal("dm")} className="rounded p-0.5 text-navy hover:bg-surface" title="New message">
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -218,7 +218,7 @@ export default function ChatPage() {
               </section>
               {threads.length > 0 && (
                 <section>
-                  <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">Task discussions</p>
+                  <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Task discussions</p>
                   {threads.map((c) => (
                     <Item key={c.id} c={c} />
                   ))}
@@ -239,7 +239,7 @@ export default function ChatPage() {
                   <ArrowLeft className="h-4 w-4" />
                 </button>
                 <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 truncate text-sm font-bold text-text-main">
+                  <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-text-main">
                     {current.kind === "channel" && (current.is_private ? <Lock className="h-3.5 w-3.5" /> : <Hash className="h-3.5 w-3.5" />)}
                     {labelOf(current)}
                   </p>
@@ -413,7 +413,7 @@ function PeoplePicker({ people, onPick }: { people: ChatPerson[]; onPick: (p: Ch
         {list.map((p) => (
           <li key={p.id}>
             <button type="button" onClick={() => onPick(p)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-surface-alt">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold text-navy">{getInitials(p.name)}</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold text-navy">{getInitials(p.name)}</span>
               {p.name}
             </button>
           </li>
@@ -453,7 +453,7 @@ function NewChannelModal({ people, onClose, onCreated }: { people: ChatPerson[];
           <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold">
             Cancel
           </button>
-          <button type="button" onClick={create} disabled={busy || name.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+          <button type="button" onClick={create} disabled={busy || name.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create channel
           </button>
         </div>

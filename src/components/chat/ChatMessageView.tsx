@@ -124,13 +124,13 @@ export default function ChatMessageView({
       )}
       <div className="w-8 shrink-0">
         {showHeader && (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold text-navy">{getInitials(sender)}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold text-navy">{getInitials(sender)}</span>
         )}
       </div>
       <div className="min-w-0 flex-1">
         {showHeader && (
           <p className="text-xs">
-            <span className="font-bold text-text-main">{sender}</span>
+            <span className="font-semibold text-text-main">{sender}</span>
             <span className="ml-2 text-[10px] text-text-muted">{timeLabel(m.created_at)}</span>
           </p>
         )}

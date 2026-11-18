@@ -188,7 +188,7 @@ function FakeQr({ seed, size = 60 }: { seed: string; size?: number }) {
     </g>
   );
   return (
-    <svg viewBox={`0 0 ${n} ${n}`} width={size} height={size} shapeRendering="crispEdges" fill="#10233f" aria-hidden="true">
+    <svg viewBox={`0 0 ${n} ${n}`} width={size} height={size} shapeRendering="crispEdges" fill="#0f172a" aria-hidden="true">
       {cells}
       {finder(0, 0)}
       {finder(n - 7, 0)}
@@ -435,7 +435,7 @@ function FirmSheet({
   return (
     <div className={`ob-sheet relative min-h-[560px] rounded-sm py-8 pl-16 pr-8 ${stamped ? "ob-thud" : "ob-sheet-in"}`}>
       {/* Letterhead */}
-      <p className="text-xl font-extrabold tracking-tight text-navy">{form.firm_name || "Your firm's name"}</p>
+      <p className="text-lg font-semibold tracking-tight text-navy">{form.firm_name || "Your firm's name"}</p>
       <p className="mt-1 min-h-[1rem] text-xs text-slate-500">{form.address || "Address"}</p>
       <p className="text-[11px] text-slate-500">
         {[form.gstin && `GSTIN ${form.gstin}`, form.pan && `PAN ${form.pan}`].filter(Boolean).join("     ") || "GSTIN and PAN"}
@@ -448,7 +448,7 @@ function FirmSheet({
       {step >= 2 ? (
         <div key="invoice" className="ob-print mt-6 text-[12px] text-slate-700">
           <div className="flex items-baseline justify-between">
-            <p className="text-base font-bold text-navy">Tax invoice</p>
+            <p className="text-base font-semibold text-navy">Tax invoice</p>
             <p className="tabular-nums">
               <span className="font-semibold text-navy">{sampleNumber}</span>
               <span className="ml-3 text-slate-500">{invoiceDate}</span>
@@ -475,8 +475,8 @@ function FirmSheet({
                 <td className="text-right tabular-nums text-slate-500">{money(tax / 2)}</td>
               </tr>
               <tr className="border-b-[3px] border-double border-slate-400">
-                <td className="py-1.5 font-bold text-navy">Total</td>
-                <td className="py-1.5 text-right font-bold tabular-nums text-navy">{money(base + tax)}</td>
+                <td className="py-1.5 font-semibold text-navy">Total</td>
+                <td className="py-1.5 text-right font-semibold tabular-nums text-navy">{money(base + tax)}</td>
               </tr>
             </tbody>
           </table>
@@ -511,7 +511,7 @@ function FirmSheet({
       {/* Services appear as they're ticked */}
       {step >= 3 && services.length > 0 && (
         <div className="mt-7 text-[12px]">
-          <p className="font-bold text-navy">Services we handle</p>
+          <p className="font-semibold text-navy">Services we handle</p>
           <ul className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
             {services.map((s) => (
               <li key={s} className="ob-pop flex items-center gap-1.5 text-slate-700">
@@ -529,7 +529,7 @@ function FirmSheet({
             <path
               d="M4 30 C 18 4, 32 6, 27 26 S 46 38, 56 18 S 78 6, 74 26 S 96 36, 108 16 L 124 12"
               fill="none"
-              stroke="#10233f"
+              stroke="#0f172a"
               strokeWidth="2"
               strokeLinecap="round"
               className="ob-draw"
@@ -715,7 +715,7 @@ export default function SetupWizardPage() {
       <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--ob-desk)] p-6">
         <div className="ob-rise max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <DueskLogo size={32} />
-          <p className="mt-4 text-lg font-bold text-navy">Firm setup is for administrators</p>
+          <p className="mt-4 text-lg font-semibold text-navy">Firm setup is for administrators</p>
           <p className="mt-2 text-sm text-slate-600">Your firm&apos;s administrator has already set things up.</p>
           <Link href="/" className="mt-6 inline-block rounded-lg bg-navy px-5 py-2.5 text-sm font-semibold text-white">
             Go to dashboard
@@ -764,7 +764,7 @@ export default function SetupWizardPage() {
             <div key={step} className={dir === "forward" ? "ob-rise" : "ob-slide-left"}>
               {step === 0 && (
                 <section>
-                  <h1 className="text-4xl font-bold leading-tight tracking-tight text-navy">Let&apos;s set up {orgName}</h1>
+                  <h1 className="text-4xl font-semibold leading-tight tracking-tight text-navy">Let&apos;s set up {orgName}</h1>
                   <p className="mt-4 max-w-md text-base leading-relaxed text-slate-600">
                     Answer a few questions on this side. Your letterhead, your first invoice and your services take shape on the right, exactly as clients will see them.
                   </p>
@@ -795,7 +795,7 @@ export default function SetupWizardPage() {
               {step === 1 && (
                 <section className="space-y-5">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-navy">Your firm</h2>
+                    <h2 className="text-3xl font-semibold tracking-tight text-navy">Your firm</h2>
                     <p className="mt-1 text-sm text-slate-600">These details print on every invoice, quotation and engagement letter.</p>
                   </div>
                   <Field label="Firm name">
@@ -848,7 +848,7 @@ export default function SetupWizardPage() {
               {step === 2 && (
                 <section className="space-y-5">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-navy">Billing</h2>
+                    <h2 className="text-3xl font-semibold tracking-tight text-navy">Billing</h2>
                     <p className="mt-1 text-sm text-slate-600">Watch the invoice on the right as you fill these in.</p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -904,7 +904,7 @@ export default function SetupWizardPage() {
               {step === 3 && (
                 <section className="space-y-7">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-navy">Your practice</h2>
+                    <h2 className="text-3xl font-semibold tracking-tight text-navy">Your practice</h2>
                     <p className="mt-1 text-sm text-slate-600">This tailors what Duesk shows you first. It doesn&apos;t limit anything.</p>
                   </div>
                   <div>
@@ -937,7 +937,7 @@ export default function SetupWizardPage() {
               {step === 4 && (
                 <section className="space-y-6">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-navy">Compare</h2>
+                    <h2 className="text-3xl font-semibold tracking-tight text-navy">Compare</h2>
                     <p className="mt-1 text-sm text-slate-600">
                       {tool && tool.app ? `Your work today, in a tool like ${tool.app}, next to the same month in Duesk.` : "One client's month in Duesk."}
                     </p>
@@ -996,7 +996,7 @@ export default function SetupWizardPage() {
 
               {step === LAST && (
                 <section>
-                  <h2 className="text-4xl font-bold leading-tight tracking-tight text-navy">{orgName} is set up</h2>
+                  <h2 className="text-4xl font-semibold leading-tight tracking-tight text-navy">{orgName} is set up</h2>
                   <p className="mt-3 max-w-md text-base text-slate-600">Your letterhead, numbering and bank details are saved. These next steps take a couple of minutes each.</p>
                   <ul className="mt-8 divide-y divide-slate-200 border-y border-slate-200">
                     {NEXT_STEPS.map((n, i) => (

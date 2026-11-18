@@ -351,7 +351,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
             <LifeBuoy className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-sm font-bold text-text-main">Help & support</p>
+            <p className="text-sm font-semibold text-text-main">Help & support</p>
             <p className="text-[10px] text-text-muted">Instant answers, and a real person when you need one</p>
           </div>
         </div>
@@ -397,12 +397,12 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
         <>
           {ticket && status && (
             <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status.tone}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.tone}`}>
                 {ticket.number} · {status.label}
               </span>
               <div className="flex gap-1">
                 {ticket.status === "ai" && (
-                  <button type="button" onClick={() => ticketAction("escalate")} disabled={sending} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold text-navy hover:bg-surface-alt">
+                  <button type="button" onClick={() => ticketAction("escalate")} disabled={sending} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold text-navy hover:bg-surface-alt">
                     <Headphones className="h-3 w-3" /> Talk to a person
                   </button>
                 )}
@@ -477,7 +477,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                 {rating > 0 && (
                   <>
                     <input value={ratingComment} onChange={(e) => setRatingComment(e.target.value)} placeholder="Anything we could do better? (optional)" className="w-full rounded-lg border border-border px-2 py-1.5 outline-none focus:border-navy" />
-                    <button type="button" onClick={() => ticketAction("rate", { rating, comment: ratingComment })} className="rounded-lg bg-navy px-3 py-1.5 text-[11px] font-bold text-white">
+                    <button type="button" onClick={() => ticketAction("rate", { rating, comment: ratingComment })} className="rounded-lg bg-navy px-3 py-1.5 text-[11px] font-semibold text-white">
                       Send rating
                     </button>
                   </>
@@ -606,7 +606,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                       {t.number} · {t.kind === "feedback" ? "Feedback" : "Help"} · {formatDate(t.updated_at)}
                     </span>
                   </span>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${s.tone}`}>{t.status === "ai" ? "Assistant" : s.label.split(" ")[0]}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${s.tone}`}>{t.status === "ai" ? "Assistant" : s.label.split(" ")[0]}</span>
                 </button>
               );
             })
@@ -649,7 +649,7 @@ export default function HelpCenter({ variant = "panel", onClose }: { variant?: "
                   ))}
                 </div>
               </div>
-              <button type="submit" disabled={sending || fbMessage.trim().length < 5} className="w-full rounded-lg bg-navy py-2 font-bold text-white disabled:opacity-50">
+              <button type="submit" disabled={sending || fbMessage.trim().length < 5} className="w-full rounded-lg bg-navy py-2 font-semibold text-white disabled:opacity-50">
                 {sending ? "Sending..." : "Send feedback"}
               </button>
             </form>
@@ -672,7 +672,7 @@ export function HelpLauncher() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-[60] flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-xs font-bold text-white shadow-xl transition hover:bg-navy-light"
+          className="fixed bottom-5 right-5 z-[60] flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-xs font-semibold text-white shadow-xl transition hover:bg-navy-light"
           aria-label="Open help"
         >
           <LifeBuoy className="h-4 w-4" /> Help

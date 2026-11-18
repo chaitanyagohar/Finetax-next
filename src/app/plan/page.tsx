@@ -75,7 +75,7 @@ export default function PlanPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-xl font-bold tracking-tight text-text-main">Your plan</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-text-main">Your plan</h2>
         <p className="mt-1 text-sm text-text-muted">
           {onTrial && info.trial_ends_at
             ? `You're on a free trial of Professional until ${formatDate(info.trial_ends_at)}. After that your firm moves to the free Starter plan unless you upgrade.`
@@ -115,7 +115,7 @@ export default function PlanPage() {
                 <th className="px-4 py-3 font-medium text-text-muted" />
                 {PLANS.map((p) => (
                   <th key={p.id} className={`px-4 py-3 ${info.plan === p.id && !onTrial ? "text-navy" : "text-text-main"}`}>
-                    <span className="block font-bold">{p.name}</span>
+                    <span className="block font-semibold">{p.name}</span>
                     <span className="block text-xs font-normal text-text-muted">{p.for}</span>
                     {info.plan === p.id && !onTrial && (
                       <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-navy">

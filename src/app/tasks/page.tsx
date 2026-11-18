@@ -48,6 +48,7 @@ import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
 import Combobox, { type ComboOption } from "@/components/ui/Combobox";
 import ClientContact from "@/components/ui/ClientContact";
 import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@/components/tasks/FeedbackTemplates";
+import { EmptyArt } from "@/components/ui/Decor";
 
 type TaskRow = Omit<Task, "category"> & Record<string, any>;
 type ClientRow = Client & Record<string, any>;
@@ -976,7 +977,7 @@ export default function TasksPage() {
               <span />
             )}
             {t.assigned_to && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy" title={nameOf(t.assigned_to)}>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-semibold text-navy" title={nameOf(t.assigned_to)}>
                 {getInitials(nameOf(t.assigned_to))}
               </span>
             )}
@@ -1008,9 +1009,9 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
         <div className="min-w-0 xl:flex-1">
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <CheckSquare className="h-5 w-5 text-navy" /> Tasks & compliance
           </h2>
           <p className="mt-1 hidden text-xs text-text-muted sm:block">Internal and statutory deadlines, maker-checker review, work queues and recurring compliance in one place.</p>
@@ -1091,7 +1092,7 @@ export default function TasksPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Open tasks</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.open}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-navy">{stats.open}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
               <CheckSquare className="h-4 w-4" />
@@ -1110,7 +1111,7 @@ export default function TasksPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue (internal)</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
               <AlertCircle className="h-4 w-4" />
@@ -1127,7 +1128,7 @@ export default function TasksPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Statutory · 7 Days</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.statutoryWeek ? "text-amber-700" : "text-text-main"}`}>{stats.statutoryWeek}</p>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.statutoryWeek ? "text-amber-700" : "text-text-main"}`}>{stats.statutoryWeek}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
               <CalendarClock className="h-4 w-4" />
@@ -1146,7 +1147,7 @@ export default function TasksPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting review</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-violet-700">{stats.awaitingReview}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-violet-700">{stats.awaitingReview}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
               <ShieldCheck className="h-4 w-4" />
@@ -1166,7 +1167,7 @@ export default function TasksPage() {
                   [
                     { key: "mine", label: "My work" },
                     { key: "review", label: "Review queue" },
-                    { key: "all", label: isAdmin ? "All tasks" : "All Mine" },
+                    { key: "all", label: isAdmin ? "All tasks" : "All mine" },
                   ] as const
                 ).map((s) => (
                   <button
@@ -1244,6 +1245,8 @@ export default function TasksPage() {
           </div>
         )}
 
+        {/* Keyed by view, so switching list / board / queue fades the new view in */}
+        <div key={view} className="animate-content-in">
         {loading ? (
           <ListSkeleton label="Loading tasks" />
         ) : view === "queue" ? (
@@ -1271,7 +1274,7 @@ export default function TasksPage() {
                 return (
                   <div key={s} className="flex flex-col rounded-lg bg-surface-alt p-2">
                     <div className="mb-2 flex items-center justify-between px-1">
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-text-main">
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-text-main">
                         <span className={`h-2 w-2 rounded-full ${STAGE_DOTS[s]}`} /> {s}
                       </span>
                       <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted">{col.length}</span>
@@ -1287,7 +1290,7 @@ export default function TasksPage() {
           </div>
         ) : filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <CheckSquare className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">{hasFilters ? "No tasks match these filters." : "No tasks in this view."}</p>
           </div>
         ) : (
@@ -1405,12 +1408,13 @@ export default function TasksPage() {
           </div>
           </>
         )}
+        </div>
       </div>
 
       {/* ================= Task Modal ================= */}
       {isModalOpen && (
         <Modal
-          title={editingTask ? titleOf(editingTask) : "Add Task"}
+          title={editingTask ? titleOf(editingTask) : "Add task"}
           subtitle={
             editingTask
               ? `${clientTextOf(editingTask)} · ${editingTask.category || "Other"}`
@@ -1512,10 +1516,10 @@ export default function TasksPage() {
                   type="submit"
                   form="task-form"
                   disabled={saving}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
                 >
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {editingTask ? "Save" : "Create Task"}
+                  {editingTask ? "Save" : "Create task"}
                 </button>
               </div>
             </div>
@@ -1761,7 +1765,7 @@ export default function TasksPage() {
               {/* Discussion */}
               {editingTask && (
                 <div className="space-y-2 border-t border-border pt-4">
-                  <h4 className="text-xs font-bold text-text-main">Discussion</h4>
+                  <h4 className="text-xs font-semibold text-text-main">Discussion</h4>
                   <div className="h-80 overflow-hidden rounded-lg border border-border">
                     <ChatConversation
                       taskId={editingTask.id}
@@ -1776,7 +1780,7 @@ export default function TasksPage() {
               {editingTask && (
                 <div className="space-y-3 border-t border-border pt-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+                    <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
                       <Timer className="h-4 w-4 text-navy" /> Time logged
                     </h4>
                     <span className={`text-xs font-semibold ${estimateNow && loggedMinutes > estimateNow ? "text-rose-600" : "text-navy"}`}>
@@ -1844,7 +1848,7 @@ export default function TasksPage() {
             {/* RIGHT COLUMN: Timeline */}
             {editingTask && (
               <div className="border-t border-border pt-6 lg:max-h-[70vh] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-                <div className="sticky top-0 mb-4 flex items-center gap-2 border-b border-border bg-surface pb-2 text-xs font-bold text-navy">
+                <div className="sticky top-0 mb-4 flex items-center gap-2 border-b border-border bg-surface pb-2 text-xs font-semibold text-navy">
                   <Activity className="h-4 w-4" /> Task timeline
                 </div>
 
@@ -1956,7 +1960,7 @@ export default function TasksPage() {
                 <button
                   type="button"
                   onClick={startNewType}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white transition hover:bg-navy-light"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add a task
                 </button>
@@ -1965,7 +1969,7 @@ export default function TasksPage() {
 
             {typeFormOpen && (
               <form onSubmit={saveType} className="space-y-3 rounded-lg border border-border bg-surface-alt p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-navy">{typeEditingId ? "Edit task" : "Add a task to the list"}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy">{typeEditingId ? "Edit task" : "Add a task to the list"}</p>
                 {typeError && (
                   <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-2.5 font-medium text-danger">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2028,9 +2032,9 @@ export default function TasksPage() {
                   Example: GSTR-3B for period &quot;Sep 2026&quot;, day 20 of the next month, gives a statutory deadline of 20/10/2026. Leave the day empty for tasks without a fixed date.
                 </p>
                 <div className="flex gap-2">
-                  <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+                  <button type="submit" disabled={typeSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
                     {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                    {typeEditingId ? "Save Changes" : "Add to List"}
+                    {typeEditingId ? "Save changes" : "Add to list"}
                   </button>
                   <button type="button" onClick={resetTypeForm} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface">
                     Cancel
@@ -2120,7 +2124,7 @@ export default function TasksPage() {
                     type="button"
                     onClick={confirmMergeTypes}
                     disabled={!mergeInto || actionBusy}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
                   >
                     {actionBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Merge
                   </button>

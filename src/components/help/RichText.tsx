@@ -90,7 +90,7 @@ export default function RichText({ text }: { text: string }) {
     if (!line.trim()) continue;
     const h = line.match(/^#{1,4}\s+(.*)$/);
     blocks.push(
-      <p key={`p${idx}`} className={h ? "font-bold text-text-main" : undefined}>
+      <p key={`p${idx}`} className={h ? "font-semibold text-text-main" : undefined}>
         {inline(h ? h[1] : line, `p${idx}`)}
       </p>
     );

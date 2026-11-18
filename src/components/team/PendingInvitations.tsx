@@ -72,7 +72,7 @@ export default function PendingInvitations() {
               type="button"
               onClick={() => openFirm(joined)}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Open {joined.org_name}
             </button>
@@ -97,7 +97,7 @@ export default function PendingInvitations() {
               type="button"
               onClick={() => respond(invitation, true)}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Accept
             </button>

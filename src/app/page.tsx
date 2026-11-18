@@ -33,6 +33,7 @@ import ImportantNotifications from "@/components/notifications/ImportantNotifica
 import AnnouncementsPanel from "@/components/notifications/AnnouncementsPanel";
 import { clientLabel } from "@/components/ui/ClientPicker";
 import Link from "next/link";
+import { HeroDecor } from "@/components/ui/Decor";
 
 /* =========================================================
    CONSTANTS
@@ -200,7 +201,7 @@ function KpiCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{label}</p>
-          <p className={`mt-1.5 truncate text-2xl font-bold tracking-tight ${t.value}`}>{value}</p>
+          <p className={`mt-1.5 truncate text-2xl font-semibold tracking-tight ${t.value}`}>{value}</p>
         </div>
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.icon}`}>
           <Icon className="h-4 w-4" />
@@ -588,7 +589,7 @@ export default function DashboardPage() {
       icon={CalendarDays}
       action={
         breachedStatutory > 0 ? (
-          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">{breachedStatutory} already breached</span>
+          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">{breachedStatutory} already breached</span>
         ) : (
           <PanelLink href="/calendar" label="Calendar" />
         )
@@ -616,9 +617,9 @@ export default function DashboardPage() {
               <span className={`text-[9px] font-semibold uppercase ${active ? "text-white/80" : "text-text-muted"}`}>
                 {date.toLocaleDateString("en-IN", { weekday: "short" })}
               </span>
-              <span className={`text-sm font-bold ${active ? "text-white" : isToday ? "text-navy" : "text-text-main"}`}>{date.getDate()}</span>
+              <span className={`text-sm font-semibold ${active ? "text-white" : isToday ? "text-navy" : "text-text-main"}`}>{date.getDate()}</span>
               <span
-                className={`mt-0.5 min-w-[18px] rounded-full px-1 text-[9px] font-bold ${
+                className={`mt-0.5 min-w-[18px] rounded-full px-1 text-[9px] font-semibold ${
                   count === 0 ? (active ? "text-white/60" : "text-text-muted") : active ? "bg-white text-navy" : "bg-amber-500 text-white"
                 }`}
               >
@@ -662,19 +663,20 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <ImportantNotifications />
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
-        <div className="min-w-0 xl:flex-1">
+      <div className="relative flex flex-col items-start justify-between gap-4 overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
+        <HeroDecor />
+        <div className="relative min-w-0 xl:flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight text-text-main">
+            <h2 className="text-lg font-semibold tracking-tight text-text-main">
               {greeting()}, {currentUser?.name?.split(" ")[0] || "there"}
             </h2>
             {isAdmin && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
+              <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
             {!isAdmin && isReviewer && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
                 <ShieldCheck className="h-3 w-3" /> Reviewer
               </span>
             )}
@@ -688,7 +690,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0 xl:justify-end">
+        <div className="relative flex w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0 xl:justify-end">
           <button
             type="button"
             onClick={() => loadDashboardData()}
@@ -875,7 +877,7 @@ export default function DashboardPage() {
             <Panel title="Receivables aging" icon={Receipt} action={<PanelLink href="/invoices" label="Invoices" />}>
               <div className="mb-4">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Total balance due</p>
-                <p className="mt-1 text-2xl font-bold tracking-tight text-amber-700">{formatINR(totalOutstanding)}</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-amber-700">{formatINR(totalOutstanding)}</p>
                 <p className="text-[11px] text-text-muted">Across {finance?.outstanding_count || 0} issued invoices</p>
               </div>
               <div className="space-y-3">
@@ -946,11 +948,11 @@ export default function DashboardPage() {
               <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-4 text-xs">
                 <div className="rounded-lg bg-violet-50 p-2.5">
                   <p className="text-[10px] font-semibold uppercase text-violet-700">Awaiting review</p>
-                  <p className="text-lg font-bold text-violet-700">{reviewQueue.length}</p>
+                  <p className="text-lg font-semibold text-violet-700">{reviewQueue.length}</p>
                 </div>
                 <div className={`rounded-lg p-2.5 ${unassignedCount > 0 ? "bg-rose-50" : "bg-emerald-50"}`}>
                   <p className={`text-[10px] font-semibold uppercase ${unassignedCount > 0 ? "text-rose-600" : "text-emerald-700"}`}>Unassigned</p>
-                  <p className={`text-lg font-bold ${unassignedCount > 0 ? "text-rose-600" : "text-emerald-700"}`}>{unassignedCount}</p>
+                  <p className={`text-lg font-semibold ${unassignedCount > 0 ? "text-rose-600" : "text-emerald-700"}`}>{unassignedCount}</p>
                 </div>
               </div>
             </Panel>
@@ -965,7 +967,7 @@ export default function DashboardPage() {
                 {staffWorkload.map((staff) => (
                   <div key={staff.id} className="space-y-2 rounded-lg border border-border bg-surface-alt p-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-[11px] font-bold text-white">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-white">
                         {staff.name.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -981,15 +983,15 @@ export default function DashboardPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-1 text-center">
                       <div>
-                        <p className="font-bold text-text-main">{staff.activeCount}</p>
+                        <p className="font-semibold text-text-main">{staff.activeCount}</p>
                         <p className="text-[10px] text-text-muted">Active</p>
                       </div>
                       <div>
-                        <p className={`font-bold ${staff.overdueCount > 0 ? "text-rose-600" : "text-emerald-600"}`}>{staff.overdueCount}</p>
+                        <p className={`font-semibold ${staff.overdueCount > 0 ? "text-rose-600" : "text-emerald-600"}`}>{staff.overdueCount}</p>
                         <p className="text-[10px] text-text-muted">Overdue</p>
                       </div>
                       <div>
-                        <p className="font-bold text-violet-700">{staff.reviewCount}</p>
+                        <p className="font-semibold text-violet-700">{staff.reviewCount}</p>
                         <p className="text-[10px] text-text-muted">To review</p>
                       </div>
                     </div>
@@ -1046,9 +1048,9 @@ export default function DashboardPage() {
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-xs font-bold text-text-main">{formatINR(Number(inv.total || 0))}</p>
+                            <p className="text-xs font-semibold text-text-main">{formatINR(Number(inv.total || 0))}</p>
                             <span
-                              className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                              className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
                                 inv.status === "Paid"
                                   ? "bg-emerald-100 text-emerald-700"
                                   : inv.status === "Partially Paid"
@@ -1096,7 +1098,7 @@ export default function DashboardPage() {
               sub={overdueTasks.length > 0 ? <span className="font-semibold text-rose-600">Click to view →</span> : "You're on schedule"}
             />
             <KpiCard
-              label={isReviewer ? "Awaiting My Review" : "In Review"}
+              label={isReviewer ? "Awaiting my review" : "In review"}
               value={isReviewer ? reviewQueue.length : myTasks.filter((t) => t.stage === "Submitted for Review").length}
               icon={ShieldCheck}
               tone="violet"
@@ -1192,9 +1194,9 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[1px] animate-fade-in" onClick={() => setIsOverdueDrawerOpen(false)}>
           <div className="flex h-full w-full max-w-md flex-col bg-surface text-xs shadow-2xl animate-slide-in-right" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-rose-600">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-rose-600">
                 <AlertCircle className="h-4 w-4" />
-                {isAdmin ? "Firm Overdue Compliance Items" : "My Overdue Tasks"} ({overdueTasks.length})
+                {isAdmin ? "Firm overdue compliance items" : "My overdue tasks"} ({overdueTasks.length})
               </h3>
               <button
                 type="button"
@@ -1223,7 +1225,7 @@ export default function DashboardPage() {
                         <button type="button" onClick={() => setSelectedOverdueTask(isOpen ? null : t)} className="w-full space-y-1 text-left">
                           <div className="flex items-start justify-between gap-2">
                             <span className="font-semibold text-navy">{t.title}</span>
-                            <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">{daysLate}d late</span>
+                            <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">{daysLate}d late</span>
                           </div>
                           <p className="text-[11px] text-text-muted">Client: {clientName(t.client_id) || "Internal"}</p>
                           <p className="text-[11px] text-text-muted">Assigned staff: {teamName(t.assigned_to) || "Unassigned"}</p>
@@ -1238,7 +1240,7 @@ export default function DashboardPage() {
                               </span>
                             )}
                             {statutoryBreached && (
-                              <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">Statutory breached</span>
+                              <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white">Statutory breached</span>
                             )}
                           </div>
                         </button>

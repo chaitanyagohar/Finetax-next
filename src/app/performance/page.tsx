@@ -67,7 +67,7 @@ function ScoreRing({ score, size = 64 }: { score?: number | null; size?: number 
         <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={6} className="fill-none stroke-surface-alt" />
         <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={6} strokeLinecap="round" className={`fill-none ${tone.ring}`} strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} />
       </svg>
-      <span className={`absolute inset-0 flex items-center justify-center font-bold ${tone.text}`} style={{ fontSize: size / 4 }}>
+      <span className={`absolute inset-0 flex items-center justify-center font-semibold ${tone.text}`} style={{ fontSize: size / 4 }}>
         {score === null || score === undefined ? "—" : Math.round(score)}
       </span>
     </div>
@@ -153,9 +153,9 @@ export default function PerformancePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Gauge className="h-5 w-5 text-navy" /> Performance scorecards
           </h2>
           <p className="mt-1 text-xs text-text-muted">
@@ -229,7 +229,7 @@ export default function PerformancePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                      <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.tone.text}`}>{k.value}</p>
+                      <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.tone.text}`}>{k.value}</p>
                     </div>
                     <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.tone.bg} ${k.tone.text}`}>
                       <Icon className="h-4 w-4" />
@@ -263,7 +263,7 @@ export default function PerformancePage() {
                     <tr key={c.user_id} onClick={() => setSelected(c)} className="cursor-pointer transition hover:bg-surface-alt">
                       <td>
                         <span className="flex items-center gap-2 font-semibold text-navy">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold">{getInitials(c.name)}</span>
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold">{getInitials(c.name)}</span>
                           {c.name}
                           {c.user_id === me && <span className="text-[10px] font-normal text-text-muted">(you)</span>}
                         </span>
@@ -393,7 +393,7 @@ function ScorecardDetail({ card: c, weights, from, to, isAdmin, me, inline }: { 
       <div className={`flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center ${inline ? "border border-border bg-surface shadow-sm" : tone.bg}`}>
         <ScoreRing score={c.score} size={88} />
         <div className="flex-1 space-y-1.5">
-          <p className={`text-sm font-bold ${tone.text}`}>
+          <p className={`text-sm font-semibold ${tone.text}`}>
             {tone.label}
             {inline ? ` · ${c.name}` : ""}
           </p>
@@ -414,7 +414,7 @@ function ScorecardDetail({ card: c, weights, from, to, isAdmin, me, inline }: { 
               </span>
               <div>
                 <p className="text-[11px] text-text-muted">{m.label}</p>
-                <p className="text-base font-bold text-text-main">{m.value}</p>
+                <p className="text-base font-semibold text-text-main">{m.value}</p>
                 <p className="text-[10px] text-text-muted">{m.sub}</p>
               </div>
             </div>
@@ -423,7 +423,7 @@ function ScorecardDetail({ card: c, weights, from, to, isAdmin, me, inline }: { 
       </div>
 
       <div className="space-y-2">
-        <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+        <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
           <MessageSquarePlus className="h-4 w-4 text-navy" /> Performance reviews
         </h4>
 
@@ -452,7 +452,7 @@ function ScorecardDetail({ card: c, weights, from, to, isAdmin, me, inline }: { 
                 <textarea rows={3} value={goals} onChange={(e) => setGoals(e.target.value)} className={inputClass} maxLength={1000} />
               </div>
             </div>
-            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save review
             </button>
           </form>
@@ -527,7 +527,7 @@ function WeightsModal({ initial, onClose, onSaved }: { initial: any; onClose: ()
           <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
             Cancel
           </button>
-          <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+          <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
           </button>
         </div>

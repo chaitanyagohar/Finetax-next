@@ -107,7 +107,7 @@ export default function ChatComposer({
   return (
     <div className="relative border-t border-border bg-surface p-2.5">
       {suggestions.length > 0 && (
-        <ul className="absolute bottom-full left-3 mb-1 w-64 overflow-hidden rounded-lg border border-border bg-surface shadow-xl" role="listbox">
+        <ul className="absolute bottom-full left-3 mb-1 w-64 animate-pop-in overflow-hidden rounded-lg border border-border bg-surface shadow-xl" role="listbox">
           {suggestions.map((p, i) => (
             <li key={p.id}>
               <button

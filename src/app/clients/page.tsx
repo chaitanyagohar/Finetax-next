@@ -39,6 +39,7 @@ import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/
 import { GSTIN_RE, PAN_RE, STATE_OPTIONS, stateCodeFromGstin, stateCodeFromName, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { EmptyArt } from "@/components/ui/Decor";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -818,9 +819,9 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Building2 className="h-5 w-5 text-navy" /> Client master
           </h2>
           <p className="mt-1 text-xs text-text-muted">Verified PAN and GSTIN records, relationship managers and receivables for every client.</p>
@@ -877,7 +878,7 @@ export default function ClientsPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                  <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                   <Icon className="h-4 w-4" />
@@ -940,9 +941,9 @@ export default function ClientsPage() {
           <ListSkeleton label="Loading client directory" />
         ) : filteredClients.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <Building2 className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">
-              {clients.length === 0 ? 'No clients yet. Click "Add Client" or "Bulk Import" to get started.' : "No clients match these filters."}
+              {clients.length === 0 ? 'No clients yet. Click "Add client" or "Bulk import (CSV)" to get started.' : "No clients match these filters."}
             </p>
           </div>
         ) : (
@@ -970,7 +971,7 @@ export default function ClientsPage() {
                     <tr key={c.id} className={`cursor-pointer transition hover:bg-surface-alt ${st === "Merged" ? "opacity-60" : ""}`} onClick={() => openModal(c)}>
                       <td>
                         <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy/10 text-[10px] font-bold text-navy">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold text-navy">
                             {getInitials(primary)}
                           </div>
                           <div className="min-w-0">
@@ -1051,7 +1052,7 @@ export default function ClientsPage() {
                     type="button"
                     onClick={handleCSVImport}
                     disabled={importing || validImportCount === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-50"
                   >
                     {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     {importing ? "Importing..." : `Import ${validImportCount} Clients`}
@@ -1064,13 +1065,13 @@ export default function ClientsPage() {
           {importCount !== null ? (
             <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center">
               <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-              <p className="text-base font-bold text-emerald-800">Import successful</p>
+              <p className="text-base font-semibold text-emerald-800">Import successful</p>
               <p className="text-sm text-emerald-700">{importCount} clients have been added to your master database.</p>
               {isAdmin && <p className="text-xs text-emerald-700">Tip: run &quot;Find Duplicates&quot; to check the imported records.</p>}
               <button
                 type="button"
                 onClick={() => setIsImportModalOpen(false)}
-                className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-700"
+                className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 Continue
               </button>
@@ -1152,7 +1153,7 @@ export default function ClientsPage() {
       {/* ================= Add / Edit Client ================= */}
       {isModalOpen && (
         <Modal
-          title={editingClient ? clientLabel(editingClient) : "Add Client"}
+          title={editingClient ? clientLabel(editingClient) : "Add client"}
           subtitle={
             editingClient
               ? [editingClient.lead_source ? `Source: ${editingClient.lead_source}` : "", editingClient.type].filter(Boolean).join(" · ") || "Client record"
@@ -1203,10 +1204,10 @@ export default function ClientsPage() {
                     type="submit"
                     form="client-form"
                     disabled={saving}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
                   >
                     {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {dupConfirmed && dupMatches?.length ? "Save Anyway" : "Save Client"}
+                    {dupConfirmed && dupMatches?.length ? "Save anyway" : "Save client"}
                   </button>
                 )}
               </div>
@@ -1222,7 +1223,7 @@ export default function ClientsPage() {
                   <span>
                     This record was merged into{" "}
                     {editingClient?.merged_into && clientById[editingClient.merged_into] ? (
-                      <button type="button" className="font-bold underline" onClick={() => openModal(clientById[editingClient.merged_into])}>
+                      <button type="button" className="font-semibold underline" onClick={() => openModal(clientById[editingClient.merged_into])}>
                         {clientLabel(clientById[editingClient.merged_into])}
                       </button>
                     ) : (
@@ -1240,7 +1241,7 @@ export default function ClientsPage() {
               )}
               {dupMatches && dupMatches.length > 0 && (
                 <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
-                  <p className="flex items-center gap-1.5 font-bold text-amber-800">
+                  <p className="flex items-center gap-1.5 font-semibold text-amber-800">
                     <ShieldAlert className="h-4 w-4" /> Possible duplicate{dupMatches.length === 1 ? "" : "s"} found
                   </p>
                   {dupMatches.map((m) => (
@@ -1387,7 +1388,7 @@ export default function ClientsPage() {
             {/* Client snapshot */}
             {editingClient && (
               <div className="space-y-4 lg:col-span-2 lg:border-l lg:border-border lg:pl-6">
-                <h4 className="text-xs font-bold text-text-main">Client snapshot</h4>
+                <h4 className="text-xs font-semibold text-text-main">Client snapshot</h4>
                 {loadingSnapshot || !snap ? (
                   <div className="flex items-center gap-2 text-xs text-text-muted">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading activity...
@@ -1397,15 +1398,15 @@ export default function ClientsPage() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-lg bg-surface-alt p-2.5">
                         <p className="text-[10px] font-semibold uppercase text-text-muted">Billed</p>
-                        <p className="text-sm font-bold text-navy">{compactINR(snap.billed)}</p>
+                        <p className="text-sm font-semibold text-navy">{compactINR(snap.billed)}</p>
                       </div>
                       <div className="rounded-lg bg-emerald-50 p-2.5">
                         <p className="text-[10px] font-semibold uppercase text-emerald-700">Received</p>
-                        <p className="text-sm font-bold text-emerald-700">{compactINR(snap.received)}</p>
+                        <p className="text-sm font-semibold text-emerald-700">{compactINR(snap.received)}</p>
                       </div>
                       <div className={`rounded-lg p-2.5 ${snap.outstanding > 0 ? "bg-amber-50" : "bg-surface-alt"}`}>
                         <p className="text-[10px] font-semibold uppercase text-amber-700">Due</p>
-                        <p className={`text-sm font-bold ${snap.outstanding > 0 ? "text-amber-700" : "text-text-muted"}`}>{compactINR(snap.outstanding)}</p>
+                        <p className={`text-sm font-semibold ${snap.outstanding > 0 ? "text-amber-700" : "text-text-muted"}`}>{compactINR(snap.outstanding)}</p>
                       </div>
                     </div>
 
@@ -1498,7 +1499,7 @@ export default function ClientsPage() {
                   setIsModalOpen(false);
                   openMerge(editingClient, other);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
               >
                 <GitMerge className="h-3.5 w-3.5" /> Continue
               </button>
@@ -1541,7 +1542,7 @@ export default function ClientsPage() {
                 <div key={`${p.a.id}-${p.b.id}`} className="rounded-xl border border-border p-3">
                   <div className="mb-2 flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         p.score >= 70 ? "bg-rose-100 text-rose-700" : p.score >= 50 ? "bg-amber-100 text-amber-700" : "bg-surface-alt text-text-muted"
                       }`}
                     >
@@ -1578,7 +1579,7 @@ export default function ClientsPage() {
                     <button
                       type="button"
                       onClick={() => openMerge(p.a, p.b)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-violet-700"
+                      className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-violet-700"
                     >
                       <GitMerge className="h-3.5 w-3.5" /> Merge
                     </button>
@@ -1615,7 +1616,7 @@ export default function ClientsPage() {
                   type="button"
                   onClick={confirmMerge}
                   disabled={merging}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
                 >
                   {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5" />} Merge Permanently
                 </button>
@@ -1633,11 +1634,11 @@ export default function ClientsPage() {
 
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Keep this record</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Keep this record</p>
                 <p className="font-semibold text-text-main">{clientLabel(mergeKeep)}</p>
               </div>
               <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">Merge and retire</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Merge and retire</p>
                 <p className="font-semibold text-text-main">{clientLabel(mergeRemove)}</p>
               </div>
             </div>

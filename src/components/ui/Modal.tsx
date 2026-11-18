@@ -71,7 +71,7 @@ export function Modal({
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
-            <h3 id={titleId} className="text-base font-bold text-text-main">{title}</h3>
+            <h3 id={titleId} className="text-base font-semibold text-text-main">{title}</h3>
             {subtitle && <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>}
             {headerExtra}
           </div>
@@ -133,7 +133,7 @@ export function ConfirmDialog({
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <h3 id={titleId} className="text-sm font-bold text-text-main">{title}</h3>
+            <h3 id={titleId} className="text-sm font-semibold text-text-main">{title}</h3>
             <div className="mt-1 text-xs text-text-muted">{message}</div>
           </div>
         </div>
@@ -150,7 +150,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white shadow-sm transition disabled:opacity-60 ${
+            className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-sm transition disabled:opacity-60 ${
               tone === "danger" ? "bg-danger hover:opacity-90" : "bg-navy hover:bg-navy-light"
             }`}
           >

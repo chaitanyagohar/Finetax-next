@@ -162,7 +162,7 @@ export function ProposalComposer({
           <button type="button" onClick={() => save(false)} disabled={!!saving} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2 text-xs font-semibold text-navy transition hover:bg-surface-alt disabled:opacity-60">
             {saving === "draft" && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save draft
           </button>
-          <button type="button" onClick={() => save(true)} disabled={!!saving} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+          <button type="button" onClick={() => save(true)} disabled={!!saving} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
             {saving === "send" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Save & email
           </button>
         </div>
@@ -491,7 +491,7 @@ export default function ProposalsPanel({
                                 setAccNote("");
                                 setAccError("");
                               }}
-                              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700"
+                              className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700"
                               title="Record client acceptance and onboard"
                             >
                               <CheckCircle2 className="h-3 w-3" /> Accepted
@@ -527,7 +527,7 @@ export default function ProposalsPanel({
               <button type="button" onClick={() => setAcceptFor(null)} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="button" onClick={recordAcceptance} disabled={busyId === acceptFor.id} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60">
+              <button type="button" onClick={recordAcceptance} disabled={busyId === acceptFor.id} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">
                 {busyId === acceptFor.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />} Confirm & onboard
               </button>
             </div>

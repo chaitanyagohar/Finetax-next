@@ -154,7 +154,7 @@ export default function LoginPage() {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-navy p-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-70"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {loading ? "Authenticating..." : "Secure Sign In"}
+          {loading ? "Signing in…" : "Sign in"}
         </button>
 
         <p className="text-center text-sm text-text-muted">

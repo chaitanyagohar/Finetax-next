@@ -61,7 +61,7 @@ export default function ConfirmOwnership({ account, onClose, onConfirmed }: Prop
               type="button"
               onClick={() => call("confirm")}
               disabled={busy || code.length !== 6}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />} Confirm
             </button>
@@ -70,7 +70,7 @@ export default function ConfirmOwnership({ account, onClose, onConfirmed }: Prop
               type="button"
               onClick={sendCode}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />} Email me a code
             </button>
