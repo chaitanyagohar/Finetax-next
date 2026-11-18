@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { AuthArt } from "@/components/ui/Decor";
 
 export default function AuthLayout({
   title,
@@ -13,17 +14,16 @@ export default function AuthLayout({
   return (
     <div className="flex min-h-screen bg-background">
       {/* Brand panel (desktop) */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-navy p-12 text-white lg:flex">
-        <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-accent/10" />
-        <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-white/5" />
+      <div className="relative hidden w-1/2 flex-col overflow-hidden bg-navy p-12 text-white lg:flex">
+        <AuthArt />
 
         <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-lg font-bold">D</div>
-          <span className="text-lg font-bold tracking-tight">Duesk</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-lg font-semibold">D</div>
+          <span className="text-lg font-semibold tracking-tight">Duesk</span>
         </div>
 
-        <div className="relative max-w-md space-y-6">
-          <h2 className="text-3xl font-bold leading-tight">
+        <div className="relative mt-auto max-w-md space-y-6 pb-10">
+          <h2 className="text-3xl font-semibold leading-tight">
             Practice management for tax, accounting and compliance professionals.
           </h2>
           <ul className="space-y-3 text-sm text-muted">
@@ -50,7 +50,7 @@ export default function AuthLayout({
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-navy text-white shadow-sm lg:hidden">
               <ShieldCheck className="h-7 w-7" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-navy">{title}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-navy">{title}</h1>
             {subtitle && <p className="mt-1 text-sm text-text-muted">{subtitle}</p>}
           </div>
 

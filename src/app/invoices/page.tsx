@@ -32,6 +32,7 @@ import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import { STATE_OPTIONS, placeOfSupplyCode, placeOfSupplyLabel, stateCodeFromGstin, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
+import { EmptyArt } from "@/components/ui/Decor";
 
 interface LineItem {
   description: string;
@@ -604,9 +605,9 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Receipt className="h-5 w-5 text-navy" /> Invoices & billing
           </h2>
           <p className="mt-1 text-xs text-text-muted">
@@ -629,7 +630,7 @@ export default function InvoicesPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Billed · This FY</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{compactINR(stats.billed)}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-navy">{compactINR(stats.billed)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
               <IndianRupee className="h-4 w-4" />
@@ -642,7 +643,7 @@ export default function InvoicesPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Collected · This FY</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-700">{compactINR(stats.collected)}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-emerald-700">{compactINR(stats.collected)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
               <TrendingUp className="h-4 w-4" />
@@ -664,7 +665,7 @@ export default function InvoicesPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Outstanding</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-amber-700">{compactINR(stats.outstanding)}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-amber-700">{compactINR(stats.outstanding)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
               <Wallet className="h-4 w-4" />
@@ -681,7 +682,7 @@ export default function InvoicesPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdueCount ? "text-rose-600" : "text-text-main"}`}>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.overdueCount ? "text-rose-600" : "text-text-main"}`}>
                 {compactINR(stats.overdueAmount)}
               </p>
             </div>
@@ -727,7 +728,7 @@ export default function InvoicesPage() {
           <ListSkeleton label="Loading billing records" />
         ) : filteredInvoices.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <Receipt className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">{invoices.length === 0 ? "No invoices generated yet." : "No invoices match this view."}</p>
           </div>
         ) : (
@@ -814,7 +815,7 @@ export default function InvoicesPage() {
                   const balance = ["Draft", "Cancelled"].includes(st) ? 0 : balanceOf(i);
                   return (
                     <tr key={i.id} className={`cursor-pointer transition hover:bg-surface-alt ${st === "Cancelled" ? "opacity-60" : ""}`} onClick={() => openModal(i)}>
-                      <td className={`whitespace-nowrap font-mono font-bold ${i.invoice_number ? "text-navy" : "text-text-muted"}`}>{numberOf(i)}</td>
+                      <td className={`whitespace-nowrap font-mono font-semibold ${i.invoice_number ? "text-navy" : "text-text-muted"}`}>{numberOf(i)}</td>
                       <td className="whitespace-nowrap">{formatDate(issueOf(i))}</td>
                       <td>
                         <p className="font-medium text-text-main">{i.organisation || clientNameOf(i)}</p>
@@ -886,7 +887,7 @@ export default function InvoicesPage() {
       {/* ================= Invoice Editor / Viewer ================= */}
       {isModalOpen && (
         <Modal
-          title={!editingInvoice ? "New Invoice" : editingInvoice.invoice_number ? `Invoice ${editingInvoice.invoice_number}` : "Draft invoice"}
+          title={!editingInvoice ? "New invoice" : editingInvoice.invoice_number ? `Invoice ${editingInvoice.invoice_number}` : "Draft invoice"}
           subtitle={
             !editingInvoice
               ? "Saved as a draft. The invoice number is assigned when you issue it."
@@ -931,7 +932,7 @@ export default function InvoicesPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt disabled:opacity-60"
                   >
                     {sendingId === editingInvoice.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                    {editingInvoice.email_sent_at ? "Resend Email" : "Send Email"}
+                    {editingInvoice.email_sent_at ? "Resend email" : "Send email"}
                   </button>
                 )}
                 {editingInvoice && editingStatus === "Draft" && (
@@ -966,10 +967,10 @@ export default function InvoicesPage() {
                     type="submit"
                     form="invoice-form"
                     disabled={saving}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
                   >
                     {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {editingInvoice ? "Save Changes" : "Create Draft Invoice"}
+                    {editingInvoice ? "Save changes" : "Create draft invoice"}
                   </button>
                 )}
               </div>
@@ -1164,7 +1165,7 @@ export default function InvoicesPage() {
                     </div>
                   </>
                 )}
-                <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-bold text-navy">
+                <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-semibold text-navy">
                   <span>Total</span>
                   <span>{formatINR(isLocked ? Number(editingInvoice?.total || grandTotal) : grandTotal)}</span>
                 </div>
@@ -1174,7 +1175,7 @@ export default function InvoicesPage() {
                       <span>Paid</span>
                       <span>{formatINR(paidOf(editingInvoice))}</span>
                     </div>
-                    <div className={`flex justify-between font-bold ${balanceOf(editingInvoice) > 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                    <div className={`flex justify-between font-semibold ${balanceOf(editingInvoice) > 0 ? "text-rose-600" : "text-emerald-700"}`}>
                       <span>Balance</span>
                       <span>{formatINR(balanceOf(editingInvoice))}</span>
                     </div>
@@ -1188,7 +1189,7 @@ export default function InvoicesPage() {
           {editingInvoice && (
             <div className="mt-6 space-y-3 border-t border-border pt-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+                <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
                   <Wallet className="h-4 w-4 text-emerald-600" /> Payments received
                 </h4>
                 <div className="flex gap-2">
@@ -1290,7 +1291,7 @@ export default function InvoicesPage() {
                 type="submit"
                 form="payment-form"
                 disabled={paySaving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
               >
                 {paySaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Save Payment

@@ -32,14 +32,14 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
     router.refresh();
   }
 
-  const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#10233f] focus:ring-2 focus:ring-[#10233f]/15";
+  const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#0f172a] focus:ring-2 focus:ring-[#0f172a]/15";
 
   return (
     <form onSubmit={submit} className="space-y-4">
       {mode === "accept" ? (
         <>
           <div>
-            <p className="text-base font-bold text-[#10233f]">Accept this engagement</p>
+            <p className="text-base font-semibold text-[#0f172a]">Accept this engagement</p>
             <p className="text-xs text-slate-500">Please read the full letter before accepting.{expiresAt ? ` This proposal is valid until ${expiresAt}.` : ""}</p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -53,7 +53,7 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
             </div>
           </div>
           <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#10233f]" />
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0f172a]" />
             <span>
               I have read the engagement letter and, on behalf of <strong>{clientOrg}</strong>, I agree to engage {firmName || "the firm"} on these terms. I&apos;m authorised to accept for{" "}
               {clientOrg}.
@@ -64,7 +64,7 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
             <button type="button" onClick={() => setMode("decline")} className="text-sm text-slate-500 underline">
               I don&apos;t want to proceed
             </button>
-            <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
+            <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
               {busy ? "Confirming..." : "Accept engagement"}
             </button>
           </div>
@@ -72,7 +72,7 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
         </>
       ) : (
         <>
-          <p className="text-base font-bold text-[#10233f]">Decline this proposal</p>
+          <p className="text-base font-semibold text-[#0f172a]">Decline this proposal</p>
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-600">Reason (optional, helps us improve)</label>
             <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className={input} maxLength={500} />
@@ -82,7 +82,7 @@ export default function AcceptForm({ token, clientOrg, firmName, expiresAt }: { 
             <button type="button" onClick={() => setMode("accept")} className="text-sm text-slate-500 underline">
               Back
             </button>
-            <button type="submit" disabled={busy} className="rounded-lg bg-rose-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-60">
+            <button type="submit" disabled={busy} className="rounded-lg bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">
               {busy ? "Sending..." : "Decline proposal"}
             </button>
           </div>

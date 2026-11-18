@@ -360,14 +360,14 @@ export default function ReviewerQueuePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+            <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
               <ShieldCheck className="h-5 w-5 text-navy" /> Reviewer verification hub
             </h2>
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-700">
-              {isAdmin && scope === "all" ? "Entire Firm" : "My Queue"}
+            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+              {isAdmin && scope === "all" ? "Entire firm" : "My queue"}
             </span>
           </div>
           <p className="mt-1 text-xs text-text-muted">Verify submitted work, return it with clear feedback, and track quality over time.</p>
@@ -383,7 +383,7 @@ export default function ReviewerQueuePage() {
                   onClick={() => setScope(s)}
                   className={`rounded-md px-3 py-1.5 transition ${scope === s ? "bg-surface text-navy shadow-sm" : "text-text-muted hover:text-text-main"}`}
                 >
-                  {s === "mine" ? "My Queue" : "Entire Firm"}
+                  {s === "mine" ? "My queue" : "Entire firm"}
                 </button>
               ))}
             </div>
@@ -427,7 +427,8 @@ export default function ReviewerQueuePage() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading review queue...
         </div>
       ) : (
-        <>
+        // Keyed by tab, so switching tabs fades the new content in
+        <div key={activeTab} className="animate-content-in space-y-6">
           {/* ---------- Pending Approvals ---------- */}
           {activeTab === "pending" &&
             (pendingTasks.length === 0 ? (
@@ -446,17 +447,17 @@ export default function ReviewerQueuePage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="rounded bg-navy/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-navy">{t.category || "Other"}</span>
+                            <span className="rounded bg-navy/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-navy">{t.category || "Other"}</span>
                             {rounds > 0 && (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Resubmission #{rounds}</span>
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Resubmission #{rounds}</span>
                             )}
                             {t.recurrence && t.recurrence !== "None" && <RefreshCw className="h-3 w-3 text-text-muted" />}
                           </div>
-                          <h4 className="mt-1.5 text-sm font-bold text-navy">{t.title}</h4>
+                          <h4 className="mt-1.5 text-sm font-semibold text-navy">{t.title}</h4>
                         </div>
                         {t.submittedAt && (
                           <span
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                               waiting > 48 ? "bg-rose-100 text-rose-700" : waiting > 24 ? "bg-amber-100 text-amber-700" : "bg-surface-alt text-text-muted"
                             }`}
                           >
@@ -488,7 +489,7 @@ export default function ReviewerQueuePage() {
                       <button
                         type="button"
                         onClick={() => openInspect(t)}
-                        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
                       >
                         <ShieldCheck className="h-4 w-4" /> Inspect & sign off
                       </button>
@@ -533,7 +534,7 @@ export default function ReviewerQueuePage() {
                         <td className="whitespace-nowrap">{personById[t.assigned_to]?.name || "Unassigned"}</td>
                         <td className="whitespace-nowrap">{t.returnedAt ? formatDuration(hoursSince(t.returnedAt)) : "—"}</td>
                         <td>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${t.rounds > 1 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${t.rounds > 1 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
                             {t.rounds || 1}
                           </span>
                         </td>
@@ -561,7 +562,7 @@ export default function ReviewerQueuePage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                          <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                          <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                         </div>
                         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                           <Icon className="h-4 w-4" />
@@ -602,7 +603,7 @@ export default function ReviewerQueuePage() {
                             <tr key={p.id}>
                               <td>
                                 <span className="flex items-center gap-2 font-semibold text-navy">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy/10 text-[9px] font-bold text-navy">{getInitials(name)}</span>
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy/10 text-[9px] font-semibold text-navy">{getInitials(name)}</span>
                                   {name}
                                 </span>
                               </td>
@@ -630,7 +631,7 @@ export default function ReviewerQueuePage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* ================= Inspection ================= */}
@@ -647,7 +648,7 @@ export default function ReviewerQueuePage() {
                 type="button"
                 onClick={() => handleDecision("Changes Required")}
                 disabled={!!deciding}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-2.5 text-xs font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
               >
                 {deciding === "Changes Required" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                 Request Changes
@@ -656,7 +657,7 @@ export default function ReviewerQueuePage() {
                 type="button"
                 onClick={() => handleDecision("Approved")}
                 disabled={!!deciding}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
               >
                 {deciding === "Approved" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 Approve & Sign Off

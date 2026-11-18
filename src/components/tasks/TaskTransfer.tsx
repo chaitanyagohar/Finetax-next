@@ -76,7 +76,7 @@ export function TransferDialog({
             type="submit"
             form="transfer-form"
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
             {mode === "request" ? "Send request" : "Transfer now"}
@@ -204,7 +204,7 @@ export function TransferHistory({
 
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+      <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
         <ArrowRightLeft className="h-4 w-4 text-navy" /> Transfers
       </h4>
 
@@ -247,7 +247,7 @@ export function TransferHistory({
                   type="button"
                   onClick={() => decide(true)}
                   disabled={busy}
-                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />} Approve transfer
                 </button>
@@ -267,7 +267,7 @@ export function TransferHistory({
           <p className="flex flex-wrap items-center gap-1 font-semibold text-text-main">
             {nameOf(r.from_user)} <ArrowRight className="h-3 w-3" /> {r.to_user ? nameOf(r.to_user) : "—"}
             <span
-              className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${
                 r.status === "approved" || r.status === "completed"
                   ? "bg-emerald-50 text-emerald-700"
                   : r.status === "declined"

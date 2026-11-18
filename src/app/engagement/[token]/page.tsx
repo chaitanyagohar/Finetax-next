@@ -13,8 +13,8 @@ function Shell({ firmName, children }: { firmName?: string; children: React.Reac
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-8 sm:py-12">
       <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-        <div className="bg-[#10233f] px-6 py-5 text-white sm:px-8">
-          <p className="text-lg font-bold tracking-wide">{(firmName || "Engagement Letter").toUpperCase()}</p>
+        <div className="bg-[#0f172a] px-6 py-5 text-white sm:px-8">
+          <p className="text-lg font-semibold tracking-wide">{(firmName || "Engagement Letter").toUpperCase()}</p>
           <p className="text-xs text-slate-300">Secure engagement letter</p>
         </div>
         <div className="p-6 sm:p-8">{children}</div>
@@ -27,7 +27,7 @@ function Shell({ firmName, children }: { firmName?: string; children: React.Reac
 function Notice({ title, text }: { title: string; text: string }) {
   return (
     <div className="py-6 text-center">
-      <p className="text-lg font-bold text-[#10233f]">{title}</p>
+      <p className="text-lg font-semibold text-[#0f172a]">{title}</p>
       <p className="mt-2 text-sm text-slate-600">{text}</p>
     </div>
   );
@@ -75,10 +75,10 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Engagement letter {p.number}</p>
-          <h1 className="mt-1 text-xl font-bold text-[#10233f]">{pkg?.name || "Professional services"}</h1>
+          <h1 className="mt-1 text-xl font-semibold text-[#0f172a]">{pkg?.name || "Professional services"}</h1>
           <p className="text-sm text-slate-600">For {clientOrg} · starting {formatDate(p.start_date, "-")}</p>
         </div>
-        <a href={pdfHref} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-[#10233f] hover:bg-slate-50">
+        <a href={pdfHref} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-[#0f172a] hover:bg-slate-50">
           View full letter (PDF)
         </a>
       </div>
@@ -86,7 +86,7 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-[11px] font-semibold uppercase text-slate-500">Professional fee</p>
-          <p className="text-lg font-bold text-[#10233f]">
+          <p className="text-lg font-semibold text-[#0f172a]">
             {formatINRExact(p.price)} <span className="text-sm font-medium text-slate-500">per {per(p.billing_cycle)} + GST {Number(p.gst_rate)}%</span>
           </p>
         </div>
@@ -105,7 +105,7 @@ export default async function EngagementPage({ params }: { params: Promise<{ tok
 
       {services.length > 0 && (
         <div className="mt-6">
-          <p className="text-sm font-bold text-[#10233f]">Services included</p>
+          <p className="text-sm font-semibold text-[#0f172a]">Services included</p>
           <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
             {services.map((s, i) => (
               <li key={i} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">

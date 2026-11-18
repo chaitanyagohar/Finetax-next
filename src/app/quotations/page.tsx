@@ -30,6 +30,7 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
+import { EmptyArt } from "@/components/ui/Decor";
 
 type ClientRow = Client & Record<string, any>;
 type LineItem = { description: string; qty: number; rate: number };
@@ -567,9 +568,9 @@ export default function QuotationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <FileText className="h-5 w-5 text-navy" /> Quotations
           </h2>
           <p className="mt-1 text-xs text-text-muted">
@@ -591,7 +592,7 @@ export default function QuotationsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Quoted value</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{compactINR(stats.quotedValue)}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-navy">{compactINR(stats.quotedValue)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
               <IndianRupee className="h-4 w-4" />
@@ -608,7 +609,7 @@ export default function QuotationsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Awaiting response</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-blue-700">{stats.awaitingCount}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-blue-700">{stats.awaitingCount}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <Hourglass className="h-4 w-4" />
@@ -621,7 +622,7 @@ export default function QuotationsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Acceptance rate</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-700">{stats.acceptanceRate}%</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-emerald-700">{stats.acceptanceRate}%</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
               <Target className="h-4 w-4" />
@@ -640,7 +641,7 @@ export default function QuotationsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Expiring in 7 days</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.expiringSoon > 0 ? "text-amber-700" : "text-text-main"}`}>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.expiringSoon > 0 ? "text-amber-700" : "text-text-main"}`}>
                 {stats.expiringSoon}
               </p>
             </div>
@@ -688,7 +689,7 @@ export default function QuotationsPage() {
           <ListSkeleton label="Loading quotations" />
         ) : filteredQuotations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <FileText className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">
               {quotations.length === 0 ? "No quotations created yet." : "No quotations match this view."}
             </p>
@@ -744,7 +745,7 @@ export default function QuotationsPage() {
                   const inv = invoiceByQuote[q.id];
                   return (
                     <tr key={q.id} className="cursor-pointer transition hover:bg-surface-alt" onClick={() => openModal(q)}>
-                      <td className="whitespace-nowrap font-bold text-navy">{getQuoteNumber(q)}</td>
+                      <td className="whitespace-nowrap font-semibold text-navy">{getQuoteNumber(q)}</td>
                       <td className="whitespace-nowrap">{formatDate(getIsoDate(q.date) || q.created_at)}</td>
                       <td>
                         <p className="font-medium text-text-main">{q.organisation || recipientOf(q)}</p>
@@ -826,7 +827,7 @@ export default function QuotationsPage() {
       {/* ================= Quotation Editor ================= */}
       {isModalOpen && (
         <Modal
-          title={editingQuotation ? `Quotation ${getQuoteNumber(editingQuotation)}` : "New Quotation"}
+          title={editingQuotation ? `Quotation ${getQuoteNumber(editingQuotation)}` : "New quotation"}
           subtitle={
             editingQuotation
               ? `Created ${formatDate(editingQuotation.created_at)}`
@@ -836,7 +837,7 @@ export default function QuotationsPage() {
           maxWidth="max-w-5xl"
           headerExtra={
             locked ? (
-              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                 <CheckCircle2 className="h-3 w-3" /> Converted to {linkedInvoice?.invoice_number ? `invoice ${linkedInvoice.invoice_number}` : "a draft invoice"} · read-only
               </span>
             ) : null
@@ -888,7 +889,7 @@ export default function QuotationsPage() {
                     type="submit"
                     form="quotation-form"
                     disabled={saving}
-                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
                   >
                     {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     Save Quotation
@@ -910,7 +911,7 @@ export default function QuotationsPage() {
               {/* Recipient Selection */}
               <div className="space-y-3 rounded-lg border border-navy/20 bg-navy/5 p-3">
                 <div className="flex flex-wrap items-center gap-4">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-navy">Prepare quotation for</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy">Prepare quotation for</span>
                   <div className="flex rounded-lg border border-border bg-surface p-0.5 text-xs font-semibold">
                     {(["client", "lead"] as const).map((t) => (
                       <button
@@ -921,7 +922,7 @@ export default function QuotationsPage() {
                           targetType === t ? "bg-navy text-white shadow-sm" : "text-text-muted hover:text-text-main"
                         }`}
                       >
-                        {t === "client" ? "Existing Client" : "Enquiry / Lead"}
+                        {t === "client" ? "Existing client" : "Enquiry / lead"}
                       </button>
                     ))}
                   </div>
@@ -1105,7 +1106,7 @@ export default function QuotationsPage() {
                       </div>
                     </>
                   )}
-                  <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm font-bold text-navy">
+                  <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm font-semibold text-navy">
                     <span>Total</span>
                     <span>{formatINR(total)}</span>
                   </div>

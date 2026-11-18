@@ -31,6 +31,7 @@ import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import AttendancePanel from "@/components/time/AttendancePanel";
 import TaskPicker, { taskLabel, type PickedTask } from "@/components/tasks/TaskPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import { EmptyArt } from "@/components/ui/Decor";
 
 const LOCK_DAYS = 7; // must match v_lock_days in the database rule
 const TASK_TITLE_BATCH = 200;
@@ -495,7 +496,7 @@ export default function TimeTrackingPage() {
               <Clock className={`h-5 w-5 ${myTimer ? "animate-pulse" : ""}`} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-text-main">{myTimer ? "Timer running" : "Live work timer"}</h3>
+              <h3 className="text-sm font-semibold text-text-main">{myTimer ? "Timer running" : "Live work timer"}</h3>
               <p className="text-[11px] text-text-muted">
                 {myTimer
                   ? `Started ${new Date(myTimer.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Keeps running even if you close this page.`
@@ -504,7 +505,7 @@ export default function TimeTrackingPage() {
             </div>
           </div>
 
-          <div className="font-mono text-2xl font-bold tracking-tight text-navy">{formatTimerDisplay(elapsedSeconds)}</div>
+          <div className="font-mono text-2xl font-semibold tracking-tight text-navy">{formatTimerDisplay(elapsedSeconds)}</div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-12">
@@ -524,7 +525,7 @@ export default function TimeTrackingPage() {
               type="button"
               onClick={handleStartTimer}
               disabled={timerBusy}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60 md:col-span-2"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60 md:col-span-2"
             >
               {timerBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start
             </button>
@@ -534,7 +535,7 @@ export default function TimeTrackingPage() {
                 type="button"
                 onClick={handleStopTimer}
                 disabled={timerBusy}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
               >
                 {timerBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Stop & Save
               </button>
@@ -651,7 +652,7 @@ export default function TimeTrackingPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                  <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                   <Icon className="h-4 w-4" />
@@ -699,7 +700,7 @@ export default function TimeTrackingPage() {
                         {h ? formatHours(h) : "—"}
                       </td>
                     ))}
-                    <td className="whitespace-nowrap text-right font-bold text-navy">{formatHours(row.total)}</td>
+                    <td className="whitespace-nowrap text-right font-semibold text-navy">{formatHours(row.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -748,7 +749,7 @@ export default function TimeTrackingPage() {
                   <button key={p.id} type="button" onClick={() => setFilterUser(filterUser === p.id ? "" : p.id)} className="block w-full text-left">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className={`flex items-center gap-1.5 font-medium ${filterUser === p.id ? "text-navy" : "text-text-main"}`}>
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-bold text-navy">{getInitials(nameOf(p.id))}</span>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-semibold text-navy">{getInitials(nameOf(p.id))}</span>
                         {nameOf(p.id) || "—"}
                       </span>
                       <span className="text-text-muted">
@@ -806,7 +807,7 @@ export default function TimeTrackingPage() {
           <ListSkeleton label="Loading office log sheet" />
         ) : filteredLogs.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <Clock className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">No time logged in this period.</p>
           </div>
         ) : (
@@ -835,14 +836,14 @@ export default function TimeTrackingPage() {
                         <p className="font-medium text-text-main">
                           {log.description}
                           {log.source && log.source !== "manual" && (
-                            <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700">{log.source === "auto" ? "Auto" : "Timer"}</span>
+                            <span className="ml-1.5 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-blue-700">{log.source === "auto" ? "Auto" : "Timer"}</span>
                           )}
-                          {log.edited_at && <span className="ml-1 rounded bg-surface-alt px-1.5 py-0.5 text-[9px] font-bold uppercase text-text-muted">Edited</span>}
-                          {log.needs_review && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">Check</span>}
+                          {log.edited_at && <span className="ml-1 rounded bg-surface-alt px-1.5 py-0.5 text-[9px] font-semibold uppercase text-text-muted">Edited</span>}
+                          {log.needs_review && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700">Check</span>}
                         </p>
                         {taskTitles[log.task_id] && <p className="text-[10px] text-text-muted">Task: {taskTitles[log.task_id]}</p>}
                       </td>
-                      <td className="whitespace-nowrap text-right font-bold text-text-main">{formatHours(Number(log.hours))}</td>
+                      <td className="whitespace-nowrap text-right font-semibold text-text-main">{formatHours(Number(log.hours))}</td>
                       <td>
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
@@ -878,7 +879,7 @@ export default function TimeTrackingPage() {
       {/* ================= Manual Entry / Edit ================= */}
       {isModalOpen && (
         <Modal
-          title={editingLog ? "Edit Time Entry" : "Manual Time Entry"}
+          title={editingLog ? "Edit time entry" : "Manual time entry"}
           subtitle={isAdmin ? "Administrators can correct entries of any date." : `You can log time for the last ${LOCK_DAYS} days.`}
           onClose={() => !saving && setIsModalOpen(false)}
           maxWidth="max-w-md"
@@ -891,10 +892,10 @@ export default function TimeTrackingPage() {
                 type="submit"
                 form="time-form"
                 disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60"
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {editingLog ? "Save Changes" : "Save Entry"}
+                {editingLog ? "Save changes" : "Save entry"}
               </button>
             </div>
           }

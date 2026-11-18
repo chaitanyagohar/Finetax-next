@@ -128,7 +128,7 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={save}
               disabled={saving || !s}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
             </button>

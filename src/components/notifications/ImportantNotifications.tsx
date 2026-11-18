@@ -184,7 +184,7 @@ export default function ImportantNotifications() {
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">New assignments</p>
-                <p className="text-base font-bold">{assignments.length} tasks were assigned to you</p>
+                <p className="text-base font-semibold">{assignments.length} tasks were assigned to you</p>
               </div>
             </div>
             <div className="max-h-60 space-y-1.5 overflow-y-auto p-4">
@@ -210,7 +210,7 @@ export default function ImportantNotifications() {
                   dismiss(assignments.map((a) => a.id), true);
                   router.push("/tasks");
                 }}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
               >
                 View my tasks <ArrowRight className="h-3.5 w-3.5" />
               </button>
@@ -229,9 +229,9 @@ export default function ImportantNotifications() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{look.label}</p>
-                    <p className="text-base font-bold leading-snug">{current.title.replace(/^New task: |^Task assigned to you: |^Ready for your review: |^Changes requested: /, "")}</p>
+                    <p className="text-base font-semibold leading-snug">{current.title.replace(/^New task: |^Task assigned to you: |^Ready for your review: |^Changes requested: /, "")}</p>
                   </div>
-                  {items.length > 1 && <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">1 of {items.length}</span>}
+                  {items.length > 1 && <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">1 of {items.length}</span>}
                 </div>
                 <div className="space-y-3 p-5 text-sm">
                   {current.body && <p className="whitespace-pre-wrap text-text-main">{current.body}</p>}
@@ -260,7 +260,7 @@ export default function ImportantNotifications() {
                         type="button"
                         onClick={() => startNow(current)}
                         disabled={busy === current.id}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                       >
                         {busy === current.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Start now
                       </button>
@@ -270,7 +270,7 @@ export default function ImportantNotifications() {
                     <button
                       type="button"
                       onClick={() => open(current)}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
                     >
                       {current.type === "task_submitted" ? "Review now" : "Open task"} <ArrowRight className="h-3.5 w-3.5" />
                     </button>
@@ -280,7 +280,7 @@ export default function ImportantNotifications() {
                       type="button"
                       onClick={() => acknowledge(current)}
                       disabled={busy === current.id}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                     >
                       {busy === current.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} I&apos;ve read this
                     </button>
@@ -289,7 +289,7 @@ export default function ImportantNotifications() {
                     <button
                       type="button"
                       onClick={() => open(current)}
-                      className="flex-1 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                      className="flex-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
                     >
                       Got it
                     </button>

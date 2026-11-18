@@ -31,6 +31,7 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { EmptyArt } from "@/components/ui/Decor";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -356,9 +357,9 @@ export default function ClientDiscussionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <MessageSquare className="h-5 w-5 text-navy" /> Client discussions
           </h2>
           <p className="mt-1 text-xs text-text-muted">Every call, meeting and message with clients, with follow-ups that never slip.</p>
@@ -378,7 +379,7 @@ export default function ClientDiscussionsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">This month</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-navy">{stats.thisMonth}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-navy">{stats.thisMonth}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
               <MessageSquare className="h-4 w-4" />
@@ -395,7 +396,7 @@ export default function ClientDiscussionsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Due today</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.dueToday ? "text-amber-700" : "text-text-main"}`}>{stats.dueToday}</p>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.dueToday ? "text-amber-700" : "text-text-main"}`}>{stats.dueToday}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
               <CalendarClock className="h-4 w-4" />
@@ -412,7 +413,7 @@ export default function ClientDiscussionsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Overdue follow-ups</p>
-              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
+              <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${stats.overdue ? "text-rose-600" : "text-emerald-700"}`}>{stats.overdue}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
               <AlertCircle className="h-4 w-4" />
@@ -425,7 +426,7 @@ export default function ClientDiscussionsPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Completed</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-700">{stats.completedThisMonth}</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-tight text-emerald-700">{stats.completedThisMonth}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="h-4 w-4" />
@@ -511,7 +512,7 @@ export default function ClientDiscussionsPage() {
           <ListSkeleton label="Loading client discussions" />
         ) : sortedDiscussions.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <MessageSquare className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">{discussions.length === 0 ? "No discussions logged yet." : "No discussions match this view."}</p>
           </div>
         ) : (
@@ -575,7 +576,7 @@ export default function ClientDiscussionsPage() {
                       <td>
                         {handler ? (
                           <span className="flex items-center gap-1.5 whitespace-nowrap">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy/10 text-[9px] font-bold text-navy">{getInitials(handler)}</span>
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy/10 text-[9px] font-semibold text-navy">{getInitials(handler)}</span>
                             {handler}
                           </span>
                         ) : (
@@ -609,7 +610,7 @@ export default function ClientDiscussionsPage() {
       {/* ================= Log / Edit Discussion ================= */}
       {isModalOpen && (
         <Modal
-          title={editingItem ? "Edit Discussion" : "Log Discussion"}
+          title={editingItem ? "Edit discussion" : "Log discussion"}
           subtitle={
             editingItem
               ? `Logged ${editingItem.created_at ? formatDate(editingItem.created_at) : formatDate(editingItem.date)}${
@@ -640,7 +641,7 @@ export default function ClientDiscussionsPage() {
                   type="submit"
                   form="discussion-form"
                   disabled={saving}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60 sm:flex-none"
                 >
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Save
@@ -774,7 +775,7 @@ export default function ClientDiscussionsPage() {
             {/* Client history */}
             {clientId && (
               <div className="space-y-3 lg:col-span-2 lg:border-l lg:border-border lg:pl-6">
-                <h4 className="flex items-center gap-1.5 text-xs font-bold text-text-main">
+                <h4 className="flex items-center gap-1.5 text-xs font-semibold text-text-main">
                   <History className="h-4 w-4 text-navy" /> Recent with {clientById[clientId]?.name || "this client"}
                 </h4>
                 {clientById[clientId]?.phone && (

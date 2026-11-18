@@ -156,9 +156,9 @@ export default function SupportInboxPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="hero-card flex flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Headphones className="h-5 w-5 text-navy" /> Support Inbox
           </h2>
           <p className="mt-1 text-xs text-text-muted">Requests the assistant handed over, conversations it solved, and feedback from your team.</p>
@@ -207,8 +207,8 @@ export default function SupportInboxPage() {
                   </div>
                   <p className="truncate text-[11px] text-text-main">{t.subject}</p>
                   <div className="mt-1 flex items-center gap-1">
-                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${STATUS_TONE[t.status] || ""}`}>{t.kind === "feedback" ? "Feedback" : t.status === "ai" ? "AI" : t.status}</span>
-                    {t.priority === "urgent" && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">Urgent</span>}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${STATUS_TONE[t.status] || ""}`}>{t.kind === "feedback" ? "Feedback" : t.status === "ai" ? "AI" : t.status}</span>
+                    {t.priority === "urgent" && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700">Urgent</span>}
                     <span className="text-[9px] text-text-muted">{ticketRef(t)}</span>
                     {t.rating ? (
                       <span className="ml-auto flex items-center text-[9px] text-amber-600">
@@ -232,7 +232,7 @@ export default function SupportInboxPage() {
               <div className="space-y-2 border-b border-border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-bold text-text-main">
+                    <p className="text-sm font-semibold text-text-main">
                       {ticketRef(selected)} · {selected.subject}
                     </p>
                     <p className="text-[11px] text-text-muted">
@@ -329,7 +329,7 @@ export default function SupportInboxPage() {
                     placeholder={asNote ? "Only support agents see notes" : "Write your reply (Ctrl + Enter to send)"}
                     className={`flex-1 resize-none rounded-xl border px-3 py-2 text-[13px] outline-none focus:ring-2 ${asNote ? "border-amber-300 bg-amber-50/40 focus:ring-amber-200" : "border-border focus:border-navy focus:ring-navy/15"}`}
                   />
-                  <button type="button" onClick={sendReply} disabled={busy || !reply.trim()} className="rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-40">
+                  <button type="button" onClick={sendReply} disabled={busy || !reply.trim()} className="rounded-xl bg-navy px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-40">
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : asNote ? "Add note" : "Send"}
                   </button>
                 </div>

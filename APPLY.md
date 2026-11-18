@@ -1,63 +1,76 @@
-# Applying batch 8
+# Applying batch 9
 
-Code only: no migration, no new packages. Close any running `npm run dev` first.
+No migration. Code and font files only. Run these in PowerShell from your project folder.
 
-## 1. Branch and extract
-
-Run these one at a time:
+## 1. New branch
 
 ```powershell
-cd C:\Users\Chait\Downloads\practice-manager-next
 git checkout main
 git pull
-git status --short
+git checkout -b batch-9-theme
 ```
 
-`git status --short` must print nothing.
+## 2. Unzip over the project
 
 ```powershell
-git checkout -b batch-8-ux
-Expand-Archive -Path "$HOME\Downloads\duesk-batch-8.zip" -DestinationPath . -Force
-git status --short
-git add -A
-git commit -m "Batch 8: UX pass, motion and loading states"
+Expand-Archive -Path "$HOME\Downloads\duesk-batch-9.zip" -DestinationPath . -Force
 ```
 
-You should see about 33 changed files, plus 2 new ones (`NavigationProgress.tsx`, `Skeleton.tsx`).
-
-## 2. Check
+## 3. Remove the old font files
 
 ```powershell
-Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+git rm src/fonts/inter-latin-variable.woff2 src/fonts/OFL-Inter.txt
+```
+
+## 4. Check and build
+
+```powershell
 npx tsc --noEmit
 npm run build
+```
+
+Both should finish without errors.
+
+## 5. Look it over
+
+```powershell
 npm run dev
 ```
 
-Open http://localhost:3000. Test on your computer, and on your phone if you can: use Chrome's device toolbar (F12, then Ctrl+Shift+M, then pick a phone).
+Open http://localhost:3000 and check:
 
-1. **Moving between pages:** click around the sidebar. A thin gold bar runs along the top, and each page fades in.
-2. **Loading:** refresh Clients or Invoices. Grey shimmering rows and KPI placeholders appear briefly instead of a spinner and zeros.
-3. **Hover:** move the mouse over the KPI cards; they lift slightly.
-4. **Tasks:** overdue and open tasks are at the top, completed ones at the bottom.
-5. **On a phone:** Tasks, Invoices, Quotations, Leads and Client discussions show cards with amount, status and dates. Invoice cards have Payment / Email / PDF.
-6. **Dashboard:** buttons sit on one row, and Announcements is a single line when empty.
-7. **Drafts:** a draft invoice shows no "due" amount.
-8. **Help button:** scroll to the bottom of a long list; the Help button no longer covers the last row.
+- [ ] Sign-in page: illustration on the left, headline at the bottom, "Sign in" button
+- [ ] Dashboard: coral highlight on the active sidebar item, rings and dots in the greeting card corner
+- [ ] Hover and click buttons: colour fades and a slight press
+- [ ] Open the bell and your profile menu: they pop in
+- [ ] Tasks: switch List / Board / Queue: the content fades in
+- [ ] Documents or Leads with no rows: small drawing in the empty state
+- [ ] ₹ amounts look the same font as the numbers next to them
+- [ ] Owner login: black sidebar with amber highlight, entry named "Firms"
+- [ ] Phone width (browser dev tools, 390px): nothing overlaps
 
-## 3. Put it live
+## 6. Commit and push
 
 ```powershell
-git push -u origin batch-8-ux
-git checkout main
-git merge --no-ff batch-8-ux -m "Merge batch 8: UX pass"
-git push
+git add -A
+git commit -m "Batch 9: midnight and coral theme, Geist font, motion and artwork"
+git push -u origin batch-9-theme
 ```
+
+Check the Vercel preview, then merge to main.
 
 ## Undo
 
+Before committing:
+
 ```powershell
 git checkout main
-git revert -m 1 HEAD
+git branch -D batch-9-theme
+```
+
+After merging:
+
+```powershell
+git revert <commit-id-of-batch-9>
 git push
 ```

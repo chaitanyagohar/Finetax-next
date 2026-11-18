@@ -163,7 +163,7 @@ export function TaskCategoriesManager({
         <form onSubmit={add} className="space-y-2 rounded-lg border border-border bg-surface-alt p-3">
           <div className="flex flex-wrap gap-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New category, e.g. FEMA / Valuation" maxLength={60} className="min-w-[200px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-navy" />
-            <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+            <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
             </button>
           </div>

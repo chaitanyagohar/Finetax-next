@@ -187,7 +187,7 @@ export default function TourRunner({ steps, onClose }: { steps: TourStep[]; onCl
           </div>
 
           <div className="px-5 pb-5 pt-4">
-            <p className="text-lg font-bold leading-snug text-navy">{step.title}</p>
+            <p className="text-lg font-semibold leading-snug text-navy">{step.title}</p>
             <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{step.body}</p>
             {step.points && (
               <ul className="mt-3 space-y-1.5">

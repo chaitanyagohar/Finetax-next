@@ -381,14 +381,14 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
             >
               <Bell className="h-5 w-5" />
               {unread > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-semibold text-white">
                   {unread > 9 ? "9+" : unread}
                 </span>
               )}
             </button>
 
             {openMenu === "notifications" && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-surface shadow-xl animate-scale-in">
+              <div className="absolute right-0 top-full z-50 mt-2 w-[22rem] origin-top-right animate-pop-in max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold text-text-main">Notifications</p>
@@ -414,7 +414,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
                       >
                         <Icon className="h-3 w-3" />
                         <span className="truncate">{a.label}</span>
-                        <span className="font-bold">{a.count}</span>
+                        <span className="font-semibold">{a.count}</span>
                       </Link>
                     );
                   })}
@@ -441,7 +441,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
                             <Icon className="h-3.5 w-3.5" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className={`block truncate ${n.read_at ? "font-medium text-text-main" : "font-bold text-navy"}`}>{n.title}</span>
+                            <span className={`block truncate ${n.read_at ? "font-medium text-text-main" : "font-semibold text-navy"}`}>{n.title}</span>
                             {n.body && <span className="line-clamp-2 block text-[11px] text-text-muted">{n.body}</span>}
                             <span className="mt-0.5 block text-[10px] text-text-muted">{timeAgo(n.created_at)}</span>
                           </span>
@@ -466,7 +466,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
               aria-expanded={openMenu === "user"}
               aria-label="Account menu"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">{getInitials(user.name)}</div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-white">{getInitials(user.name)}</div>
               <div className="hidden text-left text-xs sm:block">
                 <p className="max-w-[140px] truncate font-semibold leading-tight text-text-main">{user.name}</p>
                 <p className="leading-tight text-text-muted">{roleLabel}</p>
@@ -474,7 +474,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
             </button>
 
             {openMenu === "user" && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-surface shadow-xl animate-scale-in">
+              <div className="absolute right-0 top-full z-50 mt-2 w-64 origin-top-right overflow-hidden rounded-xl border border-border bg-surface shadow-xl animate-pop-in">
                 <div className="flex items-center gap-3 border-b border-border px-4 py-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-muted">
                     <User className="h-4 w-4" />
@@ -545,7 +545,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
               );
             })()}
             <button type="button" onClick={() => openNotification(toast)} className="min-w-0 flex-1 text-left text-xs">
-              <span className="block truncate font-bold text-navy">{toast.title}</span>
+              <span className="block truncate font-semibold text-navy">{toast.title}</span>
               {toast.body && <span className="line-clamp-2 block text-[11px] text-text-muted">{toast.body}</span>}
             </button>
             <button type="button" onClick={() => setToast(null)} className="text-text-muted hover:text-text-main" aria-label="Dismiss">

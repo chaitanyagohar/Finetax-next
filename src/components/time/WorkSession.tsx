@@ -233,7 +233,7 @@ export default function WorkSession({ userId }: { userId: string }) {
                   timer.description
                 )}
               </p>
-              <p className={`font-mono text-[11px] font-bold ${paused ? "text-amber-700" : "text-emerald-700"}`}>
+              <p className={`font-mono text-[11px] font-semibold ${paused ? "text-amber-700" : "text-emerald-700"}`}>
                 {clock(elapsed)} {paused && <span className="font-sans font-semibold">· paused</span>}
               </p>
             </div>
@@ -408,7 +408,7 @@ function DayReview({ userId, timer, onStopTimer, onClose }: { userId: string; ti
               onClick={confirmDay}
               disabled={confirming || !!timer}
               title={timer ? "Stop the running timer first" : undefined}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
             >
               {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardCheck className="h-3.5 w-3.5" />} Confirm my day
             </button>
@@ -425,7 +425,7 @@ function DayReview({ userId, timer, onStopTimer, onClose }: { userId: string; ti
               onClick={async () => {
                 if (await onStopTimer()) load();
               }}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 font-bold text-white transition hover:bg-emerald-700"
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 font-semibold text-white transition hover:bg-emerald-700"
             >
               <Square className="h-3 w-3" /> Stop & include
             </button>
@@ -478,7 +478,7 @@ function DayReview({ userId, timer, onStopTimer, onClose }: { userId: string; ti
                   </label>
                   <div className="col-span-4 flex justify-end gap-1 sm:col-span-2">
                     {(changed(r) || r.needs_review) && (
-                      <button type="button" onClick={() => saveRow(r)} disabled={savingId === r.id} className="rounded-md bg-navy px-2 py-1 text-[10px] font-bold text-white disabled:opacity-60">
+                      <button type="button" onClick={() => saveRow(r)} disabled={savingId === r.id} className="rounded-md bg-navy px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-60">
                         {savingId === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : r.needs_review && !changed(r) ? "OK" : "Save"}
                       </button>
                     )}

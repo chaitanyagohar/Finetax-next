@@ -180,12 +180,12 @@ export default function SubscriptionBilling({
                     <td className="whitespace-nowrap">{nb ? `${formatDate(nb.start)} – ${formatDate(nb.end)}` : "—"}</td>
                     <td className={`whitespace-nowrap ${nb && nb.bill <= today && sub.billing_enabled ? "font-semibold text-amber-700" : ""}`}>{nb ? formatDate(nb.bill) : "—"}</td>
                     <td>
-                      <button type="button" onClick={() => toggle(sub, "billing_enabled")} disabled={busyId === sub.id} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sub.billing_enabled ? "bg-emerald-100 text-emerald-700" : "bg-surface-alt text-text-muted"}`}>
+                      <button type="button" onClick={() => toggle(sub, "billing_enabled")} disabled={busyId === sub.id} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${sub.billing_enabled ? "bg-emerald-100 text-emerald-700" : "bg-surface-alt text-text-muted"}`}>
                         {sub.billing_enabled ? "On" : "Off"}
                       </button>
                     </td>
                     <td>
-                      <button type="button" onClick={() => toggle(sub, "auto_send")} disabled={busyId === sub.id} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sub.auto_send ? "bg-blue-100 text-blue-700" : "bg-surface-alt text-text-muted"}`}>
+                      <button type="button" onClick={() => toggle(sub, "auto_send")} disabled={busyId === sub.id} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${sub.auto_send ? "bg-blue-100 text-blue-700" : "bg-surface-alt text-text-muted"}`}>
                         {sub.auto_send ? "Auto" : "Approve first"}
                       </button>
                     </td>
@@ -245,7 +245,7 @@ export default function SubscriptionBilling({
                           <Printer className="h-3.5 w-3.5" />
                         </a>
                         {b.status === "Draft" ? (
-                          <button type="button" onClick={() => approve(b)} disabled={busyId === b.id} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
+                          <button type="button" onClick={() => approve(b)} disabled={busyId === b.id} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
                             {busyId === b.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />} Approve & send
                           </button>
                         ) : (
@@ -282,7 +282,7 @@ export default function SubscriptionBilling({
               <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="button" onClick={saveEdit} disabled={busyId === editing.id} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+              <button type="button" onClick={saveEdit} disabled={busyId === editing.id} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
                 {busyId === editing.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
               </button>
             </div>

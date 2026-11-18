@@ -159,9 +159,9 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Activity className="h-5 w-5 text-navy" /> System audit logs
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
@@ -202,7 +202,7 @@ export default function AuditLogsPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                  <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                   <Icon className="h-4 w-4" />
@@ -303,7 +303,7 @@ export default function AuditLogsPage() {
                         <td className="whitespace-nowrap">
                           <span className="flex items-center gap-2">
                             <span
-                              className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold ${
+                              className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ${
                                 actor === "System" ? "bg-surface-alt text-text-muted" : "bg-navy/10 text-navy"
                               }`}
                             >
@@ -314,7 +314,7 @@ export default function AuditLogsPage() {
                         </td>
                         <td className="whitespace-nowrap">
                           <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                               isSecurity
                                 ? "border-rose-300 bg-rose-100 text-rose-700"
                                 : isDelete

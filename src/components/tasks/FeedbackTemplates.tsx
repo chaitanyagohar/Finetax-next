@@ -231,7 +231,7 @@ export function FeedbackTemplatesManager({
     >
       <div className="space-y-4 text-xs">
         <form onSubmit={save} className="space-y-3 rounded-lg border border-border bg-surface-alt p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-navy">{editingId ? "Edit template" : "Add a template"}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-navy">{editingId ? "Edit template" : "Add a template"}</p>
           {error && (
             <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger/10 p-2.5 font-medium text-danger">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -269,7 +269,7 @@ export function FeedbackTemplatesManager({
             </div>
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+            <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : editingId ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
               {editingId ? "Save changes" : "Add template"}
             </button>
@@ -313,7 +313,7 @@ export function FeedbackTemplatesManager({
                 </button>
                 {confirmDelete?.id === t.id ? (
                   <span className="inline-flex items-center gap-1">
-                    <button type="button" onClick={() => remove(t)} disabled={busy} className="rounded-md bg-danger px-2 py-1 text-[10px] font-bold text-white disabled:opacity-60">
+                    <button type="button" onClick={() => remove(t)} disabled={busy} className="rounded-md bg-danger px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-60">
                       Delete
                     </button>
                     <button type="button" onClick={() => setConfirmDelete(null)} className="rounded-md p-1 text-text-muted hover:bg-surface-alt" aria-label="Keep">

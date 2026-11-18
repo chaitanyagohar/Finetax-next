@@ -135,7 +135,7 @@ export default function KnowledgeBaseManager({ draft, onClose }: { draft: KbDraf
               </div>
             )}
             <div className="flex gap-2">
-              <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 font-bold text-white disabled:opacity-60">
+              <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 font-semibold text-white disabled:opacity-60">
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save answer
               </button>
               <button type="button" onClick={() => setForm(null)} className="rounded-lg border border-border px-4 py-2 font-semibold">
@@ -151,7 +151,7 @@ export default function KnowledgeBaseManager({ draft, onClose }: { draft: KbDraf
 
         {needsWork.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="mb-1.5 font-bold text-amber-800">Answers that often don&apos;t solve the problem</p>
+            <p className="mb-1.5 font-semibold text-amber-800">Answers that often don&apos;t solve the problem</p>
             {needsWork.map((a) => (
               <p key={a.id} className="text-amber-900">
                 {a.title} · shown {a.s.shown}, solved {a.s.solved}, didn&apos;t work {a.s.not_solved}

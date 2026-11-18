@@ -11,10 +11,17 @@ import type { SessionUser } from "@/components/layout/navConfig";
 import { createClient } from "@/lib/supabase/server";
 
 // Served from the repo so builds and pages never depend on fonts.googleapis.com.
-const inter = localFont({
-  src: "../fonts/inter-latin-variable.woff2",
+const geist = localFont({
+  src: "../fonts/geist-variable.woff2",
   weight: "100 900",
-  variable: "--font-inter",
+  variable: "--font-geist",
+  display: "swap",
+});
+
+const geistMono = localFont({
+  src: "../fonts/geist-mono-variable.woff2",
+  weight: "100 900",
+  variable: "--font-geist-mono",
   display: "swap",
 });
 
@@ -28,7 +35,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10233f",
+  themeColor: "#0f172a",
 };
 
 const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
@@ -62,7 +69,7 @@ export default async function RootLayout({
   // If no user is logged in, ONLY render the login page children
   if (!user) {
     return (
-      <html lang="en" className={inter.variable}>
+      <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
         <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>
       </html>
     );
@@ -82,7 +89,7 @@ export default async function RootLayout({
       const { data: signupState } = await supabase.rpc("my_signup_state");
       if (!(signupState as { has_membership?: boolean } | null)?.has_membership) {
         return (
-          <html lang="en" className={inter.variable}>
+          <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
             <body className="m-0 bg-background p-0 text-text-main antialiased">
               {children}
               <PendingInvitations />
@@ -112,11 +119,11 @@ export default async function RootLayout({
               };
 
     return (
-      <html lang="en" className={inter.variable}>
+      <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
         <body className="m-0 bg-background p-0 text-text-main antialiased">
           <div className="flex min-h-screen items-center justify-center p-6">
             <div className="w-full max-w-md rounded-xl border border-border bg-surface p-8 text-center shadow-lg">
-              <h1 className="text-lg font-bold text-navy">{screen.title}</h1>
+              <h1 className="text-lg font-semibold text-navy">{screen.title}</h1>
               <p className="mt-2 text-sm text-text-muted">{screen.text}</p>
               <div className="mt-6 flex justify-center">
                 <SignOutButton />
@@ -163,7 +170,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
       <body className="m-0 bg-background p-0 text-text-main antialiased">
         <AppShell user={sessionUser}>{children}</AppShell>
         <OnboardingLayer user={sessionUser} />

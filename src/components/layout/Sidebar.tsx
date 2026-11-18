@@ -53,11 +53,11 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
           href={item.href}
           aria-current={isActive ? "page" : undefined}
           className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition ${
-            isActive ? (platform ? "bg-violet-600 text-white shadow-sm" : "bg-accent text-white shadow-sm") : "text-muted hover:bg-white/10 hover:text-white"
+            isActive ? (platform ? "bg-platform-accent text-white shadow-sm" : "bg-accent text-white shadow-sm") : "text-muted hover:bg-white/10 hover:text-white"
           }`}
         >
           <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-white/50 group-hover:text-white"}`} />
-          <span className="truncate">{item.name === "Owner Console" && platform ? "Firms" : item.name}</span>
+          <span className="truncate">{item.name === "Owner console" && platform ? "Firms" : item.name}</span>
         </Link>
       );
     });
@@ -79,7 +79,7 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col text-white transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
-          platform ? "bg-violet-950" : "bg-navy"
+          platform ? "bg-platform sidebar-glow" : "bg-navy sidebar-glow"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* Brand header */}
@@ -87,19 +87,19 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
           <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
             {platform ? (
               <>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500 text-sm font-black text-white shadow-sm">D</div>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-platform-accent text-sm font-semibold text-white shadow-sm">D</div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-base font-bold leading-tight tracking-tight text-white">Duesk</h1>
-                  <p className="truncate text-[11px] font-medium text-violet-200">{user.isPlatformOwner ? "Owner Console" : "Support Desk"}</p>
+                  <h1 className="truncate text-base font-semibold leading-tight tracking-tight text-white">Duesk</h1>
+                  <p className="truncate text-[11px] font-medium text-platform-soft">{user.isPlatformOwner ? "Owner console" : "Support desk"}</p>
                 </div>
               </>
             ) : (
               <>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white shadow-sm">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white shadow-sm">
                   {firmInitial(user.orgName)}
                 </div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-sm font-bold leading-tight tracking-tight text-white" title={user.orgName}>
+                  <h1 className="truncate text-sm font-semibold leading-tight tracking-tight text-white" title={user.orgName}>
                     {user.orgName || "Your firm"}
                   </h1>
                   <p className="truncate text-[11px] font-medium text-muted">Duesk by Oddlambda</p>
@@ -133,7 +133,7 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
                     type="button"
                     onClick={() => setIsReviewerOpen(!isReviewerOpen)}
                     aria-expanded={isReviewerOpen}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-accent transition hover:text-white"
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent transition hover:text-white"
                   >
                     <span className="flex items-center gap-2">
                       <Shield className="h-3.5 w-3.5" /> Review tasks
@@ -173,10 +173,10 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
         {/* Profile footer */}
         <div className={`border-t border-white/10 p-3 ${platform ? "bg-black/20" : "bg-navy-dark/40"}`}>
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white">{getInitials(user.name)}</div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">{getInitials(user.name)}</div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-              <p className={`truncate text-[11px] ${platform ? "text-violet-200" : "text-muted"}`}>{roleLabel}</p>
+              <p className={`truncate text-[11px] ${platform ? "text-platform-soft" : "text-muted"}`}>{roleLabel}</p>
             </div>
             <button
               type="button"

@@ -383,9 +383,9 @@ export default function PackagesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Layers className="h-5 w-5 text-navy" /> Service packages
           </h2>
           <p className="mt-1 text-xs text-text-muted">Retainers, engagement letters and automatic recurring billing.</p>
@@ -415,7 +415,7 @@ export default function PackagesPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                  <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                   <Icon className="h-4 w-4" />
@@ -480,11 +480,11 @@ export default function PackagesPage() {
                     <div className="space-y-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h3 className="text-base font-bold text-navy">{pkg.name}</h3>
+                          <h3 className="text-base font-semibold text-navy">{pkg.name}</h3>
                           {pkg.description && <p className="text-xs text-text-muted">{pkg.description}</p>}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-lg font-bold text-emerald-700">{formatINR(Number(pkg.price || 0))}</p>
+                          <p className="text-lg font-semibold text-emerald-700">{formatINR(Number(pkg.price || 0))}</p>
                           <p className="text-[10px] text-text-muted">
                             per {String(pkg.billing_cycle || "Monthly").toLowerCase().replace("ly", "")} + GST {Number(pkg.gst_rate ?? 18)}%
                           </p>
@@ -492,7 +492,7 @@ export default function PackagesPage() {
                       </div>
 
                       <div className="space-y-1.5 rounded-lg border border-border bg-surface-alt p-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-navy">Bundled Services ({services.length})</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-navy">Bundled Services ({services.length})</p>
                         {services.length === 0 ? (
                           <p className="text-[11px] text-text-muted">No services bundled.</p>
                         ) : (
@@ -576,7 +576,7 @@ export default function PackagesPage() {
       {/* ================= Create / Edit Package ================= */}
       {isPkgModalOpen && (
         <Modal
-          title={editingPkg ? `Edit ${editingPkg.name}` : "Create Retainer Package"}
+          title={editingPkg ? `Edit ${editingPkg.name}` : "Create retainer package"}
           subtitle="Services become tasks on onboarding. Terms and billing defaults are copied into each proposal."
           onClose={() => !pkgSaving && setIsPkgModalOpen(false)}
           maxWidth="max-w-4xl"
@@ -585,7 +585,7 @@ export default function PackagesPage() {
               <button type="button" onClick={() => setIsPkgModalOpen(false)} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="submit" form="pkg-form" disabled={pkgSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+              <button type="submit" form="pkg-form" disabled={pkgSaving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
                 {pkgSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save Package
               </button>
             </div>
@@ -625,7 +625,7 @@ export default function PackagesPage() {
             {/* Services */}
             <div className="space-y-2 border-t border-border pt-3">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold uppercase tracking-wide text-navy">Services (become tasks on onboarding)</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-navy">Services (become tasks on onboarding)</label>
                 <button type="button" onClick={() => setServiceTemplates([...serviceTemplates, { ...EMPTY_SERVICE }])} className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy hover:underline">
                   <Plus className="h-3 w-3" /> Add service
                 </button>
@@ -677,7 +677,7 @@ export default function PackagesPage() {
 
             {/* Engagement letter text */}
             <div className="space-y-2 border-t border-border pt-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-navy">Engagement letter details</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-navy">Engagement letter details</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {(
                   [
@@ -698,7 +698,7 @@ export default function PackagesPage() {
 
             {/* Billing defaults */}
             <div className="space-y-2 border-t border-border pt-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-navy">Billing defaults</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-navy">Billing defaults</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
                 {(
                   [
@@ -736,7 +736,7 @@ export default function PackagesPage() {
               <button type="button" onClick={() => setSelectedPkg(null)} disabled={onboarding} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
                 Cancel
               </button>
-              <button type="button" onClick={handleOnboardClient} disabled={onboarding || !selectedClientId} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+              <button type="button" onClick={handleOnboardClient} disabled={onboarding || !selectedClientId} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
                 {onboarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Confirm & Create {preview.length} Tasks
               </button>
             </div>

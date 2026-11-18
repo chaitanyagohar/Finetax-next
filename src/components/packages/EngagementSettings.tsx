@@ -68,7 +68,7 @@ function EngagementSettingsModal({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-xs font-semibold transition hover:bg-surface-alt">
             Cancel
           </button>
-          <button type="button" onClick={save} disabled={saving || !t} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60">
+          <button type="button" onClick={save} disabled={saving || !t} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60">
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
           </button>
         </div>

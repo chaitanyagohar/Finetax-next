@@ -34,6 +34,7 @@ import TaskPicker from "@/components/tasks/TaskPicker";
 import { formatDate, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { EmptyArt } from "@/components/ui/Decor";
 
 const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
 const BUCKET = "firm-documents";
@@ -423,9 +424,9 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="hero-card flex flex-col items-start justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-text-main">
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-text-main">
             <Folder className="h-5 w-5 text-navy" /> Secure document vault
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
@@ -456,7 +457,7 @@ export default function DocumentsPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{k.label}</p>
-                  <p className={`mt-1.5 text-2xl font-bold tracking-tight ${k.valueClass}`}>{k.value}</p>
+                  <p className={`mt-1.5 text-2xl font-semibold tracking-tight ${k.valueClass}`}>{k.value}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${k.style}`}>
                   <Icon className="h-4 w-4" />
@@ -515,7 +516,7 @@ export default function DocumentsPage() {
           <ListSkeleton label="Loading document vault" />
         ) : filteredDocuments.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-10 text-center">
-            <Folder className="h-6 w-6 text-text-muted" />
+            <EmptyArt />
             <p className="text-xs text-text-muted">{documents.length === 0 ? "No documents yet. Upload your first file." : "No documents match these filters."}</p>
           </div>
         ) : (
@@ -600,7 +601,7 @@ export default function DocumentsPage() {
       {/* ================= Upload / Edit ================= */}
       {isModalOpen && (
         <Modal
-          title={editingDoc ? "Edit Document Details" : "Upload to Vault"}
+          title={editingDoc ? "Edit document details" : "Upload to vault"}
           subtitle={editingDoc ? editingDoc.file_name || editingDoc.title : "PDF, Excel, Word, images, ZIP · up to 50 MB per file"}
           onClose={() => !uploading && setIsModalOpen(false)}
           maxWidth="max-w-lg"
@@ -615,10 +616,10 @@ export default function DocumentsPage() {
                   type="submit"
                   form="doc-form"
                   disabled={uploading || (!editingDoc && selectedFiles.length === 0)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
                 >
                   {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {editingDoc ? "Save Details" : `Upload ${selectedFiles.length || ""} File${selectedFiles.length === 1 ? "" : "s"}`}
+                  {editingDoc ? "Save details" : `Upload ${selectedFiles.length || ""} file${selectedFiles.length === 1 ? "" : "s"}`}
                 </button>
               </div>
             </div>
@@ -637,7 +638,7 @@ export default function DocumentsPage() {
                 <input type="file" id="pc-file-input" multiple onChange={handleFileSelect} className="hidden" accept={ALLOWED_EXT.map((e) => `.${e}`).join(",")} />
                 <label htmlFor="pc-file-input" className="block cursor-pointer space-y-1">
                   <Upload className="mx-auto h-6 w-6 text-navy" />
-                  <p className="font-bold text-navy">Click to choose files</p>
+                  <p className="font-semibold text-navy">Click to choose files</p>
                   <p className="text-[10px] text-text-muted">You can select several files at once</p>
                 </label>
                 {selectedFiles.length > 0 && (
@@ -721,7 +722,7 @@ export default function DocumentsPage() {
                 type="button"
                 onClick={sendEmail}
                 disabled={emailSending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:opacity-60"
               >
                 {emailSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Send
               </button>
