@@ -11,6 +11,7 @@ export type TourStep = {
   module?: string; // only for people with this module (admins see everything)
   adminOnly?: boolean;
   reviewerOnly?: boolean;
+  feature?: string; // only when the firm's plan includes it
   tryIt?: string; // the person clicks the highlighted control and the tour moves on
 };
 
@@ -25,6 +26,7 @@ export const TOURS: Record<string, Tour> = {
     steps: [
       { title: "Welcome to Duesk", body: "Here's a quick look at where everything lives. Use the arrow keys or the buttons, and press Esc to leave the tour any time." },
       { target: nav("/"), title: "Dashboard", body: "Your firm at a glance: work due, revenue and receivables, compliance at risk and how busy each person is." },
+      { target: nav("/my-day"), module: "tasks", title: "My day", body: "Your own list: overdue, today and the next week, with Start and Submit in one click." },
       { target: nav("/tasks"), module: "tasks", title: "Tasks", body: "The heart of Duesk. Every compliance job is a task with an internal deadline before the statutory one, a reviewer, and automatic reminders." },
       { target: nav("/calendar"), module: "calendar", title: "Calendar", body: "Every due date in one calendar: statutory compliance dates and your team's internal deadlines." },
       { target: nav("/clients"), module: "leads", title: "Clients", body: "All client details in one place, with PAN and GSTIN checks, duplicate detection and spreadsheet import." },
@@ -33,11 +35,14 @@ export const TOURS: Record<string, Tour> = {
       { target: nav("/invoices"), module: "invoices", title: "Invoices", body: "Tax invoices with place of supply worked out for you, a UPI QR code, payment recording and one continuous number series." },
       { target: nav("/packages"), adminOnly: true, title: "Packages & engagement letters", body: "Bundle recurring services with a fee. Send an engagement letter; when the client accepts online, tasks and monthly bills start automatically." },
       { target: nav("/time-tracking"), module: "time_tracking", title: "Time tracking", body: "Timers follow your task stages, idle time is caught, and a short daily review keeps timesheets honest." },
+      { target: nav("/attendance"), feature: "attendance", title: "Attendance", body: "Your days work themselves out from your activity. After 15 quiet minutes Duesk asks what you were doing, so time in Tally, on a portal or on a call still counts. Leave is applied for here too." },
       { target: nav("/performance"), title: "Performance", body: "KPI scorecards built from real task and time data, so reviews and appraisals are fair." },
       { target: nav("/inbox"), module: "dashboard", title: "Inbox", body: "Your firm's mailboxes in one inbox. Mail from clients is linked to them automatically." },
       { target: nav("/documents"), module: "documents", title: "Document vault", body: "A private vault for client documents, with secure 7-day share links and email attachments." },
       { target: nav("/chat"), title: "Team chat", body: "Channels, direct messages and a thread on every task, so discussions stay with the work." },
+      { target: nav("/organisation"), adminOnly: true, title: "Branches and roles", body: "Your offices, with shared or separate billing, and roles that decide what each person sees and can do." },
       { target: nav("/help"), title: "Help & support", body: "Step-by-step guides, a troubleshooter, and a chat with the Duesk team if you get stuck." },
+      { title: "Your account", body: "Click your name at the top right to add a photo and to turn on two-step sign-in, which asks for a code from your phone after your password." },
       { title: "You're ready", body: "Open Getting started (bottom-left) for your checklist. Every page also has a short tour: open the checklist and choose \"Tour this page\"." },
     ],
   },
@@ -58,6 +63,8 @@ export const TOURS: Record<string, Tour> = {
       { target: tag("dash-compliance"), title: "Statutory deadlines, next 14 days", body: "Each day shows how many statutory deadlines fall on it. Click a day to see exactly what's due and its stage." },
       { target: tag("dash-capacity"), adminOnly: true, title: "Team capacity", body: "Active, overdue and to-review work for each person, so new work goes to whoever has room." },
       { target: tag("dash-stream"), title: "Work in motion", body: "The open tasks that matter most right now, with internal due dates and stages." },
+      { target: tag("dash-announcements"), title: "Announcements", body: "Firm notices. A must-read one stays pinned above every page until you click \"I've read this\"." },
+      { target: tag("dash-escalations"), adminOnly: true, feature: "escalation_levels", title: "Needs a partner", body: "Work overdue past the escalation levels, or close to its statutory date, most urgent first. Partners also get this list once a day." },
     ],
   },
 
@@ -259,17 +266,70 @@ export const TOURS: Record<string, Tour> = {
         body: "Each person gets a role and a set of modules.",
         points: ["Admins manage the firm, staff do the work, reviewers approve it", "Turn modules on or off per person", "Deactivating someone keeps all their history"],
       },
+      { adminOnly: true, feature: "branches", title: "Branch and firm role", body: "When editing someone, choose their branch and a firm role. The role then decides their sections, what they see and what they may approve." },
+      { adminOnly: true, title: "Sign-in security", body: "The key icon on a person lets you email a reset link, set a password, change their email, or reset two-step sign-in if they lose their phone." },
     ],
   },
 
   "/settings": {
     title: "Settings",
-    steps: [{ adminOnly: true, title: "Firm settings", body: "Letterhead details, numbering and GST rate. Bank details need your password to change, and other admins are alerted." }],
+    steps: [
+      { adminOnly: true, title: "Firm settings", body: "Letterhead details, numbering and GST rate. Bank details need your password to change, and other admins are alerted." },
+      { adminOnly: true, title: "Logo and colour", body: "Your logo goes on PDFs, the client portal, the morning email and the menu." },
+      { adminOnly: true, title: "Email activity", body: "Every email Duesk sends from your mailbox, and why any failed. \"Send me a test email\" checks your mailbox in seconds." },
+    ],
   },
 
   "/audit-page": {
     title: "Audit trail",
     steps: [{ adminOnly: true, title: "Who did what, and when", body: "Every important action is recorded. Filter by person or action and export to CSV." }],
+  },
+
+  "/attendance": {
+    title: "Attendance",
+    steps: [
+      { title: "Attendance", body: "Worked out from activity in Duesk. Nothing on anyone's screen is recorded." },
+      { target: tag("att-day"), title: "Start and end your day", body: "Optional. If you don't, your first and last activity are used." },
+      { target: tag("att-leave"), title: "Apply for leave", body: "Your approver is told straight away, and you are told when it's decided." },
+      {
+        target: tag("att-tabs"),
+        title: "Tabs",
+        body: "My attendance shows your last 30 days.",
+        points: [
+          "Team report and Workload: for people who may see attendance",
+          "Approvals: away time above the daily limit, and leave",
+          "Holidays and rules: admins set holidays, the quiet time and the daily limit",
+        ],
+      },
+      { title: "The away question", body: "After 15 quiet minutes the timer pauses. When you come back, pick what you were doing: Tally or Excel, a portal, a call, other work, or a break. Work above 2 hours a day goes for approval." },
+    ],
+  },
+
+  "/organisation": {
+    title: "Branches and roles",
+    steps: [
+      { target: tag("org-tabs"), title: "Branches and roles", body: "Two lists: your offices, and the roles you give people." },
+      {
+        title: "Billing per branch",
+        body: "Each branch either bills under the firm or on its own.",
+        points: ["Leave GSTIN and numbering empty to use the firm's", "Or give it its own GSTIN and its own invoice numbering, such as PV/{FY}/", "A client's invoices follow the client's branch"],
+      },
+      { title: "Office internet address", body: "Days opened from this address are marked In office. It's only recorded; nobody is blocked." },
+      {
+        title: "Roles",
+        body: "A role sets what someone sees and can do.",
+        points: ["Sees: own work, their branch, or the whole firm", "Sections in the menu", "Rights: review work, approve time and leave, see attendance, see fees, export"],
+      },
+      { title: "Give people their role", body: "On Team management, choose each person's branch and role. Changing a role updates everyone who has it." },
+    ],
+  },
+
+  "/security": {
+    title: "Sign-in security",
+    steps: [
+      { title: "Two-step sign-in", body: "After your password, Duesk asks for a 6-digit code from an app on your phone. A stolen password alone then opens nothing." },
+      { title: "Lost your phone?", body: "Your firm's administrator can reset it from Team management, under the person's sign-in security." },
+    ],
   },
 
   "/help": {

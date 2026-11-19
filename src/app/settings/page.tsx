@@ -32,6 +32,7 @@ import { localISODate } from "@/lib/format";
 import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
 import PaymentGateway from "@/components/settings/PaymentGateway";
+import EmailActivity from "@/components/settings/EmailActivity";
 import DataAndSupport from "@/components/settings/DataAndSupport";
 import BrandSettings from "@/components/settings/BrandSettings";
 
@@ -696,6 +697,8 @@ export default function SettingsPage() {
 
       {isAdmin && <BrandSettings firmName={currentUser?.orgName || ""} onNotice={showToast} />}
       {isAdmin && currentUser?.orgId && <PaymentGateway orgId={currentUser.orgId} onNotice={showToast} />}
+      {isAdmin && <EmailActivity onNotice={showToast} />}
+
       {isAdmin && <DataAndSupport onNotice={showToast} />}
 
       {/* Sticky unsaved-changes bar */}

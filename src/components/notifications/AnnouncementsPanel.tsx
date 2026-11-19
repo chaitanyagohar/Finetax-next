@@ -158,7 +158,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
   if (!isAdmin && list.length === 0) return null;
 
   return (
-    <section className="rounded-xl border border-border bg-surface shadow-sm">
+    <section data-tour="dash-announcements" className="rounded-xl border border-border bg-surface shadow-sm">
       <header className={`flex items-center justify-between gap-3 px-4 py-3 ${list.length > 0 ? "border-b border-border" : ""}`}>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-main">
           <Megaphone className="h-4 w-4 text-navy" /> Announcements

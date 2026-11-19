@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
     // 6. Send
     try {
       await sendFirmEmail({
+        kind: "quotation",
         orgId: caller.orgId,
         to: recipientEmail,
         subject: `Quotation ${quoteNum} from ${firmName}`,

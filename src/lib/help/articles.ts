@@ -352,6 +352,33 @@ Give people their branch and role on **Team management**. Changing a role update
 2. Level 2: when overdue by the days you choose, the reviewer and the person who assigned it are told.
 3. Level 3: when overdue longer, or the statutory date is close, the task goes on the **partners' list**, sent once a day at the time you choose and shown on the Dashboard as **Needs a partner**.`,
   },
+  {
+    id: "two-step",
+    title: "Two-step sign-in",
+    area: "Basics",
+    keywords: "two step 2fa mfa otp code authenticator google microsoft phone security lost phone verify",
+    body: `Two-step sign-in asks for a 6-digit code from an app on your phone after your password, so a stolen password alone opens nothing.
+
+1. Click your name at the top right, then **Sign-in security**.
+2. Click **Set up two-step sign-in** and scan the code with Google Authenticator, Microsoft Authenticator or a similar app.
+3. Type the 6-digit code the app shows and click **Turn on**.
+
+From then on Duesk asks for a code each time you sign in. **Lost your phone?** An administrator opens **Team management**, clicks the key icon on your name and chooses **Reset 2-step**. Administrators can also require it for every administrator of the firm.`,
+  },
+  {
+    id: "emails-not-arriving",
+    title: "Emails are not arriving",
+    area: "Inbox",
+    adminOnly: true,
+    keywords: "email not received not sending invoice email failed test mailbox smtp spam app password",
+    body: `Every email Duesk sends (invoices, reminders, quotations, invitations, portal links) goes from your firm's connected mailbox.
+
+1. Open **Settings → Email activity** and click **Send me a test email**.
+2. If it fails, the reason is shown. "No connected email accounts" means you need to connect a mailbox under **Inbox**. "Login failed" means its password changed; for Gmail use an **app password**, not your normal password.
+3. If it says Sent but nothing arrives, check **Spam**, and ask the recipient to add your address to their contacts.
+
+Password-reset and sign-up confirmation emails are different: they are sent by Duesk's sign-in service. If those don't arrive, contact Duesk support.`,
+  },
 ];
 
 export function knowledgeBaseText(): string {

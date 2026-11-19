@@ -10,6 +10,7 @@ import { Pill } from "@/components/ui/kit";
 import FirmDiagnostics from "@/components/owner/FirmDiagnostics";
 import UpdatesComposer from "@/components/owner/UpdatesComposer";
 import PlansEditor from "@/components/owner/PlansEditor";
+import EmailHealth from "@/components/owner/EmailHealth";
 
 type Firm = {
   id: string;
@@ -128,6 +129,17 @@ export default function OwnerConsolePage() {
 
   const [health, setHealth] = useState<Record<string, Health>>({});
   const [diagFor, setDiagFor] = useState<Firm | null>(null);
+
+  // From the "gave support access" notice: open that firm's support view
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("support");
+    if (!want) return;
+    const firm = firms.find((f) => f.id === want);
+    if (firm) {
+      setDiagFor(firm);
+      window.history.replaceState(null, "", "/owner");
+    }
+  }, [firms]);
 
   async function load() {
     setLoading(true);
@@ -532,6 +544,8 @@ export default function OwnerConsolePage() {
           </form>
         </Modal>
       )}
+
+      <EmailHealth />
 
       <PlansEditor firms={firms} />
 

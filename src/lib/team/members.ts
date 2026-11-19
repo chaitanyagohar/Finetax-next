@@ -121,6 +121,7 @@ export async function inviteExistingPerson(admin: SupabaseClient, caller: AuthCo
 export async function sendInvitationNotice(caller: AuthContext, to: string, name: string, site: string): Promise<void> {
   try {
     await sendFirmEmail({
+      kind: "invitation",
       orgId: caller.orgId,
       to,
       subject: `${caller.orgName} has invited you to join them on Duesk`,

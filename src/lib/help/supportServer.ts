@@ -99,6 +99,7 @@ export async function escalateTicket(
       for (const a of agents || []) {
         if (!a.email) continue;
         await sendFirmEmail({
+          kind: "support",
           orgId: senderOrg,
           to: a.email,
           subject: `Support request ${updated?.number || ticket.number} from ${who}${info.priority === "urgent" ? " [URGENT]" : ""}`,

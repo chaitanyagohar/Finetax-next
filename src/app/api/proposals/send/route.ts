@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     const validity = proposal.expires_at ? ` This proposal is valid until ${escapeHtml(String(proposal.expires_at).split("-").reverse().join("/"))}.` : "";
 
     await sendFirmEmail({
+      kind: "engagement",
       orgId: caller.orgId,
       to,
       subject: `Engagement letter ${proposal.number}: ${pkg?.name || "Professional services"}`,

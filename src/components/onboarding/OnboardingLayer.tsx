@@ -7,6 +7,7 @@ import { ArrowRight, Check, Compass, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { SessionUser } from "@/components/layout/navConfig";
 import { TOURS, type TourStep } from "@/lib/onboarding/tours";
+import { hasFeature } from "@/lib/features";
 import TourRunner from "./TourRunner";
 import DueskLogo from "./DueskLogo";
 import Stamp from "./Stamp";
@@ -17,11 +18,14 @@ type OnboardingData = {
   progress: Record<string, boolean>;
 };
 
-type Item = { key: string; title: string; text: string; href?: string; tour?: string; module?: string; adminOnly?: boolean };
+type Item = { key: string; title: string; text: string; href?: string; tour?: string; event?: string; module?: string; adminOnly?: boolean; feature?: string };
 
 const ITEMS: Item[] = [
   { key: "setup", title: "Set up your firm profile", text: "Letterhead, GSTIN, numbering and bank details.", href: "/setup", adminOnly: true },
   { key: "welcome", title: "Take the 2-minute tour", text: "See where everything lives.", tour: "welcome" },
+  { key: "photo", title: "Add your photo", text: "From your name at the top right.", event: "duesk:open-account-menu" },
+  { key: "logo", title: "Add your firm's logo", text: "On invoices, PDFs, the portal and the menu.", href: "/settings", adminOnly: true },
+  { key: "mfa", title: "Turn on two-step sign-in", text: "A code from your phone after your password.", href: "/security" },
   { key: "team", title: "Add a team member", text: "Choose exactly which modules they can use.", href: "/team", adminOnly: true },
   { key: "mailbox", title: "Connect your firm mailbox", text: "Send invoices from your own address.", href: "/inbox", adminOnly: true },
   { key: "client", title: "Add your first client", text: "PAN and GSTIN are checked as you type.", href: "/clients", module: "leads" },
@@ -30,6 +34,9 @@ const ITEMS: Item[] = [
   { key: "task", title: "Create a task", text: "With an internal and a statutory due date.", href: "/tasks", module: "tasks" },
   { key: "time", title: "Track time on a task", text: "Start work on a task and the timer runs itself.", href: "/time-tracking", module: "time_tracking" },
   { key: "invoice", title: "Issue your first invoice", text: "GST-correct, with a UPI QR code.", href: "/invoices", module: "invoices" },
+  { key: "branches", title: "Add your other offices", text: "Shared billing, or each office with its own GSTIN.", href: "/organisation", adminOnly: true, feature: "branches" },
+  { key: "roles", title: "Make your firm's roles", text: "Article, senior, manager: what each sees and can do.", href: "/organisation", adminOnly: true, feature: "custom_roles" },
+  { key: "attendance", title: "Add holidays and attendance rules", text: "So absences and workload are counted right.", href: "/attendance?tab=holidays", adminOnly: true, feature: "attendance" },
 ];
 
 const HIDDEN_PATHS = ["/setup", "/welcome", "/reset-password"];
@@ -71,7 +78,8 @@ export default function OnboardingLayer({ user }: { user: SessionUser }) {
   const hiddenHere = user.isPlatformHome || HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
   const can = useCallback(
-    (s: { module?: string; adminOnly?: boolean; reviewerOnly?: boolean }) => {
+    (s: { module?: string; adminOnly?: boolean; reviewerOnly?: boolean; feature?: string }) => {
+      if (s.feature && !hasFeature(user, s.feature)) return false;
       if (s.adminOnly && !user.isAdmin) return false;
       if (s.reviewerOnly && !user.isReviewer) return false;
       if (s.module && !user.isAdmin && !user.moduleAccess.includes(s.module)) return false;
@@ -265,6 +273,17 @@ export default function OnboardingLayer({ user }: { user: SessionUser }) {
                     <li key={it.key} className="ob-rise transition hover:bg-slate-50" style={{ animationDelay: `${i * 0.03}s` }}>
                       {it.tour ? (
                         <button type="button" className="block w-full text-left" onClick={() => startTour(it.tour!)}>
+                          {content}
+                        </button>
+                      ) : it.event ? (
+                        <button
+                          type="button"
+                          className="block w-full text-left"
+                          onClick={() => {
+                            setOpen(false);
+                            window.dispatchEvent(new Event(it.event!));
+                          }}
+                        >
                           {content}
                         </button>
                       ) : (

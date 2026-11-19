@@ -180,8 +180,9 @@ function AttendancePage() {
 
   async function saveRules(e: React.FormEvent) {
     e.preventDefault();
-    const { error: err } = await supabase.from("firm_settings").update(rules).eq("org_id", user!.orgId);
-    setNotice(err ? err.message : "Rules saved. They apply from each person's next page load.");
+    const res = await fetch("/api/admin/firm-options", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rules) });
+    const json = await res.json().catch(() => ({}));
+    setNotice(res.ok ? "Rules saved. They apply from each person's next page load." : json.error || "Could not save the rules.");
   }
 
   async function removeHoliday(id: string) {
@@ -216,7 +217,7 @@ function AttendancePage() {
         title="Attendance"
         subtitle="Days, time away from the screen, leave and workload. Worked out from activity in Duesk; nothing on anyone's screen is recorded."
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2" data-tour="att-day">
             {!todayRow?.day_started_at || todayRow.day_ended_at ? (
               <button type="button" disabled={busy} onClick={() => markDay("start")} className={btn.secondary}>
                 <LogIn className="h-3.5 w-3.5" /> Start my day
@@ -226,13 +227,13 @@ function AttendancePage() {
                 <LogOut className="h-3.5 w-3.5" /> End my day
               </button>
             )}
-            <button type="button" onClick={() => setApplyOpen(true)} className={btn.primary}>
+            <button type="button" data-tour="att-leave" onClick={() => setApplyOpen(true)} className={btn.primary}>
               <CalendarOff className="h-3.5 w-3.5" /> Apply for leave
             </button>
           </div>
         }
       >
-        <div className="inline-flex flex-wrap rounded-lg border border-border bg-surface-alt p-1 text-xs font-semibold">
+        <div data-tour="att-tabs" className="inline-flex flex-wrap rounded-lg border border-border bg-surface-alt p-1 text-xs font-semibold">
           {tabs
             .filter(([, , show]) => show)
             .map(([k, label]) => (

@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       const firmName = firm?.firm_name || caller.orgName;
       try {
         await sendFirmEmail({
+          kind: "portal_invite",
           orgId: caller.orgId,
           to: email,
           subject: `${firmName} has opened a client portal for you`,

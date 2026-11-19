@@ -26,7 +26,7 @@ export default function EscalationList() {
 
   if (!rows || rows.length === 0) return null;
   return (
-    <div ref={ref} id="escalations">
+    <div ref={ref} id="escalations" data-tour="dash-escalations">
       <Card title={`Needs a partner (${rows.length})`} icon={Siren} bodyClassName="p-0">
         <ul className="max-h-80 divide-y divide-border overflow-y-auto text-xs">
           {rows.map((r) => (

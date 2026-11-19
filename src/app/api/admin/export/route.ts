@@ -5,6 +5,7 @@ export const maxDuration = 60;
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
+import { verifyCallerPassword } from "@/lib/api/reauth";
 import { istDate } from "@/lib/format";
 import { toCsv, zipFiles } from "@/lib/zip";
 
@@ -36,6 +37,9 @@ export async function POST(request: NextRequest) {
     if (!(await checkRateLimit(`export:${caller.orgId}`, 3, 60 * 60 * 1000))) {
       throw new ApiError(429, "An export can be made 3 times an hour.");
     }
+    // A full copy of the firm leaves Duesk: confirm it is really the administrator
+    const body = (await request.json().catch(() => ({}))) as { adminPassword?: unknown };
+    await verifyCallerPassword(caller.email, body.adminPassword);
     const admin = getAdminClient();
     const files: { name: string; data: Buffer }[] = [];
     const counts: Record<string, number> = {};

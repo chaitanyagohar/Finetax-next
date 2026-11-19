@@ -41,6 +41,8 @@ export interface SendFirmEmailInput {
   orgId: string;
   /** False keeps the email out of the sending mailbox's Sent list (for one-time codes). */
   record?: boolean;
+  /** What the email is, for the email log (invoice, reminder, invitation, ...). */
+  kind?: string;
 }
 
 export interface SendFirmEmailResult {
@@ -112,7 +114,41 @@ export function createSmtpTransport(account: any, password: string, address: str
 
 
 
+/** Sends from the firm's mailbox and notes the result in the email log, so failures are visible. */
 export async function sendFirmEmail(input: SendFirmEmailInput): Promise<SendFirmEmailResult> {
+  try {
+    const result = await sendFirmEmailNow(input);
+    await logEmail(input, "sent", null, result.from);
+    return result;
+  } catch (err) {
+    await logEmail(input, "failed", err instanceof Error ? err.message : String(err), null);
+    throw err;
+  }
+}
+
+async function logEmail(input: SendFirmEmailInput, status: "sent" | "failed", error: string | null, from: string | null) {
+  if (!input.orgId) return;
+  try {
+    const kind = /^[a-z_]{2,30}$/.test(input.kind || "") ? input.kind : "other";
+    // One-time codes are logged without their subject or recipient
+    const hidden = input.record === false;
+    await getAdminClient()
+      .from("email_log")
+      .insert({
+        org_id: input.orgId,
+        kind,
+        from_address: from,
+        recipients: hidden ? [] : parseRecipients(input.to).slice(0, MAX_RECIPIENTS),
+        subject: hidden ? null : String(input.subject || "").slice(0, 300),
+        status,
+        error: error?.slice(0, 500) || null,
+      });
+  } catch {
+    // The log must never stop an email
+  }
+}
+
+async function sendFirmEmailNow(input: SendFirmEmailInput): Promise<SendFirmEmailResult> {
   // 1. Validate
   const recipients = parseRecipients(input.to);
   if (recipients.length === 0 || recipients.length > MAX_RECIPIENTS || recipients.some((r) => !EMAIL_RE.test(r))) {

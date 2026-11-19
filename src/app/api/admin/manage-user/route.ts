@@ -15,7 +15,7 @@ import { checkRateLimit } from "@/lib/api/rateLimit";
 import { validatePassword } from "@/lib/password";
 import { EMAIL_RE, UUID_RE } from "@/lib/validate";
 
-const ACTIONS = ["set_password", "send_reset_link", "update_email", "delete_user"];
+const ACTIONS = ["set_password", "send_reset_link", "update_email", "delete_user", "reset_mfa"];
 
 /** Re-authenticates the admin with their own password before any sensitive change. */
 async function verifyCallerPassword(email: string | null, password: unknown) {
@@ -154,6 +154,20 @@ export async function POST(request: NextRequest) {
       });
 
       return NextResponse.json({ success: true, message: `Password reset link sent to ${target.email}.` });
+    }
+
+    // 3b-2. Remove two-step sign-in (lost phone)
+    if (action === "reset_mfa") {
+      const { data: factors, error: listErr } = await admin.auth.admin.mfa.listFactors({ userId });
+      if (listErr) throw new ApiError(502, "Could not read their two-step sign-in.");
+      const list = factors?.factors || [];
+      if (list.length === 0) return NextResponse.json({ success: true, message: `${targetLabel} has no two-step sign-in set up.` });
+      for (const f of list) {
+        const { error } = await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId });
+        if (error) throw new ApiError(502, "Could not remove their two-step sign-in.");
+      }
+      await writeAuditLog({ actor: caller, action: "user_mfa_reset", entity: "profiles", entity_id: userId, metadata: { target: targetLabel } });
+      return NextResponse.json({ success: true, message: `Two-step sign-in removed for ${targetLabel}. Ask them to set it up again.` });
     }
 
     // 3c. Permanently delete the login and profile

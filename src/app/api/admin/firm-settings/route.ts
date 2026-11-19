@@ -172,6 +172,7 @@ export async function POST(request: NextRequest) {
             .map((k) => `<li><strong>${escapeHtml(k.replace(/_/g, " "))}</strong>: ${escapeHtml(bankChanges[k].from)} → ${escapeHtml(bankChanges[k].to)}</li>`)
             .join("");
           await sendFirmEmail({
+            kind: "security_alert",
             orgId: caller.orgId,
             to: recipients,
             subject: "Security alert: firm bank / payment details were changed",

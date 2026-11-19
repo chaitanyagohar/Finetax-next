@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       const firmName = firm?.firm_name || "Your CA firm";
       try {
         await sendFirmEmail({
+          kind: "portal_sign_in",
           orgId: u.org_id,
           to: email,
           subject: `Your sign-in link for ${firmName}`,
