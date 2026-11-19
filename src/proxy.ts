@@ -69,8 +69,12 @@ async function guard(request: NextRequest, nonce: string, csp: string) {
     const headers = new Headers(request.headers);
     headers.set("x-nonce", nonce);
     headers.set("Content-Security-Policy", csp);
+    headers.set("x-pathname", request.nextUrl.pathname);
     return NextResponse.next({ request: { headers } });
   }
+
+  // The client portal has its own sign-in (an email link), separate from staff accounts
+  if (matchesPath(request.nextUrl.pathname, "/portal")) return forward();
 
   let response = forward();
 

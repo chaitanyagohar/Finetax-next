@@ -32,6 +32,8 @@ import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -76,6 +78,7 @@ export default function ClientDiscussionsPage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [discussions, setDiscussions] = useState<any[]>([]);
@@ -208,6 +211,8 @@ export default function ClientDiscussionsPage() {
   }
 
   /* ---------------- Modal ---------------- */
+
+  useUrlIntent(!loading, { onNew: () => openModal() });
 
   function openModal(item?: any) {
     setFormError("");
@@ -519,7 +524,7 @@ export default function ClientDiscussionsPage() {
           <>
           {/* Phones: one card per discussion (tap to open); the table starts at tablet width */}
           <ul className="list-in divide-y divide-border md:hidden">
-            {sortedDiscussions.map((d) => {
+            {sortedDiscussions.slice(0, rowLimit).map((d) => {
               const c = clientById[clientIdOf(d)];
               const ModeIcon = MODE_ICON[d.mode || "Call"] || MessageSquare;
               return (
@@ -539,6 +544,7 @@ export default function ClientDiscussionsPage() {
               );
             })}
           </ul>
+          <div className="md:hidden"><ShowMore total={sortedDiscussions.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} /></div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
@@ -552,7 +558,7 @@ export default function ClientDiscussionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedDiscussions.map((d) => {
+                {sortedDiscussions.slice(0, rowLimit).map((d) => {
                   const c = clientById[clientIdOf(d)];
                   const ModeIcon = MODE_ICON[d.mode || "Call"] || MessageSquare;
                   const handler = handlerOf(d);
@@ -602,6 +608,7 @@ export default function ClientDiscussionsPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={sortedDiscussions.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
           </>
         )}

@@ -6,6 +6,7 @@ test.skip(!credentials.email || !credentials.password, "Set E2E_EMAIL and E2E_PA
 
 const PAGES = [
   "/",
+  "/my-day",
   "/inbox",
   "/clients",
   "/leads",
@@ -17,8 +18,12 @@ const PAGES = [
   "/performance",
   "/documents",
   "/invoices",
+  "/insights",
   "/reviewer-queue",
   "/team",
+  "/organisation",
+  "/attendance",
+  "/plan",
   "/packages",
   "/settings",
   "/help",
@@ -76,4 +81,29 @@ test("dialogs close with Escape and return focus", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(add).toBeFocused();
+});
+
+test("Ctrl+K finds records and actions", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.keyboard.press("Control+k");
+  const box = page.getByRole("dialog", { name: "Search and actions" });
+  await expect(box).toBeVisible();
+  await box.locator("input").fill("new inv");
+  await expect(box.getByRole("option", { name: /New invoice/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+});
+
+test("attendance tabs and branches open for an administrator", async ({ page }) => {
+  const errors = watchErrors(page);
+  await signIn(page);
+  await page.goto("/attendance?tab=team");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Attendance" })).toBeVisible();
+  for (const tab of ["Workload", "Holidays and rules", "My attendance"]) {
+    await page.getByRole("button", { name: tab, exact: true }).click();
+  }
+  await page.goto("/organisation");
+  await page.getByRole("button", { name: "Roles", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Branches and roles" })).toBeVisible();
+  expect(errors.filter((e) => !/websocket|realtime/i.test(e))).toEqual([]);
 });

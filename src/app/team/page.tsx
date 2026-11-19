@@ -35,18 +35,9 @@ import PasswordInput from "@/components/ui/PasswordInput";
 import { formatDate, getInitials } from "@/lib/format";
 import { validatePassword } from "@/lib/password";
 import { EMAIL_RE } from "@/lib/validate";
+import { PersonAvatar } from "@/components/ui/Avatar";
+import { MODULE_OPTIONS } from "@/lib/team/modules";
 
-const MODULE_OPTIONS = [
-  { id: "leads", short: "Leads", label: "Clients & leads", desc: "Client master, enquiries and follow-ups" },
-  { id: "quotations", short: "Quotations", label: "Quotations", desc: "Fee proposals and PDF quotations" },
-  { id: "tasks", short: "Tasks", label: "Tasks & compliance", desc: "Task board, deadlines and assignments" },
-  { id: "calendar", short: "Calendar", label: "Compliance calendar", desc: "Statutory and internal due dates" },
-  { id: "discussions", short: "Discussions", label: "Client discussions", desc: "Call notes and client history" },
-  { id: "time_tracking", short: "Time", label: "Time tracking", desc: "Timers, timesheets and attendance" },
-  { id: "invoices", short: "Invoices", label: "Invoices & payments", desc: "Tax invoices and receivables" },
-  { id: "documents", short: "Documents", label: "Document vault", desc: "Client files and share links" },
-  { id: "dashboard", short: "Inbox", label: "Firm inbox", desc: "Read and send from firm mailboxes" },
-];
 const MODULE_SHORT: Record<string, string> = Object.fromEntries(MODULE_OPTIONS.map((m) => [m.id, m.short]));
 
 const ROLE_PRESETS = [
@@ -153,6 +144,11 @@ export default function TeamPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [designation, setDesignation] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [roleId, setRoleId] = useState("");
+  const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
+  const [customRoles, setCustomRoles] = useState<{ id: string; name: string; scope: string }[]>([]);
+  const [placeOf, setPlaceOf] = useState<Record<string, { branch_id: string | null; role_id: string | null }>>({});
   const [role, setRole] = useState("staff");
   const [isReviewer, setIsReviewer] = useState(false);
   const [moduleAccess, setModuleAccess] = useState<string[]>(["leads", "tasks", "time_tracking"]);
@@ -184,7 +180,16 @@ export default function TeamPage() {
 
   async function loadTeam() {
     setLoading(true);
-    const [{ data, error }, { data: planData }] = await Promise.all([supabase.rpc("firm_members"), supabase.rpc("my_plan")]);
+    const [{ data, error }, { data: planData }, b, r, places] = await Promise.all([
+      supabase.rpc("firm_members"),
+      supabase.rpc("my_plan"),
+      supabase.from("branches").select("id, name, is_default").order("is_default", { ascending: false }).order("name"),
+      supabase.from("roles").select("id, name, scope").order("name"),
+      supabase.from("memberships").select("user_id, branch_id, role_id"),
+    ]);
+    setBranches(b.data || []);
+    setCustomRoles(r.data || []);
+    setPlaceOf(Object.fromEntries((places.data || []).map((x) => [x.user_id, { branch_id: x.branch_id, role_id: x.role_id }])));
     setPlan((planData as any) || null);
     if (error) showToast("error", "Could not load the team. Refresh the page.");
     setTeam(((data as Member[]) || []).map((m) => ({ ...m, module_access: Array.isArray(m.module_access) ? m.module_access : null })));
@@ -247,7 +252,11 @@ export default function TeamPage() {
       setRole(member.role || "staff");
       setIsReviewer(!!member.is_reviewer);
       setModuleAccess(member.module_access || ["leads", "tasks", "time_tracking"]);
+      setBranchId(placeOf[member.id]?.branch_id || "");
+      setRoleId(placeOf[member.id]?.role_id || "");
     } else {
+      setBranchId("");
+      setRoleId("");
       setEditingMember(null);
       setFullName("");
       setEmail("");
@@ -275,6 +284,7 @@ export default function TeamPage() {
       role,
       is_reviewer: isReviewer,
       module_access: moduleAccess,
+      ...(editingMember ? { branch_id: branchId || null, role_id: role === "admin" ? null : roleId || null } : {}),
     };
 
     setSaving(true);
@@ -501,9 +511,7 @@ export default function TeamPage() {
                     <tr key={m.id} className="transition hover:bg-surface-alt">
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${st === "active" ? "bg-navy text-white" : "bg-border text-text-muted"}`}>
-                            {getInitials(m.name)}
-                          </div>
+                          <PersonAvatar id={m.id} name={m.name} size="md" className={st === "active" ? "" : "opacity-50 grayscale"} />
                           <div className="min-w-0">
                             <p className="flex items-center gap-1.5 text-sm font-semibold text-navy">
                               <span className="truncate">{m.name}</span>
@@ -527,6 +535,17 @@ export default function TeamPage() {
                             <Shield className="h-3 w-3" /> Reviewer
                           </span>
                         )}
+                        {(() => {
+                          const place = placeOf[m.id];
+                          const r = customRoles.find((x) => x.id === place?.role_id);
+                          const b = branches.length > 1 ? branches.find((x) => x.id === place?.branch_id) : undefined;
+                          return (
+                            <>
+                              {r && <span className="ml-1 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">{r.name}</span>}
+                              {b && <span className="ml-1 inline-block rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted">{b.name}</span>}
+                            </>
+                          );
+                        })()}
                         <p className="mt-1 text-[11px] text-text-muted">{m.designation || "—"}</p>
                       </td>
                       <td>
@@ -682,6 +701,31 @@ export default function TeamPage() {
                 </select>
                 {isSelf(editingMember) && <p className="mt-1 text-[11px] text-text-muted">You can&apos;t change your own role, so the firm never loses its administrator.</p>}
               </div>
+              {editingMember && branches.length > 1 && (
+                <div>
+                  <label className={labelClass}>Branch</label>
+                  <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={inputClass}>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {editingMember && role !== "admin" && customRoles.length > 0 && (
+                <div>
+                  <label className={labelClass}>Firm role</label>
+                  <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className={inputClass}>
+                    <option value="">None (choose sections below)</option>
+                    {customRoles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} · sees {r.scope === "own" ? "own work" : r.scope === "branch" ? "their branch" : "the whole firm"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {role !== "admin" && (
@@ -698,6 +742,10 @@ export default function TeamPage() {
 
             {role === "admin" ? (
               <p className="rounded-lg border border-border bg-surface-alt p-3 text-xs text-text-muted">Administrators can open every module and review all work.</p>
+            ) : roleId ? (
+              <p className="rounded-lg border border-border bg-surface-alt p-3 text-xs text-text-muted">
+                Sections and the right to review come from the {customRoles.find((r) => r.id === roleId)?.name} role. Change the role under Branches and roles.
+              </p>
             ) : (
               <div>
                 <div className="mb-2 flex items-center justify-between">

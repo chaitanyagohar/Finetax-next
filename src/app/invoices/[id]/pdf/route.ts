@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { pdfFileName, renderInvoicePdf } from "@/lib/pdf/firmDocuments";
 import { UUID_RE } from "@/lib/validate";
+import { sellerFor } from "@/lib/pdf/seller";
 
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: firm } = await supabase.from("firm_settings").select("*").eq("org_id", invoice.org_id).maybeSingle();
 
   try {
-    const pdf = await renderInvoicePdf(invoice, invoice.clients, firm);
+    const pdf = await renderInvoicePdf(invoice, invoice.clients, await sellerFor(invoice, firm));
     const download = request.nextUrl.searchParams.get("download") === "1";
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

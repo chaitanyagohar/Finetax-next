@@ -31,6 +31,8 @@ import { formatDate, getInitials, localISODate } from "@/lib/format";
 import ClientContact from "@/components/ui/ClientContact";
 import { nextOccurrenceText, recurrenceLabel } from "@/lib/tasks/recurrence";
 import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@/components/tasks/FeedbackTemplates";
+import FeatureGate from "@/components/plan/FeatureGate";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 const ANALYTICS_DAYS = 180;
 
@@ -73,7 +75,7 @@ function formatDateTime(iso: string): string {
 
 /* ---------------- Page ---------------- */
 
-export default function ReviewerQueuePage() {
+function ReviewerQueuePage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const activeTab = TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "pending";
@@ -603,7 +605,7 @@ export default function ReviewerQueuePage() {
                             <tr key={p.id}>
                               <td>
                                 <span className="flex items-center gap-2 font-semibold text-navy">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy/10 text-[9px] font-semibold text-navy">{getInitials(name)}</span>
+                                  <PersonAvatar id={p.id} name={name} size="xs" className="h-6 w-6" />
                                   {name}
                                 </span>
                               </td>
@@ -784,5 +786,13 @@ export default function ReviewerQueuePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ReviewerQueuePageWithPlan() {
+  return (
+    <FeatureGate feature="maker_checker">
+      <ReviewerQueuePage />
+    </FeatureGate>
   );
 }

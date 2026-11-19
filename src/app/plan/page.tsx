@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/format";
+import PlanFeatures from "@/components/plan/PlanFeatures";
 
 type PlanInfo = {
   plan: string;
@@ -149,6 +150,8 @@ export default function PlanPage() {
           </table>
         </div>
       </div>
+
+      <PlanFeatures />
     </div>
   );
 }

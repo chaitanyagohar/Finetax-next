@@ -31,6 +31,8 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import ImportantNotifications from "@/components/notifications/ImportantNotifications";
 import AnnouncementsPanel from "@/components/notifications/AnnouncementsPanel";
+import { hasFeature } from "@/lib/features";
+import EscalationList from "@/components/tasks/EscalationList";
 import { clientLabel } from "@/components/ui/ClientPicker";
 import Link from "next/link";
 import { HeroDecor } from "@/components/ui/Decor";
@@ -663,25 +665,25 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <ImportantNotifications />
       {/* ================= HEADER ================= */}
-      <div className="relative flex flex-col items-start justify-between gap-4 overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:flex-row xl:items-center">
-        <HeroDecor />
+      <div className="relative flex flex-col items-start justify-between gap-5 overflow-hidden rounded-2xl bg-navy p-5 text-white shadow-sm sm:p-7 xl:flex-row xl:items-end">
+        <HeroDecor dark />
         <div className="relative min-w-0 xl:flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-tight text-text-main">
+            <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
               {greeting()}, {currentUser?.name?.split(" ")[0] || "there"}
             </h2>
             {isAdmin && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ffb59f]">
                 <ShieldCheck className="h-3 w-3" /> Admin
               </span>
             )}
             {!isAdmin && isReviewer && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200">
                 <ShieldCheck className="h-3 w-3" /> Reviewer
               </span>
             )}
           </div>
-          <p className="mt-1 hidden text-xs text-text-muted sm:block">
+          <p className="mt-2 hidden text-sm text-white/65 sm:block">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
             {" · "}
             {isAdmin
@@ -695,7 +697,7 @@ export default function DashboardPage() {
             type="button"
             onClick={() => loadDashboardData()}
             title={lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Refresh"}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs font-medium text-text-muted transition hover:bg-surface-alt hover:text-text-main"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.06] px-2.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">
@@ -704,9 +706,9 @@ export default function DashboardPage() {
           </button>
 
           {isAdmin && (
-            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs">
-              <Calendar className="h-3.5 w-3.5 text-text-muted" />
-              <select value={dateFilter} onChange={(e) => changeDateFilter(e.target.value)} className="bg-transparent text-xs font-medium focus:outline-none">
+            <div className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.06] px-2.5 py-2 text-xs text-white">
+              <Calendar className="h-3.5 w-3.5 text-white/60" />
+              <select value={dateFilter} onChange={(e) => changeDateFilter(e.target.value)} className="bg-transparent text-xs font-medium focus:outline-none [&>option]:text-text-main">
                 <option value="all">All time</option>
                 <option value="month">This month</option>
                 <option value="quarter">This quarter</option>
@@ -717,23 +719,23 @@ export default function DashboardPage() {
 
           {isAdmin ? (
             <>
-              <Link href="/quotations" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-main shadow-sm transition hover:bg-surface-alt">
+              <Link href="/quotations?new=1" className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10">
                 <Plus className="h-3.5 w-3.5" /> Quote
               </Link>
-              <Link href="/invoices" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-main shadow-sm transition hover:bg-surface-alt">
+              <Link href="/invoices?new=1" className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10">
                 <Plus className="h-3.5 w-3.5" /> Invoice
               </Link>
-              <Link href="/tasks" className="inline-flex items-center gap-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
+              <Link href="/tasks?new=1" className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95">
                 <Plus className="h-3.5 w-3.5" /> Assign task
               </Link>
             </>
           ) : (
             <>
-              <Link href="/time-tracking" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-main shadow-sm transition hover:bg-surface-alt">
+              <Link href="/time-tracking?new=1" className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10">
                 <Timer className="h-3.5 w-3.5" /> Log time
               </Link>
-              <Link href="/tasks" className="inline-flex items-center gap-1 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light">
-                My Tasks <ArrowRight className="h-3.5 w-3.5" />
+              <Link href="/my-day" className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95">
+                My day <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </>
           )}
@@ -741,6 +743,7 @@ export default function DashboardPage() {
       </div>
 
       <AnnouncementsPanel isAdmin={isAdmin} />
+      {isAdmin && hasFeature(currentUser, "escalation_levels") && <EscalationList />}
 
       {isAdmin ? (
         /* ================= ADMIN EAGLE'S EYE VIEW ================= */

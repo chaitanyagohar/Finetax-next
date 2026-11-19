@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Building2, CheckCircle2, Loader2, Plus, Search } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, Globe2, LifeBuoy, Loader2, Mail, Plus, Search } from "lucide-react";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/format";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { createClient } from "@/lib/supabase/client";
+import { Pill } from "@/components/ui/kit";
+import FirmDiagnostics from "@/components/owner/FirmDiagnostics";
+import UpdatesComposer from "@/components/owner/UpdatesComposer";
+import PlansEditor from "@/components/owner/PlansEditor";
 
 type Firm = {
   id: string;
@@ -22,6 +27,59 @@ type Firm = {
   last_active: string | null;
   open_tickets: number;
 };
+
+type Health = {
+  org_id: string;
+  active_users_14d: number;
+  active_days_14d: number;
+  members: number;
+  clients: number;
+  tasks: number;
+  invoices_issued: number;
+  mailbox: boolean;
+  payments: boolean;
+  portal_users: number;
+  compliance_types: number;
+  setup_steps: number;
+  support_until: string | null;
+};
+
+/** Setup progress, recent use and a plain verdict, so trials that need a call stand out. */
+function HealthCell({ firm, h, onDiagnose }: { firm: Firm; h?: Health; onDiagnose: () => void }) {
+  if (!h || firm.slug === "oddlambda") return <span className="text-text-muted">—</span>;
+  const trialLeft = firm.trial_ends_at ? (Date.parse(firm.trial_ends_at) - Date.now()) / 86400000 : 99;
+  const verdict =
+    firm.status === "trial" && trialLeft <= 7 && (h.setup_steps <= 2 || h.active_users_14d === 0)
+      ? { text: "Call now", tone: "bad" as const }
+      : firm.status === "trial" && h.setup_steps <= 2
+        ? { text: "Needs help", tone: "warn" as const }
+        : h.active_users_14d === 0
+          ? { text: "Gone quiet", tone: "warn" as const }
+          : { text: "Healthy", tone: "good" as const };
+  return (
+    <div className="min-w-[150px] space-y-1">
+      <div className="flex items-center gap-2">
+        <Pill tone={verdict.tone}>{verdict.text}</Pill>
+        <span className="flex gap-0.5" title={`${h.setup_steps} of 5 setup steps: team, clients, tasks, an issued invoice, a mailbox`}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <span key={i} className={`h-1.5 w-3 rounded-full ${i < h.setup_steps ? "bg-accent" : "bg-border"}`} />
+          ))}
+        </span>
+      </div>
+      <p className="flex items-center gap-2 text-[10px] text-text-muted">
+        {h.active_users_14d} active in 14 days
+        <Mail className={`h-3 w-3 ${h.mailbox ? "text-emerald-600" : "opacity-30"}`} aria-label={h.mailbox ? "Mailbox connected" : "No mailbox"} />
+        <CreditCard className={`h-3 w-3 ${h.payments ? "text-emerald-600" : "opacity-30"}`} aria-label={h.payments ? "Razorpay connected" : "No Razorpay"} />
+        <Globe2 className={`h-3 w-3 ${h.portal_users ? "text-emerald-600" : "opacity-30"}`} aria-label={`${h.portal_users} portal users`} />
+      </p>
+      {h.support_until && (
+        <button type="button" onClick={onDiagnose} className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
+          <LifeBuoy className="h-3 w-3" /> Support view until {formatDate(h.support_until)}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const STATUS_TONE: Record<string, string> = {
   trial: "bg-violet-50 text-violet-700",
@@ -68,13 +126,17 @@ export default function OwnerConsolePage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  const [health, setHealth] = useState<Record<string, Health>>({});
+  const [diagFor, setDiagFor] = useState<Firm | null>(null);
+
   async function load() {
     setLoading(true);
     setError("");
-    const res = await fetch("/api/owner/firms", { cache: "no-store" });
+    const [res, h] = await Promise.all([fetch("/api/owner/firms", { cache: "no-store" }), createClient().rpc("platform_firm_health")]);
     const out = await res.json().catch(() => ({}));
     if (!res.ok) setError(out.error || "Could not load firms.");
     else setFirms(out.firms || []);
+    setHealth(Object.fromEntries(((h.data || []) as Health[]).map((x) => [x.org_id, x])));
     setLoading(false);
   }
 
@@ -246,6 +308,7 @@ export default function OwnerConsolePage() {
                   <th>Firm</th>
                   <th>Status</th>
                   <th>Plan</th>
+                  <th>Health</th>
                   <th className="text-right">Users</th>
                   <th className="text-right">Clients</th>
                   <th className="text-right">Open tasks</th>
@@ -313,6 +376,9 @@ export default function OwnerConsolePage() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <HealthCell firm={f} h={health[f.id]} onDiagnose={() => setDiagFor(f)} />
                     </td>
                     <td className="text-right font-mono">
                       {f.active_members}
@@ -466,6 +532,12 @@ export default function OwnerConsolePage() {
           </form>
         </Modal>
       )}
+
+      <PlansEditor firms={firms} />
+
+      <UpdatesComposer />
+
+      {diagFor && <FirmDiagnostics orgId={diagFor.id} firmName={diagFor.name} onClose={() => setDiagFor(null)} />}
     </div>
   );
 }

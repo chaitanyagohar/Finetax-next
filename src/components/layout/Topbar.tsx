@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -13,7 +13,6 @@ import {
   RotateCcw,
   LogOut,
   Loader2,
-  CornerDownLeft,
   ClipboardList,
   CheckCircle2,
   CalendarClock,
@@ -23,14 +22,20 @@ import {
   X,
   Building2,
   Check,
+  UploadCloud,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getInitials, localISODate } from "@/lib/format";
-import { getPageTitle, getVisibleSections, REVIEWER_SUB_TABS, roleLabelFor, type SessionUser } from "./navConfig";
+import { getPageTitle, roleLabelFor, type SessionUser } from "./navConfig";
+import CommandPalette from "./CommandPalette";
+import WhatsNew from "./WhatsNew";
 import { useLogout } from "./useLogout";
+import { hasFeature } from "@/lib/features";
 import WorkSession from "@/components/time/WorkSession";
 import { HelpLauncher } from "@/components/help/HelpCenter";
+import Avatar, { forgetPeoplePhotos } from "@/components/ui/Avatar";
+import ImagePicker from "@/components/ui/ImagePicker";
 
 interface TopbarProps {
   user: SessionUser;
@@ -43,12 +48,6 @@ interface Counts {
   review: number;
 }
 
-interface PaletteItem {
-  name: string;
-  href: string;
-  icon: LucideIcon;
-  group: string;
-}
 
 interface NotificationRow {
   id: string;
@@ -63,6 +62,7 @@ interface NotificationRow {
 
 const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   task_assigned: { icon: ClipboardList, style: "bg-navy/10 text-navy" },
+  portal_upload: { icon: UploadCloud, style: "bg-orange-50 text-accent" },
   task_reviewer: { icon: ShieldCheck, style: "bg-violet-50 text-violet-600" },
   task_submitted: { icon: ShieldCheck, style: "bg-violet-50 text-violet-600" },
   task_changes: { icon: RotateCcw, style: "bg-amber-50 text-amber-600" },
@@ -78,6 +78,10 @@ const TYPE_LOOK: Record<string, { icon: LucideIcon; style: string }> = {
   task_due_soon: { icon: CalendarClock, style: "bg-amber-50 text-amber-600" },
   task_overdue: { icon: AlertCircle, style: "bg-rose-50 text-rose-600" },
   statutory_risk: { icon: AlertCircle, style: "bg-rose-100 text-rose-700" },
+  escalation_list: { icon: AlertCircle, style: "bg-rose-100 text-rose-700" },
+  time_approval: { icon: CalendarClock, style: "bg-amber-50 text-amber-600" },
+  leave_request: { icon: CalendarClock, style: "bg-blue-50 text-blue-600" },
+  upgrade_request: { icon: Bell, style: "bg-violet-50 text-violet-600" },
   review_waiting: { icon: ShieldCheck, style: "bg-violet-50 text-violet-600" },
   timer_auto_stopped: { icon: Bell, style: "bg-slate-100 text-slate-600" },
   billing_ready: { icon: ClipboardList, style: "bg-amber-50 text-amber-600" },
@@ -103,6 +107,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function Topbar({ user, onMenuClick }: TopbarProps) {
+  const [photo, setPhoto] = useState<string | null>(user.avatarUrl || null);
   const pathname = usePathname();
   const router = useRouter();
   const { logout, loggingOut } = useLogout();
@@ -114,8 +119,6 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   const [unread, setUnread] = useState(0);
   const [toast, setToast] = useState<NotificationRow | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
   const [firms, setFirms] = useState<{ org_id: string; name: string; role: string; is_current: boolean }[]>([]);
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
 
@@ -136,7 +139,6 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   }
 
   const menuRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const lastFetchRef = useRef(0);
   const toastTimer = useRef<number | null>(null);
   const pathRef = useRef(pathname);
@@ -277,17 +279,6 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
   }, [openMenu]);
 
   /* ---------- Quick navigation palette (Ctrl/Cmd + K) ---------- */
-  const paletteItems = useMemo<PaletteItem[]>(() => {
-    const items: PaletteItem[] = getVisibleSections(user).flatMap((s) => s.items.map((i) => ({ name: i.name, href: i.href, icon: i.icon, group: s.label })));
-    if (user.isReviewer && !user.isPlatformHome) {
-      REVIEWER_SUB_TABS.forEach((t) => items.push({ name: t.name, href: t.href, icon: t.icon, group: "Review tasks" }));
-    }
-    return items;
-  }, [user]);
-
-  const q = query.trim().toLowerCase();
-  const filteredItems = q ? paletteItems.filter((i) => `${i.name} ${i.group}`.toLowerCase().includes(q)) : paletteItems;
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -298,36 +289,6 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  useEffect(() => {
-    if (paletteOpen) {
-      setQuery("");
-      setActiveIndex(0);
-      const t = setTimeout(() => inputRef.current?.focus(), 0);
-      return () => clearTimeout(t);
-    }
-  }, [paletteOpen]);
-
-  function goTo(href: string) {
-    setPaletteOpen(false);
-    router.push(href);
-  }
-
-  function onPaletteKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, Math.max(0, filteredItems.length - 1)));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const item = filteredItems[activeIndex];
-      if (item) goTo(item.href);
-    } else if (e.key === "Escape") {
-      setPaletteOpen(false);
-    }
-  }
 
   /* ---------- Action items ---------- */
   const actionItems = user.isPlatformHome ? [] : [
@@ -340,7 +301,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
+      <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-surface/90 px-4 shadow-[0_1px_0_rgb(255_255_255/0.6)_inset] backdrop-blur-xl sm:px-6">
         {/* Left: menu + page title */}
         <div className="flex min-w-0 items-center gap-3">
           <button
@@ -363,9 +324,11 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
             aria-label="Quick navigation"
           >
             <Search className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">Jump to...</span>
+            <span className="hidden md:inline">Search or jump to…</span>
             <kbd className="hidden rounded border border-border bg-surface px-1.5 py-0.5 font-sans text-[10px] font-semibold md:inline">Ctrl K</kbd>
           </button>
+
+          <WhatsNew />
 
           {/* Notifications */}
           <div className="relative">
@@ -466,7 +429,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
               aria-expanded={openMenu === "user"}
               aria-label="Account menu"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-white">{getInitials(user.name)}</div>
+              <Avatar name={user.name} url={photo} seed={user.id} size="sm" className="h-8 w-8" />
               <div className="hidden text-left text-xs sm:block">
                 <p className="max-w-[140px] truncate font-semibold leading-tight text-text-main">{user.name}</p>
                 <p className="leading-tight text-text-muted">{roleLabel}</p>
@@ -475,10 +438,19 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
 
             {openMenu === "user" && (
               <div className="absolute right-0 top-full z-50 mt-2 w-64 origin-top-right overflow-hidden rounded-xl border border-border bg-surface shadow-xl animate-pop-in">
+                <div className="border-b border-border px-4 py-3">
+                  <ImagePicker
+                    endpoint="/api/profile/avatar"
+                    current={photo}
+                    label="photo"
+                    preview={<Avatar name={user.name} url={photo} seed={user.id} size="lg" />}
+                    onChange={(url) => {
+                      setPhoto(url);
+                      forgetPeoplePhotos();
+                    }}
+                  />
+                </div>
                 <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-                    <User className="h-4 w-4" />
-                  </div>
                   <div className="min-w-0 text-xs">
                     <p className="truncate font-semibold text-text-main">{user.name}</p>
                     <p className="truncate text-text-muted">{user.email}</p>
@@ -528,7 +500,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
       </header>
 
       {/* Firm tools: not part of the Duesk staff console */}
-      {!user.isPlatformHome && <WorkSession userId={user.id} />}
+      {!user.isPlatformHome && <WorkSession userId={user.id} attendance={hasFeature(user, "attendance")} />}
       {!user.isPlatformHome && <HelpLauncher />}
 
       {/* New-notification toast */}
@@ -555,52 +527,7 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
         </div>
       )}
 
-      {/* Quick navigation palette */}
-      {paletteOpen && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 pt-[12vh] animate-fade-in" onClick={() => setPaletteOpen(false)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Quick navigation">
-            <div className="flex items-center gap-2 border-b border-border px-4">
-              <Search className="h-4 w-4 text-text-muted" />
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setActiveIndex(0);
-                }}
-                onKeyDown={onPaletteKeyDown}
-                placeholder="Jump to a module..."
-                className="h-12 flex-1 bg-transparent text-sm outline-none"
-              />
-              <kbd className="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">Esc</kbd>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-2">
-              {filteredItems.length === 0 ? (
-                <p className="px-3 py-6 text-center text-xs text-text-muted">No matching modules.</p>
-              ) : (
-                filteredItems.map((item, idx) => {
-                  const Icon = item.icon;
-                  const isActive = idx === activeIndex;
-                  return (
-                    <button
-                      key={item.href}
-                      type="button"
-                      onClick={() => goTo(item.href)}
-                      onMouseEnter={() => setActiveIndex(idx)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${isActive ? "bg-navy text-white" : "text-text-main"}`}
-                    >
-                      <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-text-muted"}`} />
-                      <span className="flex-1 truncate font-medium">{item.name}</span>
-                      <span className={`text-[10px] ${isActive ? "text-white/70" : "text-text-muted"}`}>{item.group}</span>
-                      {isActive && <CornerDownLeft className="h-3.5 w-3.5 text-white/70" />}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {paletteOpen && <CommandPalette user={user} onClose={() => setPaletteOpen(false)} />}
     </>
   );
 }

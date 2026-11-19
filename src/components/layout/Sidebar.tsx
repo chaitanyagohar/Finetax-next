@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { LogOut, Shield, ChevronDown, ChevronRight, X, Loader2 } from "lucide-react";
+import { LogOut, Shield, ChevronDown, ChevronRight, X, Loader2, Lock } from "lucide-react";
 import {
   getVisibleSections,
   isPathActive,
@@ -13,7 +13,8 @@ import {
   type SessionUser,
 } from "./navConfig";
 import { useLogout } from "./useLogout";
-import { getInitials } from "@/lib/format";
+import Avatar from "@/components/ui/Avatar";
+import { hasFeature } from "@/lib/features";
 
 interface SidebarProps {
   user: SessionUser;
@@ -47,17 +48,24 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
     return section.items.map((item) => {
       const Icon = item.icon;
       const isActive = isPathActive(pathname, item.href);
+      const locked = !!item.feature && !hasFeature(user, item.feature);
       return (
         <Link
           key={item.href}
-          href={item.href}
+          href={locked ? `/plan?feature=${item.feature}` : item.href}
+          title={locked ? "Not in your plan. Click to see how to get it." : undefined}
           aria-current={isActive ? "page" : undefined}
           className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition ${
-            isActive ? (platform ? "bg-platform-accent text-white shadow-sm" : "bg-accent text-white shadow-sm") : "text-muted hover:bg-white/10 hover:text-white"
+            isActive
+              ? platform
+                ? "bg-platform-accent text-white shadow-[0_8px_20px_-10px_rgb(245_165_36/0.9)]"
+                : "bg-gradient-to-r from-accent to-[#f47a5c] text-white shadow-[0_8px_20px_-10px_rgb(242_97_63/0.9)]"
+              : "text-muted hover:translate-x-0.5 hover:bg-white/[0.07] hover:text-white"
           }`}
         >
           <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-white/50 group-hover:text-white"}`} />
-          <span className="truncate">{item.name === "Owner console" && platform ? "Firms" : item.name}</span>
+          <span className={`truncate ${locked ? "opacity-60" : ""}`}>{item.name === "Owner console" && platform ? "Firms" : item.name}</span>
+          {locked && <Lock className="ml-auto h-3 w-3 shrink-0 text-white/40" aria-label="Not in your plan" />}
         </Link>
       );
     });
@@ -95,9 +103,14 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
               </>
             ) : (
               <>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white shadow-sm">
-                  {firmInitial(user.orgName)}
-                </div>
+                {user.firmLogoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.firmLogoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain p-0.5 shadow-sm" />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white shadow-sm">
+                    {firmInitial(user.orgName)}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <h1 className="truncate text-sm font-semibold leading-tight tracking-tight text-white" title={user.orgName}>
                     {user.orgName || "Your firm"}
@@ -173,7 +186,7 @@ export default function Sidebar({ user, mobileOpen, onClose }: SidebarProps) {
         {/* Profile footer */}
         <div className={`border-t border-white/10 p-3 ${platform ? "bg-black/20" : "bg-navy-dark/40"}`}>
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">{getInitials(user.name)}</div>
+            <Avatar name={user.name} url={user.avatarUrl} seed={user.id} className="ring-white/10" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-white">{user.name}</p>
               <p className={`truncate text-[11px] ${platform ? "text-platform-soft" : "text-muted"}`}>{roleLabel}</p>

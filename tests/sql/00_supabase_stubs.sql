@@ -15,3 +15,8 @@ create schema if not exists extensions;
 create schema if not exists vault;
 create schema if not exists storage;
 grant usage on schema auth to public;
+-- Vault, for tables that keep secrets there (mailboxes, payment keys). Plain text here; Supabase encrypts it.
+create table if not exists vault.secrets (id uuid primary key default gen_random_uuid(), secret text, name text, description text);
+create or replace view vault.decrypted_secrets as select id, name, description, secret as decrypted_secret from vault.secrets;
+create or replace function vault.create_secret(s text, n text default null, d text default null) returns uuid language sql as $$ insert into vault.secrets (secret, name, description) values (s, n, d) returning id $$;
+create or replace function vault.update_secret(i uuid, s text) returns void language sql as $$ update vault.secrets set secret = s where id = i $$;

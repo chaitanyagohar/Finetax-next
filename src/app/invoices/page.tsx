@@ -20,6 +20,7 @@ import {
   MessageCircle,
   Lock,
   TrendingUp,
+  Link2,
 } from "lucide-react";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
@@ -30,15 +31,19 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
-import { STATE_OPTIONS, placeOfSupplyCode, placeOfSupplyLabel, stateCodeFromGstin, stateName } from "@/lib/gst";
+import { GST_RATE_CHOICES, STATE_OPTIONS, invoiceTax, placeOfSupplyCode, placeOfSupplyLabel, stateCodeFromGstin, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
 
 interface LineItem {
   description: string;
   qty: number;
   rate: number;
   sac: string;
+  /** null: the invoice's default rate */
+  gst: number | null;
 }
 
 type ClientRow = Client & Record<string, any>;
@@ -73,12 +78,13 @@ function isoDate(value: unknown): string {
   return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "";
 }
 function normalizeItems(raw: unknown): LineItem[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [{ description: "", qty: 1, rate: 0, sac: "" }];
+  if (!Array.isArray(raw) || raw.length === 0) return [{ description: "", qty: 1, rate: 0, sac: "", gst: null }];
   return raw.map((it: any) => ({
     description: String(it?.description ?? it?.desc ?? ""),
     qty: Number(it?.qty ?? 1) || 1,
     rate: Number(it?.rate ?? it?.price ?? 0) || 0,
     sac: String(it?.sac ?? ""),
+    gst: it?.gst_rate === undefined || it?.gst_rate === null || it?.gst_rate === "" ? null : Number(it.gst_rate),
   }));
 }
 function statusOf(inv: any): string {
@@ -123,6 +129,7 @@ function fyStart(today: string): string {
 export default function InvoicesPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -151,7 +158,7 @@ export default function InvoicesPage() {
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [gstRate, setGstRate] = useState<number>(18);
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<LineItem[]>([{ description: "", qty: 1, rate: 0, sac: "" }]);
+  const [items, setItems] = useState<LineItem[]>([{ description: "", qty: 1, rate: 0, sac: "", gst: null }]);
 
   // Payments
   const [payments, setPayments] = useState<any[]>([]);
@@ -166,6 +173,40 @@ export default function InvoicesPage() {
   const [payError, setPayError] = useState("");
 
   const today = localISODate();
+
+  const [gatewayOn, setGatewayOn] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  useEffect(() => {
+    supabase.rpc("payment_gateway_status").then(({ data }) => setGatewayOn(!!(data as { connected?: boolean } | null)?.connected));
+  }, [supabase]);
+
+  async function fetchPayLink(inv: any): Promise<string | null> {
+    const res = await fetch("/api/invoices/pay-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoiceId: inv.id }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast("error", json.error || "Could not create the payment link.");
+      return null;
+    }
+    return json.url as string;
+  }
+
+  async function copyPayLink(inv: any) {
+    setLinkBusy(true);
+    const url = await fetchPayLink(inv);
+    setLinkBusy(false);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("success", "Payment link copied. Paste it anywhere to share.");
+    } catch {
+      window.prompt("Copy the payment link", url);
+    }
+  }
 
   useEffect(() => {
     loadData();
@@ -284,11 +325,10 @@ export default function InvoicesPage() {
     : !!firmStateCode && !!placeOfSupply && placeOfSupply !== firmStateCode;
 
   // Real-time preview (the database recalculates identically on save)
-  const subtotal = round2(items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.rate) || 0), 0));
-  const cgst = isInterState ? 0 : round2((subtotal * gstRate) / 200);
-  const sgst = cgst;
-  const igst = isInterState ? round2((subtotal * gstRate) / 100) : 0;
-  const grandTotal = round2(subtotal + cgst + sgst + igst);
+  const tax = invoiceTax(items, gstRate, isInterState);
+  const { subtotal, cgst, sgst, igst } = tax;
+  const grandTotal = tax.total;
+  const taxGroups = tax.groups.filter((g) => g.rate > 0);
 
   function defaultNotes(): string {
     return `Payment Terms: ${firmSettings?.payment_terms || "Due on Receipt"}\n\nBank Details:\nBank: ${firmSettings?.bank_name || "N/A"}\nA/C: ${firmSettings?.bank_account_no || "N/A"}\nIFSC: ${firmSettings?.bank_ifsc || "N/A"}\nUPI: ${firmSettings?.upi_id || "N/A"}`;
@@ -308,6 +348,14 @@ export default function InvoicesPage() {
       ? `IGST applies: the supply is outside ${stateName(firmStateCode)}.`
       : `CGST + SGST apply: the supply is within ${stateName(firmStateCode)}.`;
   }
+
+  useUrlIntent(!loading, {
+    onNew: () => openModal(),
+    onOpen: (id) => {
+      const inv = invoices.find((x) => x.id === id);
+      if (inv) openModal(inv);
+    },
+  });
 
   function openModal(inv?: any) {
     setFormError("");
@@ -332,7 +380,7 @@ export default function InvoicesPage() {
       setPlaceOfSupply("");
       setGstRate(Number(firmSettings?.default_gst_rate ?? 18));
       setNotes(defaultNotes());
-      setItems([{ description: "", qty: 1, rate: 0, sac: firmSettings?.default_sac || "" }]);
+      setItems([{ description: "", qty: 1, rate: 0, sac: firmSettings?.default_sac || "", gst: null }]);
     }
     setIsModalOpen(true);
   }
@@ -352,7 +400,7 @@ export default function InvoicesPage() {
   }
 
   function handleAddItem() {
-    setItems([...items, { description: "", qty: 1, rate: 0, sac: items[items.length - 1]?.sac || firmSettings?.default_sac || "" }]);
+    setItems([...items, { description: "", qty: 1, rate: 0, sac: items[items.length - 1]?.sac || firmSettings?.default_sac || "", gst: items[items.length - 1]?.gst ?? null }]);
   }
 
   function handleRemoveItem(index: number) {
@@ -392,7 +440,13 @@ export default function InvoicesPage() {
       if (!selectedClientId) throw new Error("Please select a client.");
       const validItems = items
         .filter((it) => it.description.trim() !== "")
-        .map((it) => ({ description: it.description.trim(), qty: Number(it.qty), rate: Number(it.rate), ...(it.sac.trim() ? { sac: it.sac.trim() } : {}) }));
+        .map((it) => ({
+          description: it.description.trim(),
+          qty: Number(it.qty),
+          rate: Number(it.rate),
+          ...(it.sac.trim() ? { sac: it.sac.trim() } : {}),
+          ...(it.gst !== null && it.gst !== gstRate ? { gst_rate: it.gst } : {}),
+        }));
       if (validItems.some((it) => it.sac && !/^\d{4,8}$/.test(it.sac))) throw new Error("A SAC code is 4 to 8 digits, e.g. 998231.");
       if (!validItems.length) throw new Error("Please add at least one line item.");
       if (validItems.some((it) => !(it.qty > 0) || it.rate < 0)) {
@@ -515,18 +569,28 @@ export default function InvoicesPage() {
     }
   }
 
-  function sendWhatsAppReminder(inv: any) {
+  async function sendWhatsAppReminder(inv: any) {
     const number = toWhatsAppNumber(clientPhoneOf(inv));
     if (!number) return showToast("error", "This client has no valid mobile number.");
     const due = dueOf(inv);
+    // Opened before the link is fetched, so the browser doesn't treat it as a pop-up
+    const tab = gatewayOn ? window.open("", "_blank") : null;
+    const payUrl = gatewayOn ? await fetchPayLink(inv) : null;
     const text =
       `Dear ${clientNameOf(inv)},\n\n` +
       `This is a gentle reminder that invoice ${numberOf(inv)} has a balance of ${formatINR(balanceOf(inv))}` +
       `${due ? ` (due ${formatDate(due)})` : ""}.\n\n` +
+      `${payUrl ? `Pay online: ${payUrl}\n` : ""}` +
       `${firmSettings?.upi_id ? `UPI: ${firmSettings.upi_id}\n` : ""}` +
       `${firmSettings?.bank_account_no ? `A/C: ${firmSettings.bank_account_no} · IFSC: ${firmSettings.bank_ifsc || ""}\n` : ""}` +
       `\nPlease ignore if already paid.\n\nRegards,\n${firmSettings?.firm_name || "Our team"}`;
-    window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+    const url = `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = url;
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   }
 
   /* ---------------- Payments ---------------- */
@@ -735,7 +799,7 @@ export default function InvoicesPage() {
           <>
           {/* Phones: one card per invoice; the table starts at tablet width */}
           <ul className="list-in divide-y divide-border md:hidden">
-            {filteredInvoices.map((i) => {
+            {filteredInvoices.slice(0, rowLimit).map((i) => {
               const st = statusOf(i);
               const overdue = isOverdue(i);
               const balance = ["Draft", "Cancelled"].includes(st) ? 0 : balanceOf(i);
@@ -792,6 +856,7 @@ export default function InvoicesPage() {
               );
             })}
           </ul>
+          <div className="md:hidden"><ShowMore total={filteredInvoices.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} /></div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
@@ -808,7 +873,7 @@ export default function InvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInvoices.map((i) => {
+                {filteredInvoices.slice(0, rowLimit).map((i) => {
                   const st = statusOf(i);
                   const overdue = isOverdue(i);
                   // A draft or cancelled invoice isn't owed, so it shows no balance
@@ -879,6 +944,7 @@ export default function InvoicesPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredInvoices.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
           </>
         )}
@@ -1043,7 +1109,7 @@ export default function InvoicesPage() {
               </div>
 
               <div>
-                <label className={labelClass}>GST Rate %</label>
+                <label className={labelClass}>Default GST rate %</label>
                 <input type="number" min="0" max="100" step="0.01" disabled={isLocked} value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))} className={inputClass} />
               </div>
             </div>
@@ -1059,6 +1125,7 @@ export default function InvoicesPage() {
                         <th>Description</th>
                         <th className="text-right">Qty</th>
                         <th className="text-right">Rate</th>
+                        {tax.mixed && <th className="text-right">GST</th>}
                         <th className="text-right">Amount</th>
                       </tr>
                     </thead>
@@ -1068,6 +1135,7 @@ export default function InvoicesPage() {
                           <td>{item.description}</td>
                           <td className="text-right">{item.qty}</td>
                           <td className="text-right">{formatINR(item.rate)}</td>
+                          {tax.mixed && <td className="text-right">{item.gst ?? gstRate}%</td>}
                           <td className="text-right font-semibold">{formatINR(round2(item.qty * item.rate))}</td>
                         </tr>
                       ))}
@@ -1083,7 +1151,7 @@ export default function InvoicesPage() {
                         placeholder="Service description"
                         value={item.description}
                         onChange={(e) => handleItemChange(idx, "description", e.target.value)}
-                        className={`${inputClass} col-span-9 sm:col-span-5`}
+                        className={`${inputClass} col-span-9 sm:col-span-4`}
                         required
                       />
                       <input
@@ -1116,6 +1184,19 @@ export default function InvoicesPage() {
                         className={`${inputClass} col-span-4 sm:col-span-2`}
                         required
                       />
+                      <select
+                        aria-label="GST rate for this line"
+                        value={item.gst === null ? "" : String(item.gst)}
+                        onChange={(e) => handleItemChange(idx, "gst", e.target.value === "" ? null : Number(e.target.value))}
+                        className={`${inputClass} col-span-4 px-1.5 sm:col-span-1`}
+                      >
+                        <option value="">{gstRate}%</option>
+                        {GST_RATE_CHOICES.filter((r) => r !== gstRate).map((r) => (
+                          <option key={r} value={r}>
+                            {r}%
+                          </option>
+                        ))}
+                      </select>
                       <span className="col-span-4 text-right text-sm font-semibold text-navy sm:col-span-2">
                         {formatINR(round2((Number(item.qty) || 0) * (Number(item.rate) || 0)))}
                       </span>
@@ -1148,22 +1229,44 @@ export default function InvoicesPage() {
                   <span>Subtotal</span>
                   <span>{formatINR(isLocked ? Number(editingInvoice?.subtotal || subtotal) : subtotal)}</span>
                 </div>
-                {isInterState ? (
-                  <div className="flex justify-between text-text-muted">
-                    <span>IGST ({gstRate}%)</span>
-                    <span>{formatINR(isLocked ? Number(editingInvoice?.igst || igst) : igst)}</span>
-                  </div>
+                {isLocked && !tax.mixed ? (
+                  isInterState ? (
+                    <div className="flex justify-between text-text-muted">
+                      <span>IGST ({gstRate}%)</span>
+                      <span>{formatINR(Number(editingInvoice?.igst || igst))}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-text-muted">
+                        <span>CGST ({gstRate / 2}%)</span>
+                        <span>{formatINR(Number(editingInvoice?.cgst || cgst))}</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>SGST ({gstRate / 2}%)</span>
+                        <span>{formatINR(Number(editingInvoice?.sgst || sgst))}</span>
+                      </div>
+                    </>
+                  )
                 ) : (
-                  <>
-                    <div className="flex justify-between text-text-muted">
-                      <span>CGST ({gstRate / 2}%)</span>
-                      <span>{formatINR(isLocked ? Number(editingInvoice?.cgst || cgst) : cgst)}</span>
-                    </div>
-                    <div className="flex justify-between text-text-muted">
-                      <span>SGST ({gstRate / 2}%)</span>
-                      <span>{formatINR(isLocked ? Number(editingInvoice?.sgst || sgst) : sgst)}</span>
-                    </div>
-                  </>
+                  taxGroups.map((g) =>
+                    isInterState ? (
+                      <div key={g.rate} className="flex justify-between text-text-muted">
+                        <span>IGST {g.rate}%{tax.mixed ? ` on ${formatINR(g.taxable)}` : ""}</span>
+                        <span>{formatINR(g.igst)}</span>
+                      </div>
+                    ) : (
+                      <div key={g.rate}>
+                        <div className="flex justify-between text-text-muted">
+                          <span>CGST {g.rate / 2}%{tax.mixed ? ` on ${formatINR(g.taxable)}` : ""}</span>
+                          <span>{formatINR(g.cgst)}</span>
+                        </div>
+                        <div className="flex justify-between text-text-muted">
+                          <span>SGST {g.rate / 2}%</span>
+                          <span>{formatINR(g.sgst)}</span>
+                        </div>
+                      </div>
+                    ),
+                  )
                 )}
                 <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-semibold text-navy">
                   <span>Total</span>
@@ -1202,6 +1305,16 @@ export default function InvoicesPage() {
                       >
                         <MessageCircle className="h-3.5 w-3.5" /> WhatsApp reminder
                       </button>
+                      {gatewayOn && (
+                        <button
+                          type="button"
+                          onClick={() => copyPayLink(editingInvoice)}
+                          disabled={linkBusy}
+                          className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold transition hover:bg-surface-alt disabled:opacity-60"
+                        >
+                          {linkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />} Payment link
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openPayment(editingInvoice)}

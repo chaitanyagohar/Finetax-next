@@ -1,5 +1,6 @@
 "use client";
 
+import CapacityHint from "@/components/attendance/CapacityHint";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -28,6 +29,7 @@ import {
   GitMerge,
   ListOrdered,
   ArrowRightLeft,
+  Sparkles,
 } from "lucide-react";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
@@ -38,6 +40,12 @@ import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import ClientPicker, { clientLabel } from "@/components/ui/ClientPicker";
 import { useTaskCategories, CategoryBadge, TaskCategoriesManager } from "@/components/tasks/TaskCategories";
+import ComplianceTools from "@/components/compliance/ComplianceTools";
+import TaskChecklist from "@/components/tasks/TaskChecklist";
+import BulkTaskBar from "@/components/tasks/BulkTaskBar";
+import { LockedHint } from "@/components/plan/FeatureGate";
+import { hasFeature } from "@/lib/features";
+import SavedViews from "@/components/tasks/SavedViews";
 import WorkQueue from "@/components/tasks/WorkQueue";
 import ChatConversation from "@/components/chat/ChatConversation";
 import ReminderSettingsButton from "@/components/tasks/ReminderSettings";
@@ -49,6 +57,9 @@ import Combobox, { type ComboOption } from "@/components/ui/Combobox";
 import ClientContact from "@/components/ui/ClientContact";
 import { FeedbackTemplatesManager, TemplateChips, useFeedbackTemplates } from "@/components/tasks/FeedbackTemplates";
 import { EmptyArt } from "@/components/ui/Decor";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 type TaskRow = Omit<Task, "category"> & Record<string, any>;
 type ClientRow = Client & Record<string, any>;
@@ -172,7 +183,10 @@ export default function TasksPage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
+  const canBulk = isAdmin && hasFeature(currentUser, "bulk_actions");
+  const planHasReview = hasFeature(currentUser, "maker_checker");
   const isReviewerUser = !!currentUser?.isReviewer;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   // Editable categories
@@ -247,6 +261,8 @@ export default function TasksPage() {
   const [logDesc, setLogDesc] = useState("");
   const [logBillable, setLogBillable] = useState(true);
   const [logSaving, setLogSaving] = useState(false);
+
+  const [complianceOpen, setComplianceOpen] = useState(false);
 
   // Task list manager (admin)
   const [typesOpen, setTypesOpen] = useState(false);
@@ -461,6 +477,36 @@ export default function TasksPage() {
 
   const hasFilters = !!(search || filterStage || filterCategory || filterClient || filterStaff || filterRecurring || filterDue);
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const currentFilters = {
+    scope,
+    search,
+    filterStage,
+    filterCategory,
+    filterClient,
+    filterStaff,
+    filterRecurring,
+    filterDue,
+  };
+  function applySavedView(f: Record<string, string>) {
+    if (f.scope === "mine" || f.scope === "review" || f.scope === "all") setScope(f.scope);
+    setSearch(f.search || "");
+    setFilterStage(f.filterStage || "");
+    setFilterCategory(f.filterCategory || "");
+    setFilterClient(f.filterClient || "");
+    setFilterStaff(f.filterStaff || "");
+    setFilterRecurring(f.filterRecurring || "");
+    setFilterDue(f.filterDue || "");
+  }
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function clearFilters() {
     setSearch("");
     setFilterStage("");
@@ -488,6 +534,8 @@ export default function TasksPage() {
   }
 
   /* ---------------- Modal ---------------- */
+
+  useUrlIntent(!loading && isAdmin, { onNew: () => openModal() });
 
   function openModal(task?: TaskRow) {
     setFormError("");
@@ -977,9 +1025,7 @@ export default function TasksPage() {
               <span />
             )}
             {t.assigned_to && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-semibold text-navy" title={nameOf(t.assigned_to)}>
-                {getInitials(nameOf(t.assigned_to))}
-              </span>
+              <PersonAvatar id={t.assigned_to} name={nameOf(t.assigned_to)} size="xs" />
             )}
           </div>
         </button>
@@ -1059,7 +1105,15 @@ export default function TasksPage() {
               <Tags className="h-4 w-4 text-navy" /> Categories
             </button>
           )}
-          {/* {isAdmin && <ReminderSettingsButton />} */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setComplianceOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-xs font-semibold text-accent transition hover:brightness-95"
+            >
+              <Sparkles className="h-4 w-4" /> Compliance setup
+            </button>
+          )}
           {isAdmin && <ReminderSettingsButton />}
           {isAdmin && (
             <button
@@ -1234,6 +1288,11 @@ export default function TasksPage() {
                 </button>
               )}
             </div>
+            {me && (
+              <div className="mt-2">
+                <SavedViews userId={me} current={currentFilters} onApply={applySavedView} />
+              </div>
+            )}
             {!showAllCompleted && (
               <p className="mt-2 text-[11px] text-text-muted">
                 Completed tasks from the last {COMPLETED_WINDOW_DAYS} days are shown.{" "}
@@ -1297,7 +1356,7 @@ export default function TasksPage() {
           /* ---------- List view: cards on phones, a table from tablet width up ---------- */
           <>
           <ul className="list-in divide-y divide-border md:hidden">
-            {filteredTasks.map((t) => {
+            {filteredTasks.slice(0, rowLimit).map((t) => {
               const done = t.stage === "Approved";
               const internal = dueInfo(t.due_date, done);
               const statutory = dueInfo(t.official_due_date, done);
@@ -1336,10 +1395,24 @@ export default function TasksPage() {
               );
             })}
           </ul>
+          <div className="md:hidden"><ShowMore total={filteredTasks.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} /></div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
                 <tr>
+                  {canBulk && (
+                    <th className="w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all open tasks shown"
+                        className="h-4 w-4 accent-[var(--color-accent)]"
+                        checked={selected.size > 0 && filteredTasks.filter((t) => t.stage !== "Approved").every((t) => selected.has(t.id))}
+                        onChange={(e) =>
+                          setSelected(e.target.checked ? new Set(filteredTasks.filter((t) => t.stage !== "Approved").map((t) => t.id)) : new Set())
+                        }
+                      />
+                    </th>
+                  )}
                   <th>Deadlines (int / statutory)</th>
                   <th>Task</th>
                   <th>Category</th>
@@ -1351,7 +1424,7 @@ export default function TasksPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTasks.map((t) => {
+                {filteredTasks.slice(0, rowLimit).map((t) => {
                   const done = t.stage === "Approved";
                   const internal = dueInfo(t.due_date, done);
                   const statutory = dueInfo(t.official_due_date, done);
@@ -1363,6 +1436,17 @@ export default function TasksPage() {
                       className={`cursor-pointer transition hover:bg-surface-alt ${needsAction || needsReview ? "bg-amber-50/40" : ""} ${done ? "opacity-70" : ""}`}
                       onClick={() => openModal(t)}
                     >
+                      {canBulk && (
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${t.title}`}
+                            className="h-4 w-4 accent-[var(--color-accent)]"
+                            checked={selected.has(t.id)}
+                            onChange={() => toggleSelected(t.id)}
+                          />
+                        </td>
+                      )}
                       <td className="whitespace-nowrap">
                         <p className={`font-medium ${internal.cls === "text-rose-600" ? "font-semibold text-rose-600" : "text-text-main"}`}>
                           Int: {t.due_date ? formatDate(t.due_date) : "—"}
@@ -1405,6 +1489,7 @@ export default function TasksPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredTasks.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
           </>
         )}
@@ -1668,10 +1753,13 @@ export default function TasksPage() {
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                     </select>
+                    {isAdmin && canEditCoreDetails && assignedTo && <CapacityHint userId={assignedTo} />}
                   </div>
                   <div>
-                    <label className={labelClass}>Assign reviewer (checker)</label>
-                    <select disabled={!canEditCoreDetails} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className={inputClass}>
+                    <label className={`${labelClass} flex items-center justify-between`}>
+                      Assign reviewer (checker) {!planHasReview && <LockedHint feature="maker_checker" />}
+                    </label>
+                    <select disabled={!canEditCoreDetails || !planHasReview} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className={inputClass}>
                       <option value="">— No Reviewer —</option>
                       {reviewers
                         .filter((t) => String(t.id) !== String(assignedTo) || String(t.id) === String(reviewerId))
@@ -1740,6 +1828,13 @@ export default function TasksPage() {
                   </label>
                 )}
               </form>
+
+              {/* Documents and steps */}
+              {editingTask && (
+                <div className="border-t border-border pt-4">
+                  <TaskChecklist taskId={editingTask.id} readOnly={editingTask.stage === "Approved"} />
+                </div>
+              )}
 
               {/* Transfers */}
               {editingTask && (
@@ -2145,6 +2240,30 @@ export default function TasksPage() {
           onClose={() => setCategoriesOpen(false)}
           onChanged={() => {
             reloadCategories();
+            loadData(false);
+          }}
+        />
+      )}
+
+      {canBulk && selected.size > 0 && view === "list" && (
+        <BulkTaskBar
+          ids={[...selected]}
+          team={team}
+          canDelete={isAdmin}
+          onClear={() => setSelected(new Set())}
+          onDone={() => {
+            setSelected(new Set());
+            loadData(false);
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {complianceOpen && (
+        <ComplianceTools
+          onClose={() => setComplianceOpen(false)}
+          onChanged={() => {
+            loadTaskTypes();
             loadData(false);
           }}
         />

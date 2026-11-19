@@ -5,6 +5,9 @@ import { AlertCircle, BellRing, CheckCircle2, Loader2, PlayCircle } from "lucide
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { Modal } from "@/components/ui/Modal";
+import { useCurrentUser } from "@/components/layout/UserContext";
+import { LockedHint } from "@/components/plan/FeatureGate";
+import { hasFeature } from "@/lib/features";
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -21,6 +24,10 @@ type Settings = {
   work_start: string;
   work_end: string;
   skip_sundays: boolean;
+  level2_days: number;
+  level3_days: number;
+  level3_statutory_days: number;
+  partner_list_at: string;
 };
 
 export default function ReminderSettingsButton() {
@@ -41,6 +48,7 @@ export default function ReminderSettingsButton() {
 
 function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
   const [supabase] = useState(() => createClient());
+  const levels = hasFeature(useCurrentUser(), "escalation_levels");
   const [s, setS] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -53,7 +61,13 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
       .select("*")
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setS({ ...data, work_start: String(data.work_start).slice(0, 5), work_end: String(data.work_end).slice(0, 5) } as Settings);
+        if (data)
+          setS({
+            ...data,
+            work_start: String(data.work_start).slice(0, 5),
+            work_end: String(data.work_end).slice(0, 5),
+            partner_list_at: String(data.partner_list_at || "10:00").slice(0, 5),
+          } as Settings);
       });
   }, []);
 
@@ -194,6 +208,43 @@ function ReminderSettingsModal({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {toggle("escalate_assigner", "Escalate to the assigner", "Tell whoever assigned it (or admins) once when work hasn't started or is overdue.")}
             {toggle("overdue_daily", "Daily overdue reminder", "Remind the assignee every working day until submitted.")}
+          </div>
+
+          <div className="rounded-lg border border-border p-3">
+            <p className="flex items-center justify-between font-semibold text-text-main">
+              Escalation levels {!levels && <LockedHint feature="escalation_levels" />}
+            </p>
+            <p className="text-[11px] text-text-muted">Level 1 is the person doing the work. If it is still not submitted, it moves up.</p>
+            <fieldset disabled={!levels} className="mt-3 grid grid-cols-1 gap-3 disabled:opacity-60 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Level 2: reviewer and assigner, when overdue by</label>
+                <select value={s.level2_days} onChange={(e) => set("level2_days", Number(e.target.value))} className={inputClass}>
+                  {[1, 2, 3, 5, 7].map((d) => (
+                    <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Level 3: partners, when overdue by</label>
+                <select value={s.level3_days} onChange={(e) => set("level3_days", Number(e.target.value))} className={inputClass}>
+                  {[2, 3, 5, 7, 10, 15].map((d) => (
+                    <option key={d} value={d}>{d} days</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Or statutory date within</label>
+                <select value={s.level3_statutory_days} onChange={(e) => set("level3_statutory_days", Number(e.target.value))} className={inputClass}>
+                  {[0, 1, 2, 3, 5, 7].map((d) => (
+                    <option key={d} value={d}>{d === 0 ? "Only once passed" : `${d} day${d === 1 ? "" : "s"}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Partners&apos; daily list at</label>
+                <input type="time" value={s.partner_list_at} onChange={(e) => set("partner_list_at", e.target.value)} className={inputClass} />
+              </div>
+            </fieldset>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

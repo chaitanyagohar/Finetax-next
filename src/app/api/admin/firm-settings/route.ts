@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
     // Only when sent, so the setup wizard (which doesn't show it) can't blank it
     if ("default_sac" in input) next.default_sac = String(input.default_sac ?? "").replace(/\s/g, "").slice(0, 8) || null;
     next.enable_email_alerts = Boolean(input.enable_email_alerts);
+    if ("remind_all_invoices" in input) next.remind_all_invoices = Boolean(input.remind_all_invoices);
+    if ("morning_digest" in input) next.morning_digest = Boolean(input.morning_digest);
 
     validate(next);
 

@@ -7,7 +7,17 @@ import { createClient } from "@/lib/supabase/client";
 import { Modal } from "@/components/ui/Modal";
 import { localISODate } from "@/lib/format";
 
-const IDLE_MS = 10 * 60 * 1000; // 10 minutes without activity pauses the timer
+const DEFAULT_QUIET_MINUTES = 15; // quiet time before the timer pauses and the away question shows
+const LONGEST_AWAY_MS = 6 * 60 * 60 * 1000; // longer gaps are treated as the day having ended
+
+type AwayKind = "task" | "tally_excel" | "portal" | "call_meeting" | "other_work" | "break" | "unanswered";
+const AWAY_CHOICES: { kind: AwayKind; label: string; hint: string }[] = [
+  { kind: "tally_excel", label: "Working in Tally, Excel or another program", hint: "Preparing, posting, reconciling" },
+  { kind: "portal", label: "On the GST, income tax or MCA portal", hint: "Filing, downloading, checking" },
+  { kind: "call_meeting", label: "On a call or in a meeting", hint: "Clients, colleagues, departments" },
+  { kind: "other_work", label: "Other office work", hint: "Bank, visit, paperwork" },
+  { kind: "break", label: "On a break", hint: "Lunch, tea, personal" },
+];
 const HEARTBEAT_MS = 2 * 60 * 1000; // presence every 2 minutes
 const REVIEW_AFTER_MINUTES = 18 * 60 + 30; // "Your day" prompt from 6:30 PM
 
@@ -42,7 +52,7 @@ function sharedLastActivity(userId: string, own: number): number {
   }
 }
 
-export default function WorkSession({ userId }: { userId: string }) {
+export default function WorkSession({ userId, attendance = false }: { userId: string; attendance?: boolean }) {
   const [supabase] = useState(() => createClient());
   const [timer, setTimer] = useState<any | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -50,6 +60,14 @@ export default function WorkSession({ userId }: { userId: string }) {
   const [message, setMessage] = useState("");
   const [idlePrompt, setIdlePrompt] = useState<{ since: string } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [away, setAway] = useState<{ since: number } | null>(null);
+  const [awayNote, setAwayNote] = useState("");
+  const [quietMs, setQuietMs] = useState(DEFAULT_QUIET_MINUTES * 60000);
+  const quietRef = useRef(quietMs);
+  quietRef.current = quietMs;
+  const awaySinceRef = useRef<number | null>(null);
+  const attendanceRef = useRef(attendance);
+  attendanceRef.current = attendance;
 
   const lastActivity = useRef(Date.now());
   const timerRef = useRef<any | null>(null);
@@ -73,15 +91,32 @@ export default function WorkSession({ userId }: { userId: string }) {
     if (!userId) return;
     (async () => {
       const t = await loadTimer();
-      if (firstLoad.current && t && !t.paused_at && t.last_seen_at && Date.now() - new Date(t.last_seen_at).getTime() > IDLE_MS) {
+      if (firstLoad.current && t && !t.paused_at && t.last_seen_at && Date.now() - new Date(t.last_seen_at).getTime() > quietRef.current) {
         await supabase.rpc("pause_timer", { p_since: t.last_seen_at });
         idlePausedRef.current = true;
-        setIdlePrompt({ since: t.last_seen_at });
+        const since = new Date(t.last_seen_at).getTime();
+        if (attendanceRef.current && Date.now() - since < LONGEST_AWAY_MS && localISODate(new Date(since)) === localISODate()) setAway({ since });
+        else setIdlePrompt({ since: t.last_seen_at });
         loadTimer();
       }
       firstLoad.current = false;
     })();
     supabase.rpc("presence_heartbeat", { p_active: true });
+    supabase
+      .from("firm_settings")
+      .select("away_quiet_minutes")
+      .maybeSingle()
+      .then(({ data }) => data?.away_quiet_minutes && setQuietMs(data.away_quiet_minutes * 60000));
+    const officeKey = `duesk:office:${userId}:${localISODate()}`;
+    try {
+      if (!window.localStorage.getItem(officeKey)) {
+        fetch("/api/attendance/ping", { method: "POST" })
+          .then((r) => r.ok && window.localStorage.setItem(officeKey, "1"))
+          .catch(() => {});
+      }
+    } catch {
+      // Storage blocked; the next page load tries again
+    }
 
     const channel = supabase
       .channel(`timer-${userId}`)
@@ -104,14 +139,22 @@ export default function WorkSession({ userId }: { userId: string }) {
       const t = Date.now();
       if (t - lastMark < 5000) return;
       lastMark = t;
+      const before = sharedLastActivity(userId, lastActivity.current);
+      if (attendanceRef.current && !awaySinceRef.current && t - before > quietRef.current && t - before < LONGEST_AWAY_MS && localISODate(new Date(before)) === localISODate(new Date(t))) {
+        awaySinceRef.current = before;
+      }
       lastActivity.current = t;
+      if (awaySinceRef.current) {
+        const since = awaySinceRef.current;
+        setAway((a) => a || { since });
+      }
       try {
         window.localStorage.setItem(activityKey(userId), String(t));
       } catch {
         // Storage can be blocked; this tab then judges idleness on its own
       }
       const current = timerRef.current;
-      if (idlePausedRef.current && current?.paused_at) {
+      if (idlePausedRef.current && current?.paused_at && !awaySinceRef.current) {
         setIdlePrompt((p) => p || { since: current.paused_at });
       }
     };
@@ -134,10 +177,11 @@ export default function WorkSession({ userId }: { userId: string }) {
     }, HEARTBEAT_MS);
 
     const idleCheck = window.setInterval(async () => {
+      const last = sharedLastActivity(userId, lastActivity.current);
+      if (attendanceRef.current && !awaySinceRef.current && Date.now() - last > quietRef.current) awaySinceRef.current = last;
       const current = timerRef.current;
       if (!current || current.paused_at) return;
-      const last = sharedLastActivity(userId, lastActivity.current);
-      if (Date.now() - last > IDLE_MS) {
+      if (Date.now() - last > quietRef.current) {
         await supabase.rpc("pause_timer", { p_since: new Date(last).toISOString() });
         idlePausedRef.current = true;
         loadTimer();
@@ -208,6 +252,29 @@ export default function WorkSession({ userId }: { userId: string }) {
     setIdlePrompt(null);
     if (choice === "stop") await run(() => supabase.rpc("stop_time_timer", { p_billable: true }), "Timer stopped when you went away. Time saved.");
     else await run(() => supabase.rpc("resume_timer", { p_keep_away_time: choice === "keep" }), choice === "keep" ? "Away time kept." : "Away time discarded.");
+  }
+
+  async function answerAway(kind: AwayKind) {
+    if (!away) return;
+    const since = away.since;
+    const timerWasIdle = idlePausedRef.current && !!timerRef.current?.paused_at;
+    awaySinceRef.current = null;
+    idlePausedRef.current = false;
+    setAway(null);
+    const note = awayNote.trim();
+    setAwayNote("");
+    const { data, error } = await supabase.rpc("record_away", {
+      p_started: new Date(since).toISOString(),
+      p_kind: kind,
+      p_task: kind === "task" ? timerRef.current?.task_id || null : null,
+      p_note: note || null,
+    });
+    if (timerWasIdle) await supabase.rpc("resume_timer", { p_keep_away_time: kind === "task" });
+    await loadTimer();
+    if (error) return flash(error.message);
+    if (kind === "unanswered") return;
+    if (data?.status === "pending") flash("Noted. This takes you past today's limit for time away from the screen, so it goes for approval.");
+    else flash(kind === "break" ? "Break noted." : "Noted as work.");
   }
 
   const elapsed = elapsedOf(timer, now);
@@ -281,6 +348,30 @@ export default function WorkSession({ userId }: { userId: string }) {
                 Stop the timer at the moment I went away
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {away && (
+        <Modal title="Welcome back" subtitle={`No activity here for ${minutesText((Date.now() - away.since) / 60000)}, since ${new Date(away.since).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}.`} onClose={() => answerAway("unanswered")} maxWidth="max-w-md">
+          <div className="space-y-3 text-sm">
+            <p className="text-text-main">What were you doing?</p>
+            <div className="grid gap-2">
+              {timer?.paused_at && (
+                <button type="button" onClick={() => answerAway("task")} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-left text-xs text-emerald-800 transition hover:bg-emerald-100">
+                  <span className="block font-semibold">Still on {timer.description}</span>
+                  <span>The time is kept on the timer</span>
+                </button>
+              )}
+              {AWAY_CHOICES.map((c) => (
+                <button key={c.kind} type="button" onClick={() => answerAway(c.kind)} className="rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:bg-surface-alt">
+                  <span className="block font-semibold text-text-main">{c.label}</span>
+                  <span className="text-text-muted">{c.hint}</span>
+                </button>
+              ))}
+            </div>
+            <input value={awayNote} onChange={(e) => setAwayNote(e.target.value)} maxLength={300} placeholder="A short note, if useful" className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs" />
+            <p className="text-[11px] text-text-muted">Only your answer and the time are saved. Nothing on your screen is recorded.</p>
           </div>
         </Modal>
       )}

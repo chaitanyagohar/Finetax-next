@@ -8,6 +8,8 @@ import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { pdfFileName, renderInvoicePdf } from "@/lib/pdf/firmDocuments";
 import { EMAIL_RE, UUID_RE } from "@/lib/validate";
 import { formatDate, rupees } from "@/lib/format";
+import { payButton, payLinkFor } from "@/lib/billing/invoiceMailer";
+import { sellerFor } from "@/lib/pdf/seller";
 
 
 
@@ -74,7 +76,8 @@ export async function POST(request: NextRequest) {
     const balance = Math.max(0, Number(invoice.total || 0) - Number(invoice.amount_paid || 0));
 
     // 4. PDF (same design as the preview)
-    const pdfBuffer = await renderInvoicePdf(invoice, client, firm);
+    const pdfBuffer = await renderInvoicePdf(invoice, client, await sellerFor(invoice, firm));
+    const payUrl = balance > 0 ? await payLinkFor(supabase, invoice) : null;
 
     // 5. Email (all dynamic values escaped)
     const paymentLines = [
@@ -89,6 +92,7 @@ export async function POST(request: NextRequest) {
       <div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px">
         <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
         <p>Please find attached tax invoice <strong>${escapeHtml(invNum)}</strong>${invoice.date ? ` dated ${formatDate(invoice.date, "")}` : ""} for <strong>${rupees(invoice.total)}</strong>.</p>
+        ${payButton(payUrl)}
         <p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">${paymentLines.join("<br/>")}</p>
         ${balance > 0 ? "<p>Please mention the invoice number when you pay.</p>" : ""}
         <p>Best regards,<br/><strong>${escapeHtml(firmName)}</strong></p>
@@ -96,6 +100,7 @@ export async function POST(request: NextRequest) {
     const textBody =
       `Dear ${clientName},\n\nPlease find attached tax invoice ${invNum} for ${rupees(invoice.total)}.` +
       (balance > 0 ? `\nAmount payable: ${rupees(balance)}${invoice.due_date ? ` by ${formatDate(invoice.due_date, "")}` : ""}.` : "\nPaid in full. Thank you!") +
+      (payUrl ? `\nPay online: ${payUrl}` : "") +
       `\n\nBest regards,\n${firmName}`;
 
     // 6. Send

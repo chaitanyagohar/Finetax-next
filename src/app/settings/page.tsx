@@ -31,6 +31,9 @@ import PasswordInput from "@/components/ui/PasswordInput";
 import { localISODate } from "@/lib/format";
 import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
 import { EMAIL_RE } from "@/lib/validate";
+import PaymentGateway from "@/components/settings/PaymentGateway";
+import DataAndSupport from "@/components/settings/DataAndSupport";
+import BrandSettings from "@/components/settings/BrandSettings";
 
 type Settings = {
   firm_name: string;
@@ -50,6 +53,8 @@ type Settings = {
   bank_ifsc: string;
   upi_id: string;
   enable_email_alerts: boolean;
+  remind_all_invoices: boolean;
+  morning_digest: boolean;
   default_task_priority: string;
 };
 
@@ -71,6 +76,8 @@ const EMPTY: Settings = {
   bank_ifsc: "",
   upi_id: "",
   enable_email_alerts: true,
+  remind_all_invoices: false,
+  morning_digest: true,
   default_task_priority: "Medium",
 };
 
@@ -184,6 +191,8 @@ export default function SettingsPage() {
         bank_ifsc: settings.bank_ifsc || "",
         upi_id: settings.upi_id || "",
         enable_email_alerts: settings.enable_email_alerts ?? true,
+        remind_all_invoices: settings.remind_all_invoices ?? false,
+        morning_digest: settings.morning_digest ?? true,
         default_task_priority: settings.default_task_priority || "Medium",
       };
       setForm(loaded);
@@ -641,6 +650,35 @@ export default function SettingsPage() {
               />
             </label>
 
+            {(
+              [
+                [
+                  "morning_digest",
+                  "Morning summary email",
+                  "Every day at 9:00, administrators get yesterday's collections, receivables, overdue work and this week's statutory deadlines. Sent from your connected mailbox.",
+                ],
+                [
+                  "remind_all_invoices",
+                  "Payment reminders for every invoice",
+                  "Reminders 2 days before, on and 3 days after the due date, with the Pay online link. Subscription bills always get them; this adds all other invoices.",
+                ],
+              ] as const
+            ).map(([key, title, hint]) => (
+              <label key={key} className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border p-4">
+                <div>
+                  <p className="font-semibold text-text-main">{title}</p>
+                  <p className="text-[11px] text-text-muted">{hint}</p>
+                </div>
+                <input
+                  disabled={disabled}
+                  type="checkbox"
+                  checked={form[key]}
+                  onChange={(e) => set(key, e.target.checked)}
+                  className="h-4 w-4 cursor-pointer accent-navy disabled:opacity-50"
+                />
+              </label>
+            ))}
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className={labelClass}>Default task priority</label>
@@ -655,6 +693,10 @@ export default function SettingsPage() {
           </div>
         </Section>
       </form>
+
+      {isAdmin && <BrandSettings firmName={currentUser?.orgName || ""} onNotice={showToast} />}
+      {isAdmin && currentUser?.orgId && <PaymentGateway orgId={currentUser.orgId} onNotice={showToast} />}
+      {isAdmin && <DataAndSupport onNotice={showToast} />}
 
       {/* Sticky unsaved-changes bar */}
       {isAdmin && dirty && (

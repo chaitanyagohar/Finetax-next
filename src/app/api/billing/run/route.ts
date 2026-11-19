@@ -3,10 +3,11 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 import { NextResponse, type NextRequest } from "next/server";
-import { ApiError, assertSameOrigin, errorResponse, getAdminClient, requireAdmin, writeAuditLog } from "@/lib/api/guard";
+import { ApiError, assertSameOrigin, errorResponse, getAdminClient, getSiteUrl, requireAdmin, writeAuditLog } from "@/lib/api/guard";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { issueAndEmailInvoice, sendPaymentReminders } from "@/lib/billing/invoiceMailer";
 import { istDate } from "@/lib/format";
+import { sendMorningDigests } from "@/lib/billing/morningDigest";
 
 const SEND_BUDGET_MS = 40_000; // stop starting new emails after this; the rest go next run
 const REMINDER_BUDGET_MS = 50_000;
@@ -17,8 +18,9 @@ const REMINDER_BUDGET_MS = 50_000;
  * 2. Issues and emails every waiting draft of an auto-send subscription, including any left over
  *    from an earlier run that ran out of time.
  * 3. Sends payment reminders.
+ * 4. The daily run also sends each firm's morning summary to its administrators.
  */
-async function runBilling(onlyOrgId?: string) {
+async function runBilling(onlyOrgId?: string, siteUrl?: string) {
   const admin = getAdminClient();
   const started = Date.now();
 
@@ -70,12 +72,23 @@ async function runBilling(onlyOrgId?: string) {
     reminders = await sendPaymentReminders(admin, onlyOrgId);
   }
 
+  let digests = 0;
+  if (!onlyOrgId && siteUrl && Date.now() - started < REMINDER_BUDGET_MS) {
+    digests = await sendMorningDigests(admin, siteUrl, started + 55_000);
+  }
+  if (!onlyOrgId) {
+    // Expired client-portal sign-in links and sessions
+    const { error: hkErr } = await admin.rpc("portal_housekeeping");
+    if (hkErr) console.error("[billing] portal housekeeping failed:", hkErr.message);
+  }
+
   return {
     bills_created: created.length,
     drafts: created.filter((c) => !c.auto_send).length,
     auto_sent: sent,
     deferred_to_next_run: deferred,
     reminders_sent: reminders,
+    morning_summaries: digests,
   };
 }
 
@@ -86,7 +99,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    return NextResponse.json({ success: true, ...(await runBilling()) });
+    return NextResponse.json({ success: true, ...(await runBilling(undefined, getSiteUrl(request))) });
   } catch (e: any) {
     console.error("[billing] scheduled run failed:", e);
     return NextResponse.json({ error: "Billing run failed." }, { status: 500 });

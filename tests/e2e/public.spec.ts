@@ -53,3 +53,17 @@ test("the email webhook refuses a wrong secret", async ({ request }) => {
   // 503 when the webhook secret isn't configured on that deployment
   expect([401, 403, 503]).toContain(res.status());
 });
+
+test("the client portal sign-in opens and its data needs a portal session", async ({ page, request, baseURL }) => {
+  await page.goto("/portal/login");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  const upload = await request.post("/api/portal/upload", { multipart: { file: { name: "a.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") } }, headers: { origin: baseURL || "" } });
+  expect(upload.status()).toBe(401);
+  const pdf = await request.get("/api/portal/invoices/00000000-0000-0000-0000-000000000000/pdf");
+  expect(pdf.status()).toBe(401);
+});
+
+test("the Razorpay webhook refuses unsigned calls", async ({ request }) => {
+  const res = await request.post("/api/webhooks/razorpay?firm=00000000-0000-0000-0000-000000000000", { data: { event: "payment_link.paid" } });
+  expect([401, 503]).toContain(res.status());
+});

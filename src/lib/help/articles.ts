@@ -292,6 +292,66 @@ If emails stop arriving, the mailbox password may have changed. For Gmail you ne
 5. **A client didn't receive an email:** ask them to check Spam, and confirm the email address on the client record.
 6. **An error message appears:** note the exact message (or take a screenshot) and share it here. That makes it much faster to fix.`,
   },
+  {
+    id: "attendance",
+    title: "Attendance, time away and leave",
+    area: "Time",
+    keywords: "attendance away question idle quiet break tally portal call leave holiday late office remote approval",
+    body: `Your day is worked out from your activity in Duesk. Nothing on your screen is recorded.
+
+1. If there is no activity for **15 minutes** (your firm can change this), the next time you move the mouse Duesk asks **what were you doing**: Tally or Excel, a government portal, a call, other office work, or a break. A running timer pauses meanwhile.
+2. Pick the answer. Work counts as **away for work**; a break counts as a break. Closing the question marks the time as **not answered**.
+3. Away-for-work time above **2 hours in a day** goes to someone who can approve time. Until then it shows as waiting.
+4. Use **Start my day** and **End my day** on the Attendance page if you want exact times. Otherwise the first and last activity are used.
+5. **Apply for leave** from the Attendance page. You can cancel it until it starts.
+
+Days are marked **In office** when you open Duesk from your branch's office internet address; otherwise **Remote**. This is only recorded, it never stops you working.`,
+  },
+  {
+    id: "attendance-admin",
+    title: "Attendance reports, approvals and workload",
+    area: "Time",
+    adminOnly: true,
+    keywords: "attendance report team absent late capacity workload approve time leave holidays rules export csv",
+    body: `Open **Attendance**.
+
+1. **Team report**: present, leave, absent, late, office and remote days, active hours and away-for-work hours for any period up to three months. A high share of away time is worth a look next to the work finished. Download it with **CSV**.
+2. **Workload**: open work for the next 7, 14 or 30 days against each person's hours, after holidays and approved leave. The same line appears under **Assign execution to** when you create a task.
+3. **Approvals**: away time above the daily limit, and leave requests.
+4. **Holidays and rules**: holidays (for every branch or one), the quiet time before the question, the daily limit before approval, and the grace before someone counts as late.
+
+Roles with **See attendance and capacity** or **Approve time and leave** can do the same for the people they can see.`,
+  },
+  {
+    id: "branches-roles",
+    title: "Branches and firm roles",
+    area: "Administration",
+    adminOnly: true,
+    keywords: "branch office gstin numbering prefix role scope own branch firm permission article manager",
+    body: `Open **Branches and roles**.
+
+**Branches**: every firm has a head office. Add a branch with its address, working hours and office internet address. For billing, either leave GSTIN and numbering empty (the branch bills under the firm) or give it its own **GSTIN** and **own invoice numbering** with a prefix such as PV/{FY}/. A client's invoices follow the client's branch.
+
+**Roles**: make roles such as Article, Senior or Branch manager. Each role decides:
+1. **Sees**: own work only, their branch, or the whole firm.
+2. **Sections** in the menu.
+3. **Can**: review work, approve time and leave, see attendance, see fees and profitability, export data.
+
+Give people their branch and role on **Team management**. Changing a role updates everyone who has it.`,
+  },
+  {
+    id: "must-read",
+    title: "Must-read announcements and escalations",
+    area: "Administration",
+    adminOnly: true,
+    keywords: "announcement must read acknowledge pinned reminder export escalation level partner list overdue statutory",
+    body: `**Announcements**: tick **Must read** to pin it above every page until each person confirms. Choose how often to remind those who haven't read it, and whether it is for one branch. Open **x of y acknowledged** to see who has read it, remind the rest, or export the list.
+
+**Escalations** (Tasks, **Reminders & escalations**):
+1. Level 1 is the person doing the work.
+2. Level 2: when overdue by the days you choose, the reviewer and the person who assigned it are told.
+3. Level 3: when overdue longer, or the statutory date is close, the task goes on the **partners' list**, sent once a day at the time you choose and shown on the Dashboard as **Needs a partner**.`,
+  },
 ];
 
 export function knowledgeBaseText(): string {
