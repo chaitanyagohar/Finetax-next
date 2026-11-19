@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
     //    with none chosen, the email goes from the firm's default mailbox.
     if (accountId) await assertMailboxAccess(getAdminClient(), caller, accountId);
     const result = await sendFirmEmail({
+      kind: "compose",
       to,
       subject,
       html: escapeHtml(body).replace(/\n/g, "<br/>"),

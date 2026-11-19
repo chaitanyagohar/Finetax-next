@@ -90,6 +90,7 @@ export async function issueAndEmailInvoice(
       : "";
 
   await sendFirmEmail({
+    kind: "invoice",
     orgId: inv.org_id,
     to,
     subject: `Invoice ${inv.invoice_number}${period} · due ${formatDate(inv.due_date, "-")}`,
@@ -154,6 +155,7 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
         const firm = await firmFor(inv.org_id);
         const payUrl = await payLinkFor(admin, inv);
         await sendFirmEmail({
+          kind: "payment_reminder",
           orgId: inv.org_id,
           to: inv.clients.email,
           subject: `${rule.subject} · ${inv.invoice_number}`,

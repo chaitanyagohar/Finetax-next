@@ -118,7 +118,12 @@ export async function requireUser(): Promise<AuthContext> {
     throw new ApiError(403, "This account is deactivated.");
   }
 
-  const role = a.role || "staff";
+  let role = a.role || "staff";
+  // The firm may require a verified two-step session for administrator rights
+  if (role === "admin") {
+    const { data: stillAdmin } = await supabase.rpc("is_admin");
+    if (!stillAdmin) role = "staff";
+  }
   const isAdmin = role === "admin";
 
   return {

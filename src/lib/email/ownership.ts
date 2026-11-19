@@ -37,6 +37,7 @@ export async function sendOwnershipCode(admin: SupabaseClient, account: Account,
 
   try {
     await sendFirmEmail({
+      kind: "mailbox_code",
       orgId: senderOrg,
       to: account.email_address,
       subject: `${code} is your Duesk mailbox confirmation code`,

@@ -236,6 +236,13 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
     };
   }, [loadCounts, loadNotifications, supabase, user.id]);
 
+  // The getting-started checklist can open the account menu (to add a photo)
+  useEffect(() => {
+    const open = () => setOpenMenu("user");
+    window.addEventListener("duesk:open-account-menu", open);
+    return () => window.removeEventListener("duesk:open-account-menu", open);
+  }, []);
+
   // Refresh (throttled) and close menus on navigation
   useEffect(() => {
     setOpenMenu(null);
@@ -483,6 +490,9 @@ export default function Topbar({ user, onMenuClick }: TopbarProps) {
                   </div>
                 )}
                 <div className="p-2">
+                  <Link href="/security" className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-text-main transition hover:bg-surface-alt">
+                    <ShieldCheck className="h-4 w-4 text-text-muted" /> Sign-in security
+                  </Link>
                   <button
                     type="button"
                     onClick={logout}

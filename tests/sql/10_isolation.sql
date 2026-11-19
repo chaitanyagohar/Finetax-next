@@ -298,4 +298,28 @@ select t.ok('C7 staff without the right cannot see the team attendance report', 
 select t.ok('C8 staff see only their own away time', not exists (select 1 from away_periods where user_id <> 'a0000000-0000-0000-0000-0000000000a2'));
 reset role;
 
+
+-- ===== Batch 12: signed-out visitors, two-step sign-in, database activity log
+select t.ok('D1 signed-out visitors have no table rights and can run no Duesk function',
+  not exists (select 1 from information_schema.role_table_grants where grantee = 'anon' and table_schema = 'public')
+  and not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace
+                    and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+                    and has_function_privilege('anon', p.oid, 'execute')));
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at)
+values (gen_random_uuid(), 'a0000000-0000-0000-0000-0000000000a2', 'test', 'totp', 'verified', now(), now());
+select t.as_user(:A_STAFF) as _ \gset
+set role authenticated;
+select t.ok('D2 a person with two-step sign-in sees no firm data until the session is verified',
+  public.current_org_id() is null and not exists (select 1 from clients) and not exists (select 1 from tasks));
+reset role;
+delete from auth.mfa_factors where user_id = 'a0000000-0000-0000-0000-0000000000a2';
+select t.as_user(:A_ADMIN) as _ \gset
+set role authenticated;
+update clients set notes = 'checked' where org_id = :A;
+delete from clients where id = (select id from clients where org_id = :A and not exists (select 1 from invoices i where i.client_id = clients.id)
+                                  and not exists (select 1 from tasks k where k.client_id = clients.id) limit 1);
+reset role;
+select t.ok('D3 the database logs team and client changes itself',
+  exists (select 1 from audit_logs where org_id = :A and metadata ->> 'source' = 'database'));
+
 select 'all isolation checks passed' as result;

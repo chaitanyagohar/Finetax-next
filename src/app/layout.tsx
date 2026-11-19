@@ -60,8 +60,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Client portal pages: no staff shell, whoever is signed in to the staff app
-  if (((await headers()).get("x-pathname") || "").startsWith("/portal")) {
+  // Client portal pages, and the two-step code page (nothing of the firm opens before it): no staff shell
+  const path = (await headers()).get("x-pathname") || "";
+  if (path.startsWith("/portal") || path === "/verify" || path.startsWith("/verify/")) {
     return (
       <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
         <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>

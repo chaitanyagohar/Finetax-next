@@ -90,6 +90,7 @@ export async function sendMorningDigests(admin: SupabaseClient, siteUrl: string,
     const firmName = settings?.firm_name || firm.name;
     try {
       await sendFirmEmail({
+        kind: "morning_email",
         orgId: firm.id,
         to,
         subject: `${firmName}: ${d.statutory_week} deadline${d.statutory_week === 1 ? "" : "s"} this week${d.collected_yesterday ? `, ${rupees(d.collected_yesterday)} collected yesterday` : ""}`,

@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Send,
   Clock,
+  ShieldOff,
 } from "lucide-react";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { createClient } from "@/lib/supabase/client";
@@ -61,7 +62,7 @@ type Member = {
   invite_pending: boolean;
   last_sign_in_at: string | null;
 };
-type SecurityMode = "set_password" | "send_reset_link" | "update_email";
+type SecurityMode = "set_password" | "send_reset_link" | "update_email" | "reset_mfa";
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15 disabled:bg-surface-alt disabled:text-text-muted";
@@ -822,12 +823,13 @@ export default function TeamPage() {
       {securityTarget && (
         <Modal title={`Sign-in security for ${securityTarget.name}`} subtitle="Sensitive actions need your own password." onClose={() => !secSubmitting && setSecurityTarget(null)} maxWidth="max-w-lg">
           <form onSubmit={submitSecurity} className="space-y-4">
-            <div className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface-alt p-1 text-[11px] font-semibold">
+            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-surface-alt p-1 text-[11px] font-semibold sm:grid-cols-4">
               {(
                 [
                   { mode: "send_reset_link", label: "Email reset link", icon: Mail },
                   { mode: "set_password", label: "Set password", icon: KeyRound },
                   { mode: "update_email", label: "Change email", icon: Edit2 },
+                  { mode: "reset_mfa", label: "Reset 2-step", icon: ShieldOff },
                 ] as { mode: SecurityMode; label: string; icon: typeof KeyRound }[]
               ).map((t) => {
                 const Icon = t.icon;
@@ -880,6 +882,12 @@ export default function TeamPage() {
               </div>
             )}
 
+            {securityMode === "reset_mfa" && (
+              <p className="rounded-lg border border-border bg-surface-alt p-3 text-xs text-text-main">
+                For a lost phone. Removes two-step sign-in from <span className="font-semibold">{securityTarget.email}</span>. They sign in with their password and should set it up again from their menu.
+              </p>
+            )}
+
             {securityMode === "update_email" && (
               <div className="space-y-2">
                 <label className={labelClass}>New sign-in email</label>
@@ -902,7 +910,7 @@ export default function TeamPage() {
               {!secSuccess && (
                 <button type="submit" disabled={secSubmitting} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-light disabled:opacity-60">
                   {secSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {securityMode === "set_password" ? "Update password" : securityMode === "send_reset_link" ? "Send reset link" : "Update email"}
+                  {securityMode === "set_password" ? "Update password" : securityMode === "send_reset_link" ? "Send reset link" : securityMode === "reset_mfa" ? "Reset two-step sign-in" : "Update email"}
                 </button>
               )}
             </div>

@@ -23,9 +23,14 @@ import {
   RotateCcw,
   Users,
   Wallet,
+  GitBranch,
+  CalendarCheck,
+  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/components/layout/UserContext";
+import { hasFeature } from "@/lib/features";
+import ImagePicker from "@/components/ui/ImagePicker";
 import DueskLogo from "@/components/onboarding/DueskLogo";
 import Stamp from "@/components/onboarding/Stamp";
 import { GSTIN_RE, PAN_RE, stateName } from "@/lib/gst";
@@ -110,11 +115,14 @@ const MONTH: { day: string; icon: LucideIcon; title: string; detail: string; chi
   { day: "12 Oct", icon: Wallet, title: "Payment of ₹17,700 recorded", detail: "The invoice is marked Paid and the reminders stop" },
 ];
 
-const NEXT_STEPS: { icon: LucideIcon; title: string; text: string; href: string }[] = [
+const NEXT_STEPS: { icon: LucideIcon; title: string; text: string; href: string; feature?: string[] }[] = [
   { icon: Users, title: "Add your team", text: "Give each person only the modules they need.", href: "/team" },
   { icon: Mail, title: "Connect your firm mailbox", text: "Send invoices from your own address.", href: "/inbox" },
   { icon: Building2, title: "Add your clients", text: "One by one or from a spreadsheet.", href: "/clients" },
   { icon: Briefcase, title: "Create a retainer package", text: "Services plus a fee, ready to send.", href: "/packages" },
+  { icon: GitBranch, title: "Add your offices and roles", text: "Shared or separate billing per office; what each role sees.", href: "/organisation", feature: ["branches", "custom_roles"] },
+  { icon: CalendarCheck, title: "Set holidays and attendance rules", text: "So absences and workload are counted right.", href: "/attendance?tab=holidays", feature: ["attendance"] },
+  { icon: ShieldCheck, title: "Turn on two-step sign-in", text: "A code from your phone after your password.", href: "/security" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -409,6 +417,7 @@ function MonthPlayer() {
 /* The firm file (right-hand sheet)                                    */
 /* ------------------------------------------------------------------ */
 function FirmSheet({
+  logo,
   form,
   gstState,
   sampleNumber,
@@ -416,6 +425,7 @@ function FirmSheet({
   step,
   signatory,
 }: {
+  logo: string | null;
   form: Form;
   gstState?: string;
   sampleNumber: string;
@@ -435,7 +445,11 @@ function FirmSheet({
   return (
     <div className={`ob-sheet relative min-h-[560px] rounded-sm py-8 pl-16 pr-8 ${stamped ? "ob-thud" : "ob-sheet-in"}`}>
       {/* Letterhead */}
-      <p className="text-lg font-semibold tracking-tight text-navy">{form.firm_name || "Your firm's name"}</p>
+      <div className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {logo && <img src={logo} alt="" className="h-10 w-10 object-contain" />}
+        <p className="text-lg font-semibold tracking-tight text-navy">{form.firm_name || "Your firm's name"}</p>
+      </div>
       <p className="mt-1 min-h-[1rem] text-xs text-slate-500">{form.address || "Address"}</p>
       <p className="text-[11px] text-slate-500">
         {[form.gstin && `GSTIN ${form.gstin}`, form.pan && `PAN ${form.pan}`].filter(Boolean).join("     ") || "GSTIN and PAN"}
@@ -574,6 +588,7 @@ export default function SetupWizardPage() {
   const [compareView, setCompareView] = useState<"now" | "duesk">("now");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [logo, setLogo] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -581,6 +596,7 @@ export default function SetupWizardPage() {
       const s = (data || {}) as Record<string, unknown>;
       const str = (k: string) => (s[k] === null || s[k] === undefined ? "" : String(s[k]));
       setSettings(s);
+      setLogo(typeof s.logo_url === "string" ? s.logo_url : null);
       setForm({
         firm_name: str("firm_name") || me?.orgName || "",
         gstin: str("gstin"), pan: str("pan"), address: str("address"), phone: str("phone"), email: str("email"), website: str("website"),
@@ -801,6 +817,22 @@ export default function SetupWizardPage() {
                   <Field label="Firm name">
                     <input className={inputClass} value={form.firm_name} maxLength={200} onChange={(e) => update("firm_name", e.target.value)} />
                   </Field>
+                  <Field label="Logo" hint="Optional. PNG or JPG up to 2 MB; it prints on your invoices.">
+                    <ImagePicker
+                      endpoint="/api/admin/logo"
+                      current={logo}
+                      label="logo"
+                      onChange={setLogo}
+                      preview={
+                        logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={logo} alt="Firm logo" className="h-14 w-14 rounded-lg border border-slate-200 bg-white object-contain p-1" />
+                        ) : (
+                          <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-400">Logo</span>
+                        )
+                      }
+                    />
+                  </Field>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field
                       label="GSTIN"
@@ -999,7 +1031,7 @@ export default function SetupWizardPage() {
                   <h2 className="text-4xl font-semibold leading-tight tracking-tight text-navy">{orgName} is set up</h2>
                   <p className="mt-3 max-w-md text-base text-slate-600">Your letterhead, numbering and bank details are saved. These next steps take a couple of minutes each.</p>
                   <ul className="mt-8 divide-y divide-slate-200 border-y border-slate-200">
-                    {NEXT_STEPS.map((n, i) => (
+                    {NEXT_STEPS.filter((n) => !n.feature || n.feature.some((f) => hasFeature(me, f))).map((n, i) => (
                       <li key={n.href} className="ob-rise" style={{ animationDelay: `${1.2 + i * 0.08}s` }}>
                         <button type="button" onClick={() => leave(n.href)} className="group flex w-full items-center gap-3 py-3 text-left">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-navy transition group-hover:border-navy">
@@ -1059,7 +1091,7 @@ export default function SetupWizardPage() {
 
         {/* Right: the firm file */}
         <div className="lg:sticky lg:top-24 lg:self-start">
-          {loaded && <FirmSheet form={form} gstState={gstState} sampleNumber={sampleNumber} services={services} step={step} signatory={me?.name || ""} />}
+          {loaded && <FirmSheet logo={logo} form={form} gstState={gstState} sampleNumber={sampleNumber} services={services} step={step} signatory={me?.name || ""} />}
         </div>
       </main>
     </div>

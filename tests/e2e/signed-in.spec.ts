@@ -24,6 +24,7 @@ const PAGES = [
   "/organisation",
   "/attendance",
   "/plan",
+  "/security",
   "/packages",
   "/settings",
   "/help",

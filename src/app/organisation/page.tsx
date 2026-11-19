@@ -208,7 +208,7 @@ export default function OrganisationPage() {
           )
         }
       >
-        <div className="inline-flex rounded-lg border border-border bg-surface-alt p-1 text-xs font-semibold">
+        <div data-tour="org-tabs" className="inline-flex rounded-lg border border-border bg-surface-alt p-1 text-xs font-semibold">
           {(
             [
               ["branches", "Branches", GitBranch],

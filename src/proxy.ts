@@ -6,7 +6,7 @@ import { CSP_HEADER, contentSecurityPolicy } from "@/lib/csp";
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/auth/confirm", "/engagement"];
 
 // Routes that only administrators may open
-const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings", "/proposals", "/setup", "/plan"];
+const ADMIN_ONLY_PATHS = ["/team", "/packages", "/audit-page", "/settings", "/proposals", "/setup", "/plan", "/organisation"];
 
 // Routes that need a specific module (same as the sidebar)
 const MODULE_PATHS: { base: string; module: string }[] = [
@@ -33,7 +33,7 @@ const OWNER_PATHS = ["/owner"];
 
 // The Duesk staff workspace (Oddlambda) only has these pages
 const PLATFORM_ORG_SLUG = "oddlambda";
-const PLATFORM_PATHS = ["/owner", "/support", "/chat", "/reset-password"];
+const PLATFORM_PATHS = ["/owner", "/support", "/chat", "/reset-password", "/security", "/verify"];
 
 // Same default as the root layout, for people with no modules saved
 const DEFAULT_STAFF_MODULES = ["leads", "tasks", "time_tracking"];
@@ -131,6 +131,20 @@ async function guard(request: NextRequest, nonce: string, csp: string) {
     if (request.cookies.get(RECOVERY_COOKIE)?.value !== user.id) return redirectToPath("/");
   }
 
+  // RULE 3b: Two-step sign-in. A person who has set it up enters their code before anything else opens.
+  if (user && !isPublic) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const needsCode = aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2";
+    if (needsCode && !matchesPath(pathname, "/verify")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/verify";
+      url.search = "";
+      if (pathname !== "/") url.searchParams.set("redirect", pathname + search);
+      return redirectTo(url);
+    }
+    if (matchesPath(pathname, "/verify")) return needsCode ? response : redirectToPath("/");
+  }
+
   // RULE 4: Role, module and workspace checks (current firm)
   if (user && !isPublic) {
     const { data: accessData } = await supabase.rpc("my_access");
@@ -156,6 +170,18 @@ async function guard(request: NextRequest, nonce: string, csp: string) {
 
     if (platformLanding && !PLATFORM_PATHS.some((base) => matchesPath(pathname, base))) {
       return redirectToPath(platformLanding);
+    }
+
+    // The firm requires two-step sign-in of administrators, and this one hasn't set it up yet
+    if (active && access!.role === "admin" && !matchesPath(pathname, "/security")) {
+      const { data: sec } = await supabase.rpc("my_security");
+      const s = sec as { firm_requires_for_admins?: boolean; session_verified?: boolean } | null;
+      if (s?.firm_requires_for_admins && !s.session_verified) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/security";
+        url.search = "?required=1";
+        return redirectTo(url);
+      }
     }
 
     const adminPath = ADMIN_ONLY_PATHS.some((base) => matchesPath(pathname, base));

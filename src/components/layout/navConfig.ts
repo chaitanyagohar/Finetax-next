@@ -175,6 +175,7 @@ export function isPathActive(pathname: string, href: string): boolean {
 
 export function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/reviewer-queue")) return "Review tasks";
+  if (pathname.startsWith("/security")) return "Sign-in security";
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
       if (isPathActive(pathname, item.href)) return item.name;

@@ -12,6 +12,7 @@ type Grant = { id: string; expires_at: string; reason: string | null; created_at
 export default function DataAndSupport({ onNotice }: { onNotice: (type: "success" | "error", message: string) => void }) {
   const [supabase] = useState(() => createClient());
   const [exporting, setExporting] = useState(false);
+  const [exportPassword, setExportPassword] = useState("");
   const [grant, setGrant] = useState<Grant | null>(null);
   const [hours, setHours] = useState("24");
   const [reason, setReason] = useState("");
@@ -33,10 +34,11 @@ export default function DataAndSupport({ onNotice }: { onNotice: (type: "success
     load();
   }, [load]);
 
-  async function exportAll() {
+  async function exportAll(e: React.FormEvent) {
+    e.preventDefault();
     setExporting(true);
     try {
-      const res = await fetch("/api/admin/export", { method: "POST" });
+      const res = await fetch("/api/admin/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adminPassword: exportPassword }) });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || "Export failed.");
@@ -56,19 +58,23 @@ export default function DataAndSupport({ onNotice }: { onNotice: (type: "success
       onNotice("error", e instanceof Error ? e.message : "Export failed.");
     } finally {
       setExporting(false);
+      setExportPassword("");
     }
   }
 
   async function allow(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase
-      .from("support_access_grants")
-      .insert({ expires_at: new Date(Date.now() + Number(hours) * 3600_000).toISOString(), reason: reason.trim() || null });
+    const res = await fetch("/api/admin/support-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hours: Number(hours), reason: reason.trim() }),
+    });
+    const json = await res.json().catch(() => ({}));
     setBusy(false);
-    if (error) return onNotice("error", error.message);
+    if (!res.ok) return onNotice("error", json.error || "Could not give access.");
     setReason("");
-    onNotice("success", "Duesk support can now see your setup until the time shown.");
+    onNotice("success", "Duesk support can now see your setup until the time shown. Duesk has been told.");
     load();
   }
 
@@ -95,9 +101,21 @@ export default function DataAndSupport({ onNotice }: { onNotice: (type: "success
         <div className="space-y-2">
           <p className="font-semibold text-text-main">Export everything</p>
           <p className="text-text-muted">Clients, enquiries, quotations, invoices, payments, tasks, checklists, time and discussions as spreadsheet (CSV) files in one ZIP.</p>
-          <button type="button" onClick={exportAll} disabled={exporting} className={btn.secondary}>
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download export
-          </button>
+          <form onSubmit={exportAll} className="flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              value={exportPassword}
+              onChange={(e) => setExportPassword(e.target.value)}
+              placeholder="Your password"
+              aria-label="Your password"
+              className={`${field.input} max-w-48`}
+            />
+            <button type="submit" disabled={exporting || !exportPassword} className={btn.secondary}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download export
+            </button>
+          </form>
         </div>
         <div className="space-y-2">
           <p className="flex items-center gap-1.5 font-semibold text-text-main">
