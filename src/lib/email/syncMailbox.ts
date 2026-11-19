@@ -4,6 +4,7 @@ import { simpleParser } from "mailparser";
 import { ImapFlow } from "imapflow";
 import { getAccountPassword, imapSettingsFor } from "@/lib/email/mailer";
 import { assertPublicMailHost } from "@/lib/email/mailHost";
+import { keptAttachments, storeMailFiles, type MailFile } from "@/lib/email/attachments";
 
 const MAX_PER_RUN = 100; // larger backlogs continue on the next run
 const FIRST_SYNC_DAYS = 14; // how far back the very first sync looks
@@ -49,6 +50,7 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
     });
 
     const rows: any[] = [];
+    const filesByMessage = new Map<string, MailFile[]>();
     let maxUid = Number(account.last_uid || 0);
     let uidValidity: number | null = null;
     let more = false;
@@ -90,6 +92,9 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
             if (msg.uid > maxUid) maxUid = msg.uid;
             if (!msg.source) continue;
             const parsed = await simpleParser(msg.source);
+            const files = keptAttachments(parsed.attachments);
+            const messageId = parsed.messageId || `${msg.uid}-${account.id}`;
+            if (files.length) filesByMessage.set(messageId, files);
             rows.push({
               org_id: account.org_id,
               account_id: account.id,
@@ -99,7 +104,7 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
               subject: parsed.subject || "(No Subject)",
               body_text: parsed.text || "",
               body_html: parsed.html || "",
-              message_id: parsed.messageId || `${msg.uid}-${account.id}`,
+              message_id: messageId,
               is_read: false,
               received_at: parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
             });
@@ -140,10 +145,16 @@ export async function syncMailbox(admin: SupabaseClient, account: any): Promise<
       const clientByEmail = new Map((matched || []).map((c: any) => [String(c.email).toLowerCase(), c.id]));
       newRows.forEach((r) => (r.client_id = clientByEmail.get(r.from_address) || null));
 
-      const { error: insertErr } = await admin.from("email_messages").insert(newRows);
+      const { data: savedRows, error: insertErr } = await admin
+        .from("email_messages")
+        .insert(newRows)
+        .select("id, message_id, client_id, subject");
       if (insertErr) {
         console.error("[sync-emails] Insert error:", insertErr.message);
         throw new Error("Emails were fetched but could not be saved.");
+      }
+      if (filesByMessage.size && savedRows?.length) {
+        await storeMailFiles(admin, account.org_id, savedRows, filesByMessage);
       }
     }
 

@@ -9,6 +9,7 @@ import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import ChatConversation from "@/components/chat/ChatConversation";
 import { getInitials } from "@/lib/format";
 import type { ChatChannel, ChatPerson } from "@/lib/chat";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 type Unread = Record<string, { unread: number; mentions: number }>;
 
@@ -413,7 +414,7 @@ function PeoplePicker({ people, onPick }: { people: ChatPerson[]; onPick: (p: Ch
         {list.map((p) => (
           <li key={p.id}>
             <button type="button" onClick={() => onPick(p)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-surface-alt">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold text-navy">{getInitials(p.name)}</span>
+              <PersonAvatar id={p.id} name={p.name} size="sm" />
               {p.name}
             </button>
           </li>

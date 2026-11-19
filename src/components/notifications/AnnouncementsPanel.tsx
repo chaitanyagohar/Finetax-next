@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Loader2, Megaphone, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, BellRing, CheckCircle2, ChevronDown, ChevronRight, Download, Loader2, Megaphone, Pin, Plus, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, localISODate } from "@/lib/format";
+import { LockedHint } from "@/components/plan/FeatureGate";
+import { hasFeature } from "@/lib/features";
+import { downloadCsv } from "@/lib/csv";
 
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm outline-none transition focus:border-navy focus:ring-2 focus:ring-navy/15";
@@ -22,6 +25,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
   const [team, setTeam] = useState<{ id: string; name: string; is_active?: boolean }[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [reminded, setReminded] = useState<Record<string, string>>({});
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -29,6 +33,12 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
   const [important, setImportant] = useState(false);
   const [requiresAck, setRequiresAck] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
+  const [mustRead, setMustRead] = useState(false);
+  const [remindHours, setRemindHours] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [status, setStatus] = useState<Record<string, { user_id: string; name: string; email: string | null; branch: string | null; acked_at: string | null }[]>>({});
+  const canMustRead = hasFeature(user, "must_acknowledge");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,6 +62,11 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
       setAcks([]);
     }
     if (isAdmin) {
+      supabase
+        .from("branches")
+        .select("id, name")
+        .order("is_default", { ascending: false })
+        .then(({ data: b }) => setBranches(b || []));
       const { data: people } = await supabase.from("profiles").select("id, name, is_active").order("name", { ascending: true });
       setTeam(people || []);
     }
@@ -69,7 +84,18 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
     setSaving(true);
     const { data, error: err } = await supabase
       .from("announcements")
-      .insert([{ title: title.trim(), body: body.trim(), priority: important ? "important" : "normal", requires_ack: requiresAck, expires_at: expiresAt || null }])
+      .insert([
+        {
+          title: title.trim(),
+          body: body.trim(),
+          priority: important || mustRead ? "important" : "normal",
+          requires_ack: requiresAck || mustRead,
+          must_acknowledge: mustRead,
+          remind_every_hours: (requiresAck || mustRead) && remindHours ? Number(remindHours) : null,
+          branch_id: branchId || null,
+          expires_at: expiresAt || null,
+        },
+      ])
       .select("id")
       .single();
     setSaving(false);
@@ -81,6 +107,9 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
     setImportant(false);
     setRequiresAck(false);
     setExpiresAt("");
+    setMustRead(false);
+    setRemindHours("");
+    setBranchId("");
     load();
   }
 
@@ -91,6 +120,28 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
     if (err) return;
     logAuditEvent("DELETE_ANNOUNCEMENT", "ANNOUNCEMENTS", a.id, { title: a.title });
     load();
+  }
+
+  async function loadStatus(id: string) {
+    const { data } = await supabase.rpc("announcement_ack_status", { p_id: id });
+    setStatus((m) => ({ ...m, [id]: data || [] }));
+  }
+
+  async function remindNow(a: any) {
+    setBusy(a.id);
+    const { data, error: err } = await supabase.rpc("remind_unacknowledged", { p_id: a.id });
+    setBusy(null);
+    setError("");
+    setReminded((r) => ({ ...r, [a.id]: err ? err.message : data ? `Reminded ${data} ${data === 1 ? "person" : "people"}.` : "Everyone waiting was reminded within the last hour." }));
+  }
+
+  function exportStatus(a: any) {
+    const rows = status[a.id] || [];
+    downloadCsv(
+      `read-${a.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.csv`,
+      ["Name", "Email", "Branch", "Read on"],
+      rows.map((r) => [r.name, r.email, r.branch, r.acked_at ? new Date(r.acked_at).toLocaleString("en-IN") : "Not yet"]),
+    );
   }
 
   async function acknowledge(a: any) {
@@ -133,7 +184,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
           list.map((a) => {
             const myAck = acks.some((k) => k.announcement_id === a.id && k.user_id === me);
             const ackedIds = new Set(acks.filter((k) => k.announcement_id === a.id).map((k) => k.user_id));
-            const audience = activeTeam.filter((t) => t.id !== a.created_by);
+            const audience = status[a.id] ? status[a.id].map((r) => ({ id: r.user_id, name: r.name })) : activeTeam.filter((t) => t.id !== a.created_by);
             const pending = audience.filter((t) => !ackedIds.has(t.id));
             const isOpen = expanded === a.id;
             return (
@@ -145,7 +196,9 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
                   <div className="min-w-0">
                     <p className="font-semibold text-text-main">
                       {a.priority === "important" && <span className="mr-1 rounded bg-amber-500 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white">Important</span>}
+                      {a.must_acknowledge && <Pin className="mr-1 inline h-3 w-3 text-amber-600" aria-label="Pinned until read" />}
                       {a.title}
+                      {a.branch_id && <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[9px] font-semibold text-text-muted">{branches.find((b) => b.id === a.branch_id)?.name || "One branch"}</span>}
                     </p>
                     {a.body && <p className="mt-1 whitespace-pre-wrap text-text-main">{a.body}</p>}
                     <p className="mt-1 text-[10px] text-text-muted">
@@ -182,7 +235,14 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
 
                 {a.requires_ack && isAdmin && (
                   <div className="mt-2">
-                    <button type="button" onClick={() => setExpanded(isOpen ? null : a.id)} className="flex items-center gap-1 text-[11px] font-semibold text-navy">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpanded(isOpen ? null : a.id);
+                        if (!isOpen) loadStatus(a.id);
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-navy"
+                    >
                       {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       {audience.length - pending.length} of {audience.length} acknowledged
                     </button>
@@ -190,9 +250,39 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
                       <div className="h-full rounded-full bg-emerald-500" style={{ width: `${audience.length ? ((audience.length - pending.length) / audience.length) * 100 : 0}%` }} />
                     </div>
                     {isOpen && (
-                      <p className="mt-1.5 text-[11px] text-text-muted">
-                        {pending.length === 0 ? "Everyone has acknowledged." : `Waiting for: ${pending.map((p) => p.name).join(", ")}`}
-                      </p>
+                      <div className="mt-2 space-y-2">
+                        {status[a.id] ? (
+                          <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-md border border-border bg-surface text-[11px]">
+                            {status[a.id].map((r) => (
+                              <li key={r.user_id} className="flex items-center justify-between px-2.5 py-1.5">
+                                <span>
+                                  {r.name} {r.branch && <span className="text-text-muted">· {r.branch}</span>}
+                                </span>
+                                {r.acked_at ? (
+                                  <span className="text-emerald-700">{new Date(r.acked_at).toLocaleString("en-IN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                                ) : (
+                                  <span className="font-semibold text-amber-700">Not yet</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[11px] text-text-muted">{pending.length === 0 ? "Everyone has acknowledged." : `Waiting for: ${pending.map((p) => p.name).join(", ")}`}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {pending.length > 0 && (
+                            <button type="button" disabled={busy === a.id} onClick={() => remindNow(a)} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold hover:bg-surface-alt">
+                              <BellRing className="h-3 w-3" /> Remind those who haven&apos;t read
+                            </button>
+                          )}
+                          {status[a.id] && (
+                            <button type="button" onClick={() => exportStatus(a)} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold hover:bg-surface-alt">
+                              <Download className="h-3 w-3" /> Export
+                            </button>
+                          )}
+                          {reminded[a.id] && <span className="text-[11px] text-emerald-700">{reminded[a.id]}</span>}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -206,7 +296,7 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
       {composeOpen && (
         <Modal
           title="Post an announcement"
-          subtitle="Every active team member is notified immediately."
+          subtitle="Everyone it is meant for is notified straight away."
           onClose={() => !saving && setComposeOpen(false)}
           maxWidth="max-w-lg"
           footer={
@@ -252,6 +342,35 @@ export default function AnnouncementsPanel({ isAdmin }: { isAdmin: boolean }) {
               <input type="checkbox" checked={requiresAck} onChange={(e) => setRequiresAck(e.target.checked)} className="h-4 w-4 accent-navy" />
               Require each person to confirm &quot;I&apos;ve read this&quot;
             </label>
+            <label className={`flex items-center gap-2 text-text-main ${canMustRead ? "cursor-pointer" : "opacity-60"}`}>
+              <input type="checkbox" disabled={!canMustRead} checked={mustRead} onChange={(e) => setMustRead(e.target.checked)} className="h-4 w-4 accent-navy" />
+              Must read: pinned at the top of every page until they confirm
+              {!canMustRead && <LockedHint feature="must_acknowledge" />}
+            </label>
+            {(requiresAck || mustRead) && canMustRead && (
+              <div>
+                <label className={labelClass}>Remind those who haven&apos;t read</label>
+                <select value={remindHours} onChange={(e) => setRemindHours(e.target.value)} className={inputClass}>
+                  <option value="">Don&apos;t remind</option>
+                  <option value="4">Every 4 hours</option>
+                  <option value="24">Every day</option>
+                  <option value="72">Every 3 days</option>
+                </select>
+              </div>
+            )}
+            {branches.length > 1 && (
+              <div>
+                <label className={labelClass}>Who sees it</label>
+                <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={inputClass}>
+                  <option value="">Everyone in the firm</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      Only {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </form>
         </Modal>
       )}

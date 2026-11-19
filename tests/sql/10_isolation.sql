@@ -173,4 +173,129 @@ select t.ok('F2 no trigger function is callable by anon or signed-in users',
     where p.pronamespace = 'public'::regnamespace and p.prorettype = 'trigger'::regtype
       and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))));
 
+-- ===== Batch 10: secrets, admin-only tables, client portal, owner tools
+select t.ok('B1 payment keys, the morning digest and portal housekeeping are server-only',
+  not exists (
+    select 1 from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('get_payment_gateway_secrets', 'firm_daily_digest', 'portal_housekeeping')
+      and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))));
+select t.ok('B2 portal sign-in links and sessions are closed to the browser',
+  not has_table_privilege('authenticated', 'public.client_portal_tokens', 'select')
+  and not has_table_privilege('anon', 'public.client_portal_tokens', 'select'));
+select t.ok('B3 payment secrets are never kept in the table itself',
+  not exists (select 1 from payment_gateways where key_secret is not null or webhook_secret is not null)
+  and not exists (select 1 from payment_gateways where key_secret_id is null));
+
+select t.as_user(:A_STAFF) as _ \gset
+set role authenticated;
+select t.ok('B4 staff cannot see payment settings, rates or support grants',
+  not exists (select 1 from payment_gateways) and not exists (select 1 from member_rates) and not exists (select 1 from support_access_grants));
+select t.ok('B5 staff cannot create invoice payment links themselves', not has_table_privilege('authenticated', 'public.invoice_payment_links', 'insert'));
+do $$
+begin
+  perform public.practice_profitability(current_date - 30, current_date);
+  raise exception 'staff ran practice_profitability';
+exception when raise_exception then
+  if sqlerrm like 'staff ran%' then raise; end if;
+end $$;
+select t.ok('B6 staff cannot see profitability', true);
+reset role;
+
+select t.as_user(:A_ADMIN) as _ \gset
+set role authenticated;
+select t.ok('B7 firm A admin sees only its own payment settings', (select count(*) from payment_gateways) = 1 and not exists (select 1 from payment_gateways where org_id = :B));
+select t.ok('B8 firm A admin sees only its own unbilled time', not exists (select 1 from public.unbilled_time() where client_id = 'c0000000-0000-0000-0000-00000000000b'));
+do $$
+begin
+  perform public.platform_firm_health();
+  raise exception 'firm admin ran platform_firm_health';
+exception when raise_exception then
+  if sqlerrm like 'firm admin ran%' then raise; end if;
+end $$;
+do $$
+begin
+  perform public.support_diagnostics('b0000000-0000-0000-0000-00000000000b');
+  raise exception 'firm admin ran support_diagnostics';
+exception when raise_exception then
+  if sqlerrm like 'firm admin ran%' then raise; end if;
+end $$;
+select t.ok('B9 firm admins cannot use the owner tools', true);
+do $$
+begin
+  perform public.apply_compliance_plan('c0000000-0000-0000-0000-00000000000b', array[]::uuid[], 'a0000000-0000-0000-0000-0000000000a2');
+  raise exception 'planned for a firm B client';
+exception when raise_exception then
+  if sqlerrm like 'planned for%' then raise; end if;
+end $$;
+select t.ok('B10 a compliance plan cannot be made for another firm''s client', true);
+reset role;
+
+
+-- ===== Batch 11: plans, branches, roles, attendance
+select t.ok('C1 plan switches, office checks and escalation jobs are server-only',
+  not has_function_privilege('authenticated', 'public.org_has_feature(uuid, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.mark_office_presence(uuid, uuid, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.run_escalations(uuid)', 'execute')
+  and not has_table_privilege('authenticated', 'public.org_feature_overrides', 'insert')
+  and not has_table_privilege('authenticated', 'public.away_periods', 'insert'));
+
+select (select id from public.branches where org_id = :B and not is_default limit 1) as b_branch,
+       (select id from public.away_periods where org_id = :B limit 1) as b_away,
+       (select id from public.roles where org_id = :B limit 1) as b_role \gset
+select set_config('test.b_branch', :'b_branch', false), set_config('test.b_away', :'b_away', false), set_config('test.b_role', :'b_role', false) \gset
+select t.as_user(:A_ADMIN) as _ \gset
+set role authenticated;
+do $$
+begin
+  insert into clients (name, branch_id) values ('Cross-firm branch', current_setting('test.b_branch')::uuid);
+  raise exception 'client placed in a firm B branch';
+exception when raise_exception then
+  if sqlerrm like 'client placed%' then raise; end if;
+end $$;
+select t.ok('C2 a client cannot be put in another firm''s branch', true);
+do $$
+begin
+  perform public.decide_away(current_setting('test.b_away')::uuid, true);
+  raise exception 'firm A approved firm B time';
+exception when raise_exception then
+  if sqlerrm like 'firm A approved%' then raise; end if;
+end $$;
+select t.ok('C3 firm A cannot approve firm B time away', true);
+select t.ok('C4 firm A reports list only firm A people',
+  not exists (select 1 from public.attendance_report(current_date - 7, current_date) r where r.user_id::text like 'b%')
+  and not exists (select 1 from public.capacity_report(current_date + 7) r where r.user_id::text like 'b%'));
+reset role;
+-- Run with full rights, as the admin API does
+do $$
+begin
+  update memberships set role_id = current_setting('test.b_role')::uuid
+   where user_id = 'a0000000-0000-0000-0000-0000000000a2';
+  raise exception 'firm A used a firm B role';
+exception when raise_exception then
+  if sqlerrm like 'firm A used%' then raise; end if;
+end $$;
+select t.ok('C5 a firm B role cannot be given to firm A staff, even by the server', true);
+
+select t.as_user(:A_STAFF) as _ \gset
+set role authenticated;
+do $$
+begin
+  update leave_requests set status = 'approved' where user_id = 'a0000000-0000-0000-0000-0000000000a2';
+  raise exception 'staff approved own leave';
+exception when raise_exception then
+  if sqlerrm like 'staff approved%' then raise; end if;
+end $$;
+select t.ok('C6 staff cannot approve their own leave', true);
+do $$
+begin
+  perform public.attendance_report(current_date - 7, current_date);
+  raise exception 'staff saw the attendance report';
+exception when raise_exception then
+  if sqlerrm like 'staff saw%' then raise; end if;
+end $$;
+select t.ok('C7 staff without the right cannot see the team attendance report', true);
+select t.ok('C8 staff see only their own away time', not exists (select 1 from away_periods where user_id <> 'a0000000-0000-0000-0000-0000000000a2'));
+reset role;
+
 select 'all isolation checks passed' as result;

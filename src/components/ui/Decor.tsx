@@ -50,22 +50,23 @@ export function AuthArt() {
 }
 
 /** Dashboard welcome card: a soft coral glow, part rings and a few dots in the corner. */
-export function HeroDecor() {
+/** Corner art for page headers; `dark` for headers on the midnight background. */
+export function HeroDecor({ dark = false }: { dark?: boolean }) {
   return (
-    <svg viewBox="0 0 320 160" className="pointer-events-none absolute right-0 top-0 h-full w-[320px] max-w-[60%]" aria-hidden="true" preserveAspectRatio="xMaxYMin slice">
+    <svg viewBox="0 0 320 160" className="pointer-events-none absolute right-0 top-0 h-full w-[420px] max-w-[70%]" aria-hidden="true" preserveAspectRatio="xMaxYMin slice">
       <defs>
         <radialGradient id="hero-glow" cx="85%" cy="10%" r="70%">
-          <stop offset="0%" stopColor="#f2613f" stopOpacity="0.16" />
+          <stop offset="0%" stopColor="#f2613f" stopOpacity={dark ? 0.35 : 0.16} />
           <stop offset="100%" stopColor="#f2613f" stopOpacity="0" />
         </radialGradient>
       </defs>
       <rect width="320" height="160" fill="url(#hero-glow)" />
-      <g fill="none" stroke="#f2613f">
+      <g fill="none" stroke="#f2613f" className={dark ? "decor-spin" : undefined} style={{ transformOrigin: "300px 10px" }}>
         <circle cx="300" cy="10" r="46" strokeOpacity="0.35" />
         <circle cx="300" cy="10" r="78" strokeOpacity="0.18" strokeDasharray="3 7" />
         <circle cx="300" cy="10" r="112" strokeOpacity="0.1" />
       </g>
-      <g fill="#0f172a" fillOpacity="0.12">
+      <g fill={dark ? "#ffffff" : "#0f172a"} fillOpacity={dark ? 0.14 : 0.12}>
         {Array.from({ length: 4 }).map((_, row) =>
           Array.from({ length: 6 }).map((_, col) => <circle key={`${row}-${col}`} cx={150 + col * 14} cy={100 + row * 14} r="1.4" />)
         )}

@@ -9,6 +9,7 @@ import PendingInvitations from "@/components/team/PendingInvitations";
 import SignOutButton from "@/components/layout/SignOutButton";
 import type { SessionUser } from "@/components/layout/navConfig";
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 
 // Served from the repo so builds and pages never depend on fonts.googleapis.com.
 const geist = localFont({
@@ -59,6 +60,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Client portal pages: no staff shell, whoever is signed in to the staff app
+  if (((await headers()).get("x-pathname") || "").startsWith("/portal")) {
+    return (
+      <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
+        <body className="m-0 bg-background p-0 text-text-main antialiased">{children}</body>
+      </html>
+    );
+  }
+
   const supabase = await createClient();
 
   // getUser() validates the session with Supabase Auth (safe for authorization)
@@ -77,7 +87,7 @@ export default async function RootLayout({
 
   // Profile (name/email) + access in the current firm, fetched once on the server
   const [{ data: profile }, { data: accessData }] = await Promise.all([
-    supabase.from("profiles").select("name, email, designation, is_active").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("name, email, designation, is_active, avatar_url").eq("id", user.id).maybeSingle(),
     supabase.rpc("my_access"),
   ]);
   const access = accessData as AccessRow | null;
@@ -136,6 +146,13 @@ export default async function RootLayout({
     );
   }
 
+  const [{ data: planData }, { data: brand }, { data: perms }] = await Promise.all([
+    supabase.rpc("my_features"),
+    supabase.from("firm_settings").select("logo_url").maybeSingle(),
+    supabase.rpc("my_permissions"),
+  ]);
+  const plan = planData as { plan?: string; plan_name?: string; features?: Record<string, boolean> } | null;
+
   const role: string = access.role || "staff";
   const isAdmin = role === "admin";
 
@@ -154,6 +171,12 @@ export default async function RootLayout({
     orgName: access.org_name,
     isPlatformOwner: !!access.is_platform_owner,
     isPlatformHome: access.org_slug === "oddlambda",
+    features: plan?.features || {},
+    plan: plan?.plan,
+    planName: plan?.plan_name,
+    avatarUrl: profile?.avatar_url || null,
+    firmLogoUrl: brand?.logo_url || null,
+    permissions: Array.isArray(perms) ? (perms as string[]) : [],
   };
 
   // Trial reminder for firm administrators (last 7 days of the trial)

@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Users,
   Calendar,
+  Globe2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
@@ -35,8 +36,10 @@ import { formatDate, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
 
-const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Other"];
+const CATEGORIES = ["Tax", "Statutory", "Audit", "Legal", "Invoice", "KYC", "Financials", "Correspondence", "Other"];
 const BUCKET = "firm-documents";
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const INTERNAL_FILTER = [{ id: "internal", label: "Internal (no client)" }];
@@ -71,6 +74,7 @@ export default function DocumentsPage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [documents, setDocuments] = useState<any[]>([]);
@@ -80,6 +84,11 @@ export default function DocumentsPage() {
 
   // Filters
   const [search, setSearch] = useState("");
+  // A link from search (/documents?q=…) starts with that search filled in
+  useEffect(() => {
+    const q = new URL(window.location.href).searchParams.get("q");
+    if (q) setSearch(q);
+  }, []);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
   const [uploaderFilter, setUploaderFilter] = useState("all");
@@ -166,6 +175,8 @@ export default function DocumentsPage() {
   }, [documents, search, categoryFilter, clientFilter, uploaderFilter, clientById, me]);
 
   /* ---------------- Upload / edit ---------------- */
+
+  useUrlIntent(!loading, { onNew: () => openUpload() });
 
   function openUpload() {
     setEditingDoc(null);
@@ -341,6 +352,17 @@ export default function DocumentsPage() {
       win.location.href = url;
     }
     logAuditEvent(download ? "DOWNLOAD_DOCUMENT" : "VIEW_DOCUMENT", "DOCUMENTS", doc.id, { title: doc.title });
+  }
+
+  async function toggleClientShare(doc: any) {
+    const next = !doc.shared_with_client;
+    setDocuments((prev) => prev.map((d) => (d.id === doc.id ? { ...d, shared_with_client: next } : d)));
+    const { error } = await supabase.from("documents").update({ shared_with_client: next }).eq("id", doc.id);
+    if (error) {
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? { ...d, shared_with_client: !next } : d)));
+      return showToast("error", error.message);
+    }
+    showToast("success", next ? "Shared with the client in their portal." : "No longer shown in the client portal.");
   }
 
   async function shareLink(doc: any) {
@@ -534,7 +556,7 @@ export default function DocumentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocuments.map((doc) => {
+                {filteredDocuments.slice(0, rowLimit).map((doc) => {
                   const busy = busyId === doc.id;
                   return (
                     <tr key={doc.id} className="transition hover:bg-surface-alt">
@@ -545,6 +567,7 @@ export default function DocumentsPage() {
                             <span className="block font-semibold text-navy hover:underline">{doc.title}</span>
                             {doc.file_name && doc.file_name !== doc.title && <span className="block truncate text-[10px] text-text-muted">{doc.file_name}</span>}
                             {!doc.storage_path && <span className="block text-[10px] font-semibold text-rose-600">File missing: please re-upload</span>}
+                            {doc.from_client && <span className="mt-0.5 inline-block rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-semibold text-accent">From client portal</span>}
                           </span>
                         </button>
                       </td>
@@ -579,6 +602,18 @@ export default function DocumentsPage() {
                           <button type="button" onClick={() => shareLink(doc)} disabled={busy || !doc.storage_path} className="rounded-md p-1.5 text-navy transition hover:bg-surface-alt disabled:opacity-40" title="Copy a 7-day download link">
                             <Link2 className="h-3.5 w-3.5" />
                           </button>
+                          {doc.client_id && (
+                            <button
+                              type="button"
+                              onClick={() => toggleClientShare(doc)}
+                              disabled={busy || !doc.storage_path}
+                              aria-pressed={!!doc.shared_with_client}
+                              className={`rounded-md p-1.5 transition disabled:opacity-40 ${doc.shared_with_client ? "bg-accent-soft text-accent" : "text-text-muted hover:bg-surface-alt"}`}
+                              title={doc.shared_with_client ? "Shown in the client portal (click to hide)" : "Share in the client portal"}
+                            >
+                              <Globe2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button type="button" onClick={() => openEdit(doc)} className="rounded-md p-1.5 text-text-muted transition hover:bg-surface-alt" title="Edit details">
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
@@ -594,6 +629,7 @@ export default function DocumentsPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredDocuments.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
         )}
       </div>

@@ -29,6 +29,7 @@ const LOOK: Record<string, { icon: LucideIcon; tone: string; label: string }> = 
   task_due_soon: { icon: Clock, tone: "bg-amber-600 text-white", label: "Deadline approaching" },
   task_overdue: { icon: AlertCircle, tone: "bg-rose-600 text-white", label: "Overdue" },
   statutory_risk: { icon: AlertCircle, tone: "bg-rose-700 text-white", label: "Statutory deadline" },
+  escalation_list: { icon: AlertCircle, tone: "bg-rose-700 text-white", label: "Partner escalation" },
   transfer_request: { icon: BellRing, tone: "bg-navy text-white", label: "Transfer request" },
   tasks_unassigned: { icon: AlertCircle, tone: "bg-amber-600 text-white", label: "Unassigned tasks" },
   support_reply: { icon: BellRing, tone: "bg-emerald-600 text-white", label: "Support replied" },

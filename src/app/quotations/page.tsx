@@ -31,6 +31,8 @@ import ClientPicker from "@/components/ui/ClientPicker";
 import { compactINR, formatDate, formatINR, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
 
 type ClientRow = Client & Record<string, any>;
 type LineItem = { description: string; qty: number; rate: number };
@@ -100,6 +102,7 @@ function normalizeItems(raw: unknown): LineItem[] {
 export default function QuotationsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -257,6 +260,8 @@ export default function QuotationsPage() {
   function defaultNotes(): string {
     return `Advance Payment Required for Mobilization of Work.\n\nBank Details:\nBank: ${firmSettings?.bank_name || "N/A"}\nA/C: ${firmSettings?.bank_account_no || "N/A"}\nIFSC: ${firmSettings?.bank_ifsc || "N/A"}\nUPI: ${firmSettings?.upi_id || "N/A"}`;
   }
+
+  useUrlIntent(!loading, { onNew: () => openModal() });
 
   function openModal(q?: any) {
     setFormError("");
@@ -698,7 +703,7 @@ export default function QuotationsPage() {
           <>
           {/* Phones: one card per quotation (tap to open); the table starts at tablet width */}
           <ul className="list-in divide-y divide-border md:hidden">
-            {filteredQuotations.map((q) => {
+            {filteredQuotations.slice(0, rowLimit).map((q) => {
               const st = statusOf(q);
               const expired = isExpired(q);
               const inv = invoiceByQuote[q.id];
@@ -724,6 +729,7 @@ export default function QuotationsPage() {
               );
             })}
           </ul>
+          <div className="md:hidden"><ShowMore total={filteredQuotations.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} /></div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
@@ -738,7 +744,7 @@ export default function QuotationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredQuotations.map((q) => {
+                {filteredQuotations.slice(0, rowLimit).map((q) => {
                   const st = statusOf(q);
                   const expired = isExpired(q);
                   const validTo = getValidUntil(q);
@@ -819,6 +825,7 @@ export default function QuotationsPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredQuotations.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
           </>
         )}

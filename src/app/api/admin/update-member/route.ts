@@ -75,6 +75,24 @@ export async function POST(request: NextRequest) {
         .eq("user_id", userId);
       if (error) throw new ApiError(500, "Could not save the changes.");
 
+      // Branch and custom role (a role then sets the sections and reviewer right)
+      const place: Record<string, string | null> = {};
+      for (const key of ["branch_id", "role_id"] as const) {
+        if (body && key in body) {
+          const v = (body as Record<string, unknown>)[key];
+          if (v === null || v === "") place[key] = null;
+          else if (typeof v === "string" && UUID_RE.test(v)) {
+            const { data: owned } = await admin.from(key === "branch_id" ? "branches" : "roles").select("id").eq("id", v).eq("org_id", caller.orgId).maybeSingle();
+            if (!owned) throw new ApiError(400, "That branch or role isn't in your firm.");
+            place[key] = v;
+          }
+        }
+      }
+      if (Object.keys(place).length) {
+        const { error: placeErr } = await admin.from("memberships").update(place).eq("org_id", caller.orgId).eq("user_id", userId);
+        if (placeErr) throw new ApiError(400, placeErr.message);
+      }
+
       if (awaitingAcceptance) {
         await writeAuditLog({ actor: caller, action: "UPDATE_MEMBER", entity: "MEMBERSHIPS", entity_id: userId, metadata: { role: input.role, modules: input.module_access, reviewer: input.is_reviewer } });
         return NextResponse.json({ success: true, message: `${input.name}'s invitation updated.` });

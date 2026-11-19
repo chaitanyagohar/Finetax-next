@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { simpleParser } from "mailparser";
 import { getAdminClient } from "@/lib/api/guard";
+import { keptAttachments, storeMailFiles } from "@/lib/email/attachments";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
         .limit(1);
 
       // 6. Save to that firm's Unified Inbox
-      const { error: insertErr } = await supabase.from("email_messages").insert([
+      const { data: savedRows, error: insertErr } = await supabase.from("email_messages").insert([
         {
           org_id: account.org_id,
           account_id: account.id,
@@ -119,13 +120,18 @@ export async function POST(request: NextRequest) {
           is_read: false,
           received_at: new Date().toISOString(),
         },
-      ]);
+      ]).select("id, message_id, client_id, subject");
 
       if (insertErr) {
         console.error("[webhook] Insert error:", insertErr.message);
         continue;
       }
       saved++;
+
+      const files = keptAttachments(parsed.attachments);
+      if (files.length && savedRows?.length) {
+        await storeMailFiles(supabase, account.org_id, savedRows, new Map([[messageId, files]]));
+      }
     }
 
     return NextResponse.json({ success: true, message: saved ? "Email processed and saved." : "Duplicate ignored." });

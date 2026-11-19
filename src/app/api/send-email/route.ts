@@ -15,6 +15,7 @@ import { assertMailboxAccess } from "@/lib/email/access";
 import { MAX_ATTACHMENTS, MAX_TOTAL_ATTACHMENT_BYTES, escapeHtml, sendFirmEmail, type MailAttachment } from "@/lib/email/mailer";
 import { isVaultPathAllowed } from "@/lib/storage/vaultPath";
 import { UUID_RE } from "@/lib/validate";
+import { sellerFor } from "@/lib/pdf/seller";
 
 const MAX_SYSTEM_ITEMS = 5;
 
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
             .eq("org_id", caller.orgId)
             .maybeSingle();
           if (!invoice) throw new ApiError(404, "One of the selected invoices was not found.");
-          const pdf = await renderInvoicePdf(invoice, invoice.clients, firm);
+          const pdf = await renderInvoicePdf(invoice, invoice.clients, await sellerFor(invoice, firm));
           attachments.push({ filename: pdfFileName(invoice.invoice_number, "Invoice"), content: pdf, contentType: "application/pdf" });
         }
 

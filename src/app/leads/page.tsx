@@ -36,6 +36,9 @@ import { compactINR, formatDate, formatINR, getInitials, localISODate } from "@/
 import { toWhatsAppNumber } from "@/lib/phone";
 import { EMAIL_RE } from "@/lib/validate";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
+import FeatureGate from "@/components/plan/FeatureGate";
 
 type LeadRow = Lead & Record<string, any>;
 type ProfileRow = Profile & Record<string, any>;
@@ -121,9 +124,10 @@ function formatDateTime(iso: string): string {
 
 /* ---------------- Page ---------------- */
 
-export default function LeadsPage() {
+function LeadsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [leads, setLeads] = useState<LeadRow[]>([]);
@@ -308,6 +312,8 @@ export default function LeadsPage() {
   }
 
   /* ---------------- Modal ---------------- */
+
+  useUrlIntent(!loading, { onNew: () => openModal() });
 
   function openModal(lead?: LeadRow) {
     setFormError("");
@@ -843,7 +849,7 @@ export default function LeadsPage() {
           <>
           {/* Phones: one card per lead (tap to open); the table starts at tablet width */}
           <ul className="list-in divide-y divide-border md:hidden">
-            {filteredLeads.map((l) => {
+            {filteredLeads.slice(0, rowLimit).map((l) => {
               const follow = getFollowUp(l);
               const open = isOpen(l);
               const overdue = open && !!follow && follow < today;
@@ -868,6 +874,7 @@ export default function LeadsPage() {
               );
             })}
           </ul>
+          <div className="md:hidden"><ShowMore total={filteredLeads.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} /></div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-xs">
               <thead>
@@ -883,7 +890,7 @@ export default function LeadsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLeads.map((l) => {
+                {filteredLeads.slice(0, rowLimit).map((l) => {
                   const follow = getFollowUp(l);
                   const open = isOpen(l);
                   const overdue = open && !!follow && follow < today;
@@ -949,6 +956,7 @@ export default function LeadsPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredLeads.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
           </>
         )}
@@ -1324,5 +1332,13 @@ export default function LeadsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeadsPageWithPlan() {
+  return (
+    <FeatureGate feature="leads_crm">
+      <LeadsPage />
+    </FeatureGate>
   );
 }

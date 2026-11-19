@@ -23,6 +23,10 @@ import {
   Headphones,
   MessagesSquare,
   Building2,
+  Sun,
+  LineChart,
+  GitBranch,
+  CalendarCheck,
 } from "lucide-react";
 
 /** Minimal, serialisable user object passed from the server layout to the client shell. */
@@ -43,6 +47,14 @@ export interface SessionUser {
   /** Current firm */
   orgId: string;
   orgName: string;
+  /** Features this firm's plan includes (plus any extras from Duesk) */
+  features?: Record<string, boolean>;
+  plan?: string;
+  planName?: string;
+  avatarUrl?: string | null;
+  firmLogoUrl?: string | null;
+  /** Rights from the person's firm role (admins have all of them) */
+  permissions?: string[];
 }
 
 export interface NavItem {
@@ -51,6 +63,8 @@ export interface NavItem {
   icon: LucideIcon;
   moduleId: string;
   adminOnly?: boolean;
+  /** Admins, or people whose firm role grants this */
+  permission?: string;
   /** Visible to every active user (each sees only their own data on that page). */
   everyone?: boolean;
   /** Visible only to support agents. */
@@ -59,6 +73,8 @@ export interface NavItem {
   ownerOnly?: boolean;
   /** Shown in the Duesk staff workspace. */
   platform?: boolean;
+  /** Plan feature; when the firm's plan lacks it the item shows a lock and leads to the Plan page */
+  feature?: string;
 }
 
 export interface NavSection {
@@ -71,7 +87,8 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Overview",
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard, moduleId: "dashboard" },
-      { name: "Unified inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard" },
+      { name: "My day", href: "/my-day", icon: Sun, moduleId: "tasks", everyone: true },
+      { name: "Unified inbox", href: "/inbox", icon: Inbox, moduleId: "dashboard", feature: "inbox" },
       { name: "Team chat", href: "/chat", icon: MessagesSquare, moduleId: "chat", everyone: true, platform: true },
     ],
   },
@@ -79,7 +96,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Clients & sales",
     items: [
       { name: "Clients", href: "/clients", icon: Users, moduleId: "leads" },
-      { name: "Enquiries & leads", href: "/leads", icon: UserPlus, moduleId: "leads" },
+      { name: "Enquiries & leads", href: "/leads", icon: UserPlus, moduleId: "leads", feature: "leads_crm" },
       { name: "Quotations", href: "/quotations", icon: FileText, moduleId: "quotations" },
       { name: "Client discussions", href: "/client-discussions", icon: MessageSquare, moduleId: "discussions" },
     ],
@@ -90,13 +107,17 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: "Tasks & compliance", href: "/tasks", icon: CheckSquare, moduleId: "tasks" },
       { name: "Compliance calendar", href: "/calendar", icon: Calendar, moduleId: "calendar" },
       { name: "Time tracking", href: "/time-tracking", icon: Clock, moduleId: "time_tracking" },
-      { name: "Performance", href: "/performance", icon: Gauge, moduleId: "performance", everyone: true },
+      { name: "Attendance", href: "/attendance", icon: CalendarCheck, moduleId: "attendance", everyone: true, feature: "attendance" },
+      { name: "Performance", href: "/performance", icon: Gauge, moduleId: "performance", everyone: true, feature: "kpi_scorecards" },
       { name: "Documents", href: "/documents", icon: Folder, moduleId: "documents" },
     ],
   },
   {
     label: "Finance",
-    items: [{ name: "Invoices", href: "/invoices", icon: Receipt, moduleId: "invoices" }],
+    items: [
+      { name: "Invoices", href: "/invoices", icon: Receipt, moduleId: "invoices" },
+      { name: "Practice insights", href: "/insights", icon: LineChart, moduleId: "insights", everyone: true, permission: "see_profitability", feature: "insights" },
+    ],
   },
   {
     label: "Support",
@@ -113,7 +134,8 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Administration",
     items: [
       { name: "Team management", href: "/team", icon: UserCheck, adminOnly: true, moduleId: "team" },
-      { name: "Service packages", href: "/packages", icon: Package, adminOnly: true, moduleId: "packages" },
+      { name: "Branches and roles", href: "/organisation", icon: GitBranch, adminOnly: true, moduleId: "team" },
+      { name: "Service packages", href: "/packages", icon: Package, adminOnly: true, moduleId: "packages", feature: "leads_crm" },
       { name: "Logs", href: "/audit-page", icon: ShieldAlert, adminOnly: true, moduleId: "audit-page" },
       { name: "Firm settings", href: "/settings", icon: Settings, adminOnly: true, moduleId: "settings" },
     ],
@@ -131,6 +153,7 @@ export function canAccess(item: NavItem, user: SessionUser): boolean {
   if (item.href === "/") return true;
   if (item.ownerOnly) return !!user.isPlatformOwner;
   if (item.supportOnly) return !!user.isSupportAgent;
+  if (item.permission && !user.isAdmin && !user.permissions?.includes(item.permission)) return false;
   if (item.adminOnly && !user.isAdmin) return false;
   if (item.everyone) return true;
   if (!user.isAdmin) return user.moduleAccess.includes(item.moduleId);

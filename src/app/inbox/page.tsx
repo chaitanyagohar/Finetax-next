@@ -46,6 +46,9 @@ import ConfirmOwnership from "@/components/inbox/ConfirmOwnership";
 import MailboxAccess from "@/components/inbox/MailboxAccess";
 import { formatDate, localISODate } from "@/lib/format";
 import { EMAIL_RE } from "@/lib/validate";
+import MessageAttachments from "@/components/inbox/MessageAttachments";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import FeatureGate from "@/components/plan/FeatureGate";
 
 const PAGE_SIZE = 100;
 
@@ -88,7 +91,7 @@ function cleanSearch(s: string): string {
   return s.replace(/[,()%*\\]/g, " ").trim().slice(0, 80);
 }
 
-export default function UnifiedInboxPage() {
+function UnifiedInboxPage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
@@ -313,6 +316,19 @@ export default function UnifiedInboxPage() {
   }
 
   /* ---------------- Message actions ---------------- */
+
+  useUrlIntent(!loading, {
+    onOpen: async (id) => {
+      const known = messages.find((m) => m.id === id);
+      if (known) return openMessage(known);
+      const { data } = await supabase
+        .from("email_messages")
+        .select("id, account_id, client_id, direction, from_address, to_address, subject, body_text, is_read, received_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (data) openMessage(data);
+    },
+  });
 
   async function openMessage(msg: any) {
     setSelectedMessage(msg);
@@ -1081,6 +1097,9 @@ export default function UnifiedInboxPage() {
 
                   <div className="flex-1 overflow-y-auto whitespace-pre-wrap bg-surface p-5 text-sm leading-relaxed text-text-main">
                     {selectedMessage.body_text || "No content."}
+                    <div className="whitespace-normal">
+                      <MessageAttachments key={selectedMessage.id} messageId={selectedMessage.id} />
+                    </div>
                   </div>
 
                   <div className="flex gap-2 border-t border-border bg-surface p-3">
@@ -1371,5 +1390,13 @@ export default function UnifiedInboxPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function UnifiedInboxPageWithPlan() {
+  return (
+    <FeatureGate feature="inbox">
+      <UnifiedInboxPage />
+    </FeatureGate>
   );
 }

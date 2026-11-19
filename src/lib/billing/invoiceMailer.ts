@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeHtml, sendFirmEmail } from "@/lib/email/mailer";
 import { pdfFileName, renderInvoicePdf } from "@/lib/pdf/firmDocuments";
 import { formatDate, istDate, rupees } from "@/lib/format";
+import { ensurePaymentLink, type InvoiceForLink } from "@/lib/payments/links";
+import { sellerFor } from "@/lib/pdf/seller";
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
 
@@ -13,7 +15,23 @@ function emailShell(firmName: string, bodyHtml: string): string {
   </div>`;
 }
 
-function paymentBlock(firm: any, balance: number): string {
+/** The invoice's Razorpay link, or null. Never stops an email from going out. */
+export async function payLinkFor(admin: SupabaseClient, inv: InvoiceForLink): Promise<string | null> {
+  try {
+    return await ensurePaymentLink(admin, inv);
+  } catch (e) {
+    console.error("[billing] payment link failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+export function payButton(url: string | null): string {
+  if (!url) return "";
+  return `<p style="margin:16px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px">Pay online</a>
+    <span style="color:#64748b;font-size:12px;margin-left:8px">UPI, cards and net banking</span></p>`;
+}
+
+function paymentBlock(firm: any, balance: number, payUrl: string | null = null): string {
   const lines = [
     `<strong>Amount payable:</strong> ${rupees(balance)}`,
     firm?.upi_id ? `<strong>UPI:</strong> ${escapeHtml(firm.upi_id)}` : "",
@@ -21,7 +39,7 @@ function paymentBlock(firm: any, balance: number): string {
       ? `<strong>Bank:</strong> ${escapeHtml(firm.bank_name || "")} · A/C ${escapeHtml(firm.bank_account_no)} · IFSC ${escapeHtml(firm.bank_ifsc || "")}`
       : "",
   ].filter(Boolean);
-  return `<p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">${lines.join("<br/>")}</p>`;
+  return `${payButton(payUrl)}<p style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px">${lines.join("<br/>")}</p>`;
 }
 
 /**
@@ -62,7 +80,8 @@ export async function issueAndEmailInvoice(
   ]);
 
   const balance = Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
-  const pdf = await renderInvoicePdf(inv, inv.clients, firm);
+  const pdf = await renderInvoicePdf(inv, inv.clients, await sellerFor(inv, firm));
+  const payUrl = balance > 0 ? await payLinkFor(admin, inv) : null;
   const firmName = firm?.firm_name || "Our firm";
   const period = inv.billing_period_start ? ` for ${formatDate(inv.billing_period_start, "-")} to ${formatDate(inv.billing_period_end, "-")}` : "";
   const late =
@@ -78,7 +97,7 @@ export async function issueAndEmailInvoice(
       firmName,
       `<p>Dear ${escapeHtml(inv.clients?.name || "Client")},</p>
        <p>Please find attached invoice <strong>${escapeHtml(inv.invoice_number)}</strong>${escapeHtml(period)} for <strong>${rupees(inv.total)}</strong>, payable by <strong>${formatDate(inv.due_date, "-")}</strong>.</p>
-       ${paymentBlock(firm, balance)}
+       ${paymentBlock(firm, balance, payUrl)}
        ${late}
        <p>Please ignore this message if you have already paid.</p>`
     ),
@@ -91,7 +110,8 @@ export async function issueAndEmailInvoice(
 }
 
 /**
- * Before-due, due-today and 3-days-overdue reminders for subscription bills (each sent once).
+ * Before-due, due-today and 3-days-overdue reminders (each sent once): for subscription bills always,
+ * and for every other issued invoice when the firm has turned that on in Settings.
  * Pass onlyOrgId to limit the run to one firm (the "Run billing now" button).
  */
 export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: string | null): Promise<number> {
@@ -118,7 +138,6 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
     let query = admin
       .from("invoices")
       .select("*, clients!client_id(*)")
-      .not("client_package_id", "is", null)
       .in("status", ["Sent", "Partially Paid"])
       .eq("due_date", rule.due);
     if (onlyOrgId) query = query.eq("org_id", onlyOrgId);
@@ -127,11 +146,13 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
     for (const inv of invoices || []) {
       const balance = Math.max(0, Number(inv.total || 0) - Number(inv.amount_paid || 0));
       if (balance <= 0.009 || !inv.clients?.email) continue;
+      if (!inv.client_package_id && !(await firmFor(inv.org_id))?.remind_all_invoices) continue;
       const { error } = await admin.from("invoice_reminders").insert([{ org_id: inv.org_id, invoice_id: inv.id, kind: rule.kind }]);
       if (error) continue; // already sent
 
       try {
         const firm = await firmFor(inv.org_id);
+        const payUrl = await payLinkFor(admin, inv);
         await sendFirmEmail({
           orgId: inv.org_id,
           to: inv.clients.email,
@@ -141,10 +162,10 @@ export async function sendPaymentReminders(admin: SupabaseClient, onlyOrgId?: st
             `<p>Dear ${escapeHtml(inv.clients?.name || "Client")},</p>
              <p>${rule.lead}</p>
              <p><strong>Invoice:</strong> ${escapeHtml(inv.invoice_number)} · <strong>Due date:</strong> ${formatDate(inv.due_date, "-")}</p>
-             ${paymentBlock(firm, balance)}
+             ${paymentBlock(firm, balance, payUrl)}
              <p>Please ignore this message if you have already paid.</p>`
           ),
-          text: `${rule.lead} Invoice ${inv.invoice_number}, balance ${rupees(balance)}, due ${formatDate(inv.due_date, "-")}.`,
+          text: `${rule.lead} Invoice ${inv.invoice_number}, balance ${rupees(balance)}, due ${formatDate(inv.due_date, "-")}.${payUrl ? ` Pay online: ${payUrl}` : ""}`,
         });
         sent++;
       } catch (e) {

@@ -72,3 +72,46 @@ export function placeOfSupplyLabel(code?: string | null): string {
   const name = stateName(code);
   return name ? `${name} (${code})` : "";
 }
+
+export const GST_RATE_CHOICES = [0, 5, 12, 18, 28];
+
+export interface TaxLine {
+  qty: number;
+  rate: number;
+  /** This line's GST rate; empty means the invoice's default rate */
+  gst?: number | null;
+}
+
+export interface TaxGroup {
+  rate: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+}
+
+const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Lines are grouped by GST rate and each group is rounded once, the same way
+ * invoices_before_write() does it (migration 050). One rate gives the same figures as before.
+ */
+export function invoiceTax(lines: TaxLine[], defaultRate: number, interState: boolean) {
+  const byRate = new Map<number, number>();
+  for (const l of lines) {
+    const rate = l.gst === null || l.gst === undefined || Number.isNaN(Number(l.gst)) ? Number(defaultRate) || 0 : Number(l.gst);
+    byRate.set(rate, (byRate.get(rate) || 0) + (Number(l.qty) || 0) * (Number(l.rate) || 0));
+  }
+  const groups: TaxGroup[] = [...byRate.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([rate, amount]) => {
+      const taxable = r2(amount);
+      const half = interState ? 0 : r2((taxable * rate) / 200);
+      return { rate, taxable, cgst: half, sgst: half, igst: interState ? r2((taxable * rate) / 100) : 0 };
+    });
+  const subtotal = r2(groups.reduce((s, g) => s + g.taxable, 0));
+  const cgst = r2(groups.reduce((s, g) => s + g.cgst, 0));
+  const sgst = r2(groups.reduce((s, g) => s + g.sgst, 0));
+  const igst = r2(groups.reduce((s, g) => s + g.igst, 0));
+  return { groups, subtotal, cgst, sgst, igst, total: r2(subtotal + cgst + sgst + igst), mixed: groups.length > 1 };
+}

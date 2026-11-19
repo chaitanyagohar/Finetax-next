@@ -22,6 +22,8 @@ import { logAuditEvent } from "@/lib/audit";
 import { useCurrentUser } from "@/components/layout/UserContext";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
+import FeatureGate from "@/components/plan/FeatureGate";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 type Card = Record<string, any>;
 type Period = "month" | "lastMonth" | "quarter" | "fy" | "custom";
@@ -91,7 +93,7 @@ function Bar({ label, value, weight }: { label: string; value?: number | null; w
   );
 }
 
-export default function PerformancePage() {
+function PerformancePage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
@@ -263,7 +265,7 @@ export default function PerformancePage() {
                     <tr key={c.user_id} onClick={() => setSelected(c)} className="cursor-pointer transition hover:bg-surface-alt">
                       <td>
                         <span className="flex items-center gap-2 font-semibold text-navy">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold">{getInitials(c.name)}</span>
+                          <PersonAvatar id={c.user_id} name={c.name} size="sm" />
                           {c.name}
                           {c.user_id === me && <span className="text-[10px] font-normal text-text-muted">(you)</span>}
                         </span>
@@ -563,5 +565,13 @@ function WeightsModal({ initial, onClose, onSaved }: { initial: any; onClose: ()
         </div>
       </div>
     </Modal>
+  );
+}
+
+export default function PerformancePageWithPlan() {
+  return (
+    <FeatureGate feature="kpi_scorecards">
+      <PerformancePage />
+    </FeatureGate>
   );
 }

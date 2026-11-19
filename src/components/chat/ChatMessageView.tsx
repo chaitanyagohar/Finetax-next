@@ -6,6 +6,7 @@ import { FileText, Loader2, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fileSize, timeLabel, type ChatAttachment, type ChatMessage } from "@/lib/chat";
 import { getInitials } from "@/lib/format";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 function escapeRe(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -124,7 +125,7 @@ export default function ChatMessageView({
       )}
       <div className="w-8 shrink-0">
         {showHeader && (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy/10 text-[10px] font-semibold text-navy">{getInitials(sender)}</span>
+          <PersonAvatar id={m.sender_id} name={sender} size="md" className="h-8 w-8" />
         )}
       </div>
       <div className="min-w-0 flex-1">

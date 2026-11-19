@@ -6,7 +6,7 @@
 import React from "react";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import QRCode from "qrcode";
-import { placeOfSupplyCode, placeOfSupplyLabel } from "@/lib/gst";
+import { invoiceTax, placeOfSupplyCode, placeOfSupplyLabel } from "@/lib/gst";
 
 // Never split words with hyphens (keeps names and addresses intact)
 Font.registerHyphenationCallback((word) => [word]);
@@ -156,25 +156,23 @@ function lineItems(raw: unknown) {
     qty: num(it?.qty ?? 1) || 1,
     rate: num(it?.rate ?? it?.price),
     sac: str(it?.sac),
+    gst: it?.gst_rate === undefined || it?.gst_rate === null || it?.gst_rate === "" ? null : num(it.gst_rate),
   }));
 }
 
-/** Prefer the totals the database calculated; fall back to computing them. */
+/** Prefer the totals the database calculated; the per-rate split is worked out the same way. */
 function taxes(doc: Rec) {
   const items = lineItems(doc?.items);
   const inter = Boolean(doc?.is_inter_state ?? doc?.isInterState);
   const rate = num(doc?.gst_rate ?? doc?.gstRate ?? 18);
-  const computedSub = Math.round(items.reduce((sum, i) => sum + i.qty * i.rate, 0) * 100) / 100;
-  const subtotal = num(doc?.subtotal) || computedSub;
-  let cgst = num(doc?.cgst);
-  let sgst = num(doc?.sgst);
-  let igst = num(doc?.igst);
-  if (!cgst && !sgst && !igst && rate > 0) {
-    if (inter) igst = Math.round(subtotal * rate) / 100;
-    else cgst = sgst = Math.round((subtotal * rate) / 2) / 100;
-  }
+  const calc = invoiceTax(items, rate, inter);
+  const stored = num(doc?.cgst) || num(doc?.sgst) || num(doc?.igst);
+  const subtotal = num(doc?.subtotal) || calc.subtotal;
+  const cgst = stored ? num(doc?.cgst) : calc.cgst;
+  const sgst = stored ? num(doc?.sgst) : calc.sgst;
+  const igst = stored ? num(doc?.igst) : calc.igst;
   const total = num(doc?.total) || Math.round((subtotal + cgst + sgst + igst) * 100) / 100;
-  return { items, inter, rate, subtotal, cgst, sgst, igst, total };
+  return { items, inter, rate, subtotal, cgst, sgst, igst, total, groups: calc.groups };
 }
 
 interface PartyDetails {
@@ -237,10 +235,20 @@ function invoicePlaceOfSupply(invoice: Rec, client: Rec): string {
 
 function Header({ firm, badge, title, number, issued }: { firm: Rec; badge: string; title: string; number: string; issued: string }) {
   const firmName = str(firm?.firm_name) || "Your Firm";
+  const tint = /^#[0-9a-fA-F]{6}$/.test(str(firm?.brand_color)) ? { backgroundColor: str(firm?.brand_color) } : {};
   return (
-    <View style={s.header} fixed>
+    <View style={[s.header, tint]} fixed>
       <View style={s.company}>
-        <Text style={[s.brand, firmName.length > 24 ? { fontSize: 15 } : {}]}>{firmName.toUpperCase()}</Text>
+        {firm?._logo ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ backgroundColor: C.white, borderRadius: 6, padding: 3 }}>
+              <Image src={str(firm._logo)} style={{ width: 38, height: 38, objectFit: "contain" }} />
+            </View>
+            <Text style={[s.brand, firmName.length > 24 ? { fontSize: 15 } : {}]}>{firmName.toUpperCase()}</Text>
+          </View>
+        ) : (
+          <Text style={[s.brand, firmName.length > 24 ? { fontSize: 15 } : {}]}>{firmName.toUpperCase()}</Text>
+        )}
         <View style={s.accent} />
         {firm?.address ? <Text style={s.companyText}>{str(firm.address)}</Text> : null}
         <Text style={s.companyMeta}>
@@ -275,7 +283,7 @@ function Party({ heading, party }: { heading: string; party: PartyDetails }) {
 }
 
 /** `defaultSac` turns on the SAC column (tax invoices); a line without its own code uses it. */
-function Items({ items, defaultSac }: { items: { description: string; qty: number; rate: number; sac: string }[]; defaultSac?: string | null }) {
+function Items({ items, defaultSac, gstLabel }: { items: { description: string; qty: number; rate: number; sac: string; gst: number | null }[]; defaultSac?: string | null; gstLabel?: (gst: number | null) => string }) {
   const showSac = defaultSac !== undefined;
   return (
     <View style={s.table}>
@@ -295,7 +303,7 @@ function Items({ items, defaultSac }: { items: { description: string; qty: numbe
         items.map((it, i) => (
           <View key={i} wrap={false} style={i % 2 ? s.trAlt : s.tr}>
             <Text style={[s.tdMuted, s.cNo]}>{i + 1}</Text>
-            <Text style={[s.td, showSac ? s.cDescSac : s.cDesc]}>{it.description}</Text>
+            <Text style={[s.td, showSac ? s.cDescSac : s.cDesc]}>{gstLabel ? `${it.description} (GST ${gstLabel(it.gst)})` : it.description}</Text>
             {showSac && <Text style={[s.td, s.cSac]}>{it.sac || defaultSac || "-"}</Text>}
             <Text style={[s.tdNum, s.cQty]}>{it.qty}</Text>
             <Text style={[s.tdNum, s.cRate]}>{money(it.rate)}</Text>
@@ -308,28 +316,31 @@ function Items({ items, defaultSac }: { items: { description: string; qty: numbe
 }
 
 function TaxRows({ t }: { t: ReturnType<typeof taxes> }) {
+  const groups = t.groups.filter((g) => g.rate > 0);
   return (
     <>
       <View style={s.totRow}>
         <Text style={s.totLabel}>Subtotal</Text>
         <Text style={s.totValue}>{money(t.subtotal)}</Text>
       </View>
-      {t.inter ? (
-        <View style={s.totRow}>
-          <Text style={s.totLabel}>IGST ({t.rate}%)</Text>
-          <Text style={s.totValue}>{money(t.igst)}</Text>
-        </View>
-      ) : (
-        <>
-          <View style={s.totRow}>
-            <Text style={s.totLabel}>CGST ({t.rate / 2}%)</Text>
-            <Text style={s.totValue}>{money(t.cgst)}</Text>
+      {groups.map((g) =>
+        t.inter ? (
+          <View key={g.rate} style={s.totRow}>
+            <Text style={s.totLabel}>IGST ({g.rate}%{groups.length > 1 ? ` on ${money(g.taxable)}` : ""})</Text>
+            <Text style={s.totValue}>{money(groups.length > 1 ? g.igst : t.igst)}</Text>
           </View>
-          <View style={s.totRow}>
-            <Text style={s.totLabel}>SGST ({t.rate / 2}%)</Text>
-            <Text style={s.totValue}>{money(t.sgst)}</Text>
+        ) : (
+          <View key={g.rate}>
+            <View style={s.totRow}>
+              <Text style={s.totLabel}>CGST ({g.rate / 2}%{groups.length > 1 ? ` on ${money(g.taxable)}` : ""})</Text>
+              <Text style={s.totValue}>{money(groups.length > 1 ? g.cgst : t.cgst)}</Text>
+            </View>
+            <View style={s.totRow}>
+              <Text style={s.totLabel}>SGST ({g.rate / 2}%{groups.length > 1 ? ` on ${money(g.taxable)}` : ""})</Text>
+              <Text style={s.totValue}>{money(groups.length > 1 ? g.sgst : t.sgst)}</Text>
+            </View>
           </View>
-        </>
+        ),
       )}
     </>
   );
@@ -392,7 +403,7 @@ export function InvoicePdf({ invoice, client, firm, qrDataUrl }: { invoice: Rec;
           </View>
         </View>
 
-        <Items items={t.items} defaultSac={str(firm?.gstin) ? str(firm?.default_sac) || null : undefined} />
+        <Items items={t.items} defaultSac={str(firm?.gstin) ? str(firm?.default_sac) || null : undefined} gstLabel={t.groups.length > 1 ? (g) => `${g ?? t.rate}%` : undefined} />
 
         <View style={s.lower} wrap={false}>
           <View style={s.left}>
@@ -486,7 +497,7 @@ export function QuotationPdf({ quotation, client, firm }: { quotation: Rec; clie
           </View>
         </View>
 
-        <Items items={t.items} />
+        <Items items={t.items} gstLabel={t.groups.length > 1 ? (g) => `${g ?? t.rate}%` : undefined} />
 
         <View style={s.lower} wrap={false}>
           <View style={s.left}>
@@ -516,7 +527,24 @@ export function QuotationPdf({ quotation, client, firm }: { quotation: Rec; clie
 
 /* ---------------- Renderers (used by preview routes and email) ---------------- */
 
-export async function renderInvoicePdf(invoice: Rec, client: Rec, firm: Rec): Promise<Buffer> {
+/** The firm logo as a data URL, or nothing: a missing or slow logo never stops a PDF. */
+async function withLogo(firm: Rec): Promise<Rec> {
+  const url = str(firm?.logo_url);
+  if (!/^https:\/\//.test(url)) return firm;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const type = res.headers.get("content-type") || "";
+    if (!res.ok || !/^image\/(png|jpeg)/.test(type)) return firm;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length > 2 * 1024 * 1024) return firm;
+    return { ...firm, _logo: `data:${type};base64,${bytes.toString("base64")}` };
+  } catch {
+    return firm;
+  }
+}
+
+export async function renderInvoicePdf(invoice: Rec, client: Rec, firmIn: Rec): Promise<Buffer> {
+  const firm = await withLogo(firmIn);
   const t = taxes(invoice);
   const paid = num(invoice?.amount_paid ?? invoice?.amountPaid);
   const balance = Math.max(0, Math.round((t.total - paid) * 100) / 100);
@@ -531,7 +559,7 @@ export async function renderInvoicePdf(invoice: Rec, client: Rec, firm: Rec): Pr
 }
 
 export async function renderQuotationPdf(quotation: Rec, client: Rec, firm: Rec): Promise<Buffer> {
-  return renderToBuffer(<QuotationPdf quotation={quotation} client={client} firm={firm} />);
+  return renderToBuffer(<QuotationPdf quotation={quotation} client={client} firm={await withLogo(firm)} />);
 }
 
 export function pdfFileName(number: unknown, fallback: string): string {

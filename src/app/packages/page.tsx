@@ -33,6 +33,7 @@ import ProposalsPanel, { ProposalComposer } from "@/components/packages/Proposal
 import SubscriptionBilling from "@/components/packages/SubscriptionBilling";
 import { compactINR, formatDate, formatINR, localISODate, ordinal } from "@/lib/format";
 import { RECURRENCES, recurrenceLabel } from "@/lib/tasks/recurrence";
+import FeatureGate from "@/components/plan/FeatureGate";
 
 const CYCLES = ["Monthly", "Quarterly", "Half-Yearly", "Yearly"];
 const CYCLE_MONTHS: Record<string, number> = { Monthly: 1, Quarterly: 3, "Half-Yearly": 6, Yearly: 12 };
@@ -50,7 +51,7 @@ function addDays(iso: string, days: number): string {
   return localISODate(new Date(y, m - 1, d + days));
 }
 
-export default function PackagesPage() {
+function PackagesPage() {
   const [supabase] = useState(() => createClient());
   const { activeNames: CATEGORIES } = useTaskCategories();
   const tabParam = useSearchParams().get("tab");
@@ -852,5 +853,13 @@ export default function PackagesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PackagesPageWithPlan() {
+  return (
+    <FeatureGate feature="leads_crm">
+      <PackagesPage />
+    </FeatureGate>
   );
 }

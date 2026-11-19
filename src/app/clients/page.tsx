@@ -27,6 +27,8 @@ import {
   GitMerge,
   ArrowLeftRight,
   Copy,
+  CalendarCheck,
+  Globe2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAll } from "@/lib/supabase/fetchAll";
@@ -40,6 +42,13 @@ import { GSTIN_RE, PAN_RE, STATE_OPTIONS, stateCodeFromGstin, stateCodeFromName,
 import { EMAIL_RE } from "@/lib/validate";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { EmptyArt } from "@/components/ui/Decor";
+import CompliancePlanner from "@/components/compliance/CompliancePlanner";
+import PortalAccess from "@/components/portal/PortalAccess";
+import { readXlsx } from "@/lib/xlsx";
+import { LockedHint } from "@/components/plan/FeatureGate";
+import { hasFeature } from "@/lib/features";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
 
 type ClientRow = Client & Record<string, any>;
 
@@ -161,6 +170,22 @@ const HEADER_MAP: Record<string, string> = {
   address: "address",
   status: "status",
   notes: "notes",
+  // Tally ledger exports
+  ledgername: "name",
+  particulars: "name",
+  mailingname: "organization_name",
+  gstinuin: "gstin",
+  gstno: "gstin",
+  panitno: "pan",
+  panno: "pan",
+  incometaxnumber: "pan",
+  emailid: "email",
+  mobileno: "phone",
+  mobilenumber: "phone",
+  phoneno: "phone",
+  contactno: "phone",
+  statename: "state",
+  tan: "tan",
 };
 
 interface ImportRow {
@@ -175,6 +200,7 @@ interface ImportRow {
 export default function ClientsPage() {
   const currentUser = useCurrentUser();
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -209,6 +235,10 @@ export default function ClientsPage() {
   const [type, setType] = useState("Individual");
   const [pan, setPan] = useState("");
   const [gstin, setGstin] = useState("");
+  const [tan, setTan] = useState("");
+  const [gstScheme, setGstScheme] = useState("");
+  const [planFor, setPlanFor] = useState<{ id: string; name: string; assignee: string | null } | null>(null);
+  const [portalFor, setPortalFor] = useState<{ id: string; name: string; email: string | null } | null>(null);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [state, setState] = useState("");
@@ -343,6 +373,14 @@ export default function ClientsPage() {
     }
   }
 
+  useUrlIntent(!loading, {
+    onNew: () => openModal(),
+    onOpen: (id) => {
+      const c = clients.find((x) => x.id === id);
+      if (c) openModal(c);
+    },
+  });
+
   function openModal(client?: ClientRow) {
     setFormError("");
     setSnapshot(null);
@@ -353,6 +391,8 @@ export default function ClientsPage() {
       setType(client.type || "Individual");
       setPan(client.pan || "");
       setGstin(client.gstin || "");
+      setTan(client.tan || "");
+      setGstScheme(client.gst_scheme || "");
       setEmail(client.email || "");
       setPhone(client.phone || "");
       setState(stateName(stateCodeFromName(client.state)));
@@ -382,6 +422,8 @@ export default function ClientsPage() {
     setType("Individual");
     setPan("");
     setGstin("");
+    setTan("");
+    setGstScheme("");
     setEmail("");
     setPhone("");
     setState("");
@@ -403,6 +445,7 @@ export default function ClientsPage() {
     if (!cleanName) return setFormError("Client name is required.");
     if (!panValid) return setFormError("PAN must look like ABCDE1234F.");
     if (!gstinValid) return setFormError("GSTIN must look like 07ABCDE1234F1Z5.");
+    if (tan.trim() && !/^[A-Z]{4}[0-9]{5}[A-Z]$/.test(tan.trim().toUpperCase())) return setFormError("TAN must look like DELA12345B.");
     if (gstPanMismatch) return setFormError("This GSTIN does not belong to the PAN entered.");
     if (!state) return setFormError("Select the client's state. It decides the place of supply on invoices.");
     if (cleanEmail && !EMAIL_RE.test(cleanEmail)) return setFormError("Please enter a valid email address.");
@@ -457,6 +500,8 @@ export default function ClientsPage() {
         type,
         pan: panUpper || null,
         gstin: gstinUpper || null,
+        tan: tan.trim().toUpperCase() || null,
+        gst_scheme: gstinUpper ? gstScheme || null : null,
         email: cleanEmail,
         phone: phone.trim(),
         state: state.trim(),
@@ -476,6 +521,8 @@ export default function ClientsPage() {
         if (error || !data) throw error || new Error("Could not create the client.");
         logAuditEvent("CREATE_CLIENT", "CLIENTS", data.id, { ...payload, duplicate_warning_overridden: !!dupMatches?.length });
         showToast("success", `${clientLabel(payload)} added to the client master.`);
+        // Straight on to their recurring returns, while the details are fresh
+        if (payload.gstin || payload.tan || type !== "Other") setPlanFor({ id: data.id, name: clientLabel(payload), assignee: payload.assigned_to });
       }
 
       setIsModalOpen(false);
@@ -678,7 +725,7 @@ export default function ClientsPage() {
     }
 
     try {
-      const rows = parseCSV(await file.text());
+      const rows = /\.xlsx$/i.test(file.name) ? await readXlsx(file) : parseCSV(await file.text());
       if (rows.length < 2) throw new Error("The file is empty or has no data rows below the header.");
       if (rows.length - 1 > MAX_IMPORT_ROWS) throw new Error(`Please import at most ${MAX_IMPORT_ROWS} clients at a time.`);
 
@@ -707,6 +754,8 @@ export default function ClientsPage() {
         if (!data.name) errors.push("Name is missing");
         if (data.pan && !PAN_RE.test(data.pan)) errors.push("Invalid PAN");
         if (data.gstin && !GSTIN_RE.test(data.gstin)) errors.push("Invalid GSTIN");
+        if (data.tan) data.tan = data.tan.toUpperCase().replace(/\s/g, "");
+        if (data.tan && !/^[A-Z]{4}[0-9]{5}[A-Z]$/.test(data.tan)) errors.push("Invalid TAN");
         if (data.pan && data.gstin && PAN_RE.test(data.pan) && GSTIN_RE.test(data.gstin) && data.gstin.slice(2, 12) !== data.pan) {
           errors.push("GSTIN does not match PAN");
         }
@@ -760,6 +809,7 @@ export default function ClientsPage() {
         type: r.data.type || "Individual",
         pan: r.data.pan || null,
         gstin: r.data.gstin || null,
+        tan: r.data.tan || null,
         email: r.data.email || "",
         phone: r.data.phone || "",
         state: r.data.state || "",
@@ -851,7 +901,7 @@ export default function ClientsPage() {
             onClick={openImport}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-surface-alt lg:flex-none"
           >
-            <Upload className="h-4 w-4 text-navy" /> Bulk import (CSV)
+            <Upload className="h-4 w-4 text-navy" /> Import (Excel, CSV, Tally)
           </button>
           <button
             type="button"
@@ -943,7 +993,7 @@ export default function ClientsPage() {
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <EmptyArt />
             <p className="text-xs text-text-muted">
-              {clients.length === 0 ? 'No clients yet. Click "Add client" or "Bulk import (CSV)" to get started.' : "No clients match these filters."}
+              {clients.length === 0 ? 'No clients yet. Click "Add client" or "Import" to bring in your client list.' : "No clients match these filters."}
             </p>
           </div>
         ) : (
@@ -962,7 +1012,7 @@ export default function ClientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredClients.map((c) => {
+                {filteredClients.slice(0, rowLimit).map((c) => {
                   const due = outstandingByClient[c.id] || 0;
                   const rm = teamName(c.assigned_to);
                   const st = statusOf(c);
@@ -1022,6 +1072,7 @@ export default function ClientsPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredClients.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
         )}
       </div>
@@ -1095,7 +1146,7 @@ export default function ClientsPage() {
                 <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-navy/40 px-3 py-2 text-xs font-semibold text-navy transition hover:bg-navy/5">
                   <FileSpreadsheet className="h-4 w-4" />
                   <span className="truncate">{csvFile ? csvFile.name : "Choose CSV file..."}</span>
-                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => handleFileSelect(e.target.files?.[0] || null)} />
+                  <input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => handleFileSelect(e.target.files?.[0] || null)} />
                 </label>
               </div>
 
@@ -1171,6 +1222,27 @@ export default function ClientsPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-muted transition hover:bg-surface-alt"
                   >
                     <UserX className="h-3.5 w-3.5" /> Mark inactive
+                  </button>
+                )}
+                {editingClient && !editingMerged && statusOf(editingClient) === "Active" && (
+                  <button
+                    type="button"
+                    onClick={() => setPlanFor({ id: editingClient.id, name: clientLabel(editingClient), assignee: editingClient.assigned_to || null })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-xs font-semibold text-accent transition hover:brightness-95"
+                  >
+                    <CalendarCheck className="h-3.5 w-3.5" /> Compliance plan
+                  </button>
+                )}
+                {editingClient && !editingMerged && statusOf(editingClient) === "Active" && !hasFeature(currentUser, "client_portal") && (
+                  <LockedHint feature="client_portal" />
+                )}
+                {editingClient && !editingMerged && statusOf(editingClient) === "Active" && hasFeature(currentUser, "client_portal") && (
+                  <button
+                    type="button"
+                    onClick={() => setPortalFor({ id: editingClient.id, name: clientLabel(editingClient), email: editingClient.email || null })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-main transition hover:bg-surface-alt"
+                  >
+                    <Globe2 className="h-3.5 w-3.5" /> Client portal
                   </button>
                 )}
                 {editingClient && isAdmin && !editingMerged && (
@@ -1333,6 +1405,30 @@ export default function ClientsPage() {
                     {!gstinValid && <p className="mt-1 text-[10px] font-medium text-rose-600">15 characters, e.g. 07ABCDE1234F1Z5</p>}
                     {gstPanMismatch && <p className="mt-1 text-[10px] font-medium text-rose-600">This GSTIN belongs to a different PAN</p>}
                     {gstinUpper && gstinValid && !gstPanMismatch && <p className="mt-1 text-[10px] text-text-muted">State auto-filled from GSTIN</p>}
+                  </div>
+
+                  {gstinUpper && (
+                    <div>
+                      <label className={labelClass}>GST returns</label>
+                      <select value={gstScheme} onChange={(e) => setGstScheme(e.target.value)} className={inputClass}>
+                        <option value="">Monthly</option>
+                        <option value="qrmp">Quarterly (QRMP)</option>
+                        <option value="composition">Composition</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelClass}>TAN</label>
+                    <input
+                      type="text"
+                      placeholder="DELA12345B"
+                      maxLength={10}
+                      value={tan}
+                      onChange={(e) => setTan(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                      className={`${inputClass} font-mono uppercase`}
+                    />
+                    <p className="mt-1 text-[10px] text-text-muted">For TDS returns. Leave blank if the client doesn&apos;t deduct TDS.</p>
                   </div>
 
                   <div>
@@ -1693,6 +1789,18 @@ export default function ClientsPage() {
           </div>
         </Modal>
       )}
+
+      {planFor && (
+        <CompliancePlanner
+          clientId={planFor.id}
+          clientName={planFor.name}
+          defaultAssignee={planFor.assignee}
+          onClose={() => setPlanFor(null)}
+          onDone={(n) => showToast("success", n ? `${n} recurring task${n === 1 ? "" : "s"} created for ${planFor.name}.` : "Nothing new to create.")}
+        />
+      )}
+
+      {portalFor && <PortalAccess clientId={portalFor.id} clientName={portalFor.name} defaultEmail={portalFor.email} onClose={() => setPortalFor(null)} />}
 
       {/* Confirmations */}
       {confirm === "delete" && editingClient && (

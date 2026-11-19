@@ -32,6 +32,9 @@ import AttendancePanel from "@/components/time/AttendancePanel";
 import TaskPicker, { taskLabel, type PickedTask } from "@/components/tasks/TaskPicker";
 import { formatDate, getInitials, localISODate } from "@/lib/format";
 import { EmptyArt } from "@/components/ui/Decor";
+import { useUrlIntent } from "@/lib/useUrlIntent";
+import { ROW_PAGE, ShowMore } from "@/components/ui/kit";
+import { PersonAvatar } from "@/components/ui/Avatar";
 
 const LOCK_DAYS = 7; // must match v_lock_days in the database rule
 const TASK_TITLE_BATCH = 200;
@@ -97,6 +100,7 @@ export default function TimeTrackingPage() {
   const currentUser = useCurrentUser();
   const me = currentUser?.id || "";
   const isAdmin = !!currentUser?.isAdmin;
+  const [rowLimit, setRowLimit] = useState(ROW_PAGE);
   const [supabase] = useState(() => createClient());
 
   const [logs, setLogs] = useState<any[]>([]);
@@ -293,6 +297,8 @@ export default function TimeTrackingPage() {
     if (isAdmin) return true;
     return log.user_id === me && String(log.log_date) >= lockDate;
   }
+
+  useUrlIntent(!loading, { onNew: () => openModal() });
 
   function openModal(log?: any) {
     setFormError("");
@@ -749,7 +755,7 @@ export default function TimeTrackingPage() {
                   <button key={p.id} type="button" onClick={() => setFilterUser(filterUser === p.id ? "" : p.id)} className="block w-full text-left">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className={`flex items-center gap-1.5 font-medium ${filterUser === p.id ? "text-navy" : "text-text-main"}`}>
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-navy/10 text-[8px] font-semibold text-navy">{getInitials(nameOf(p.id))}</span>
+                        <PersonAvatar id={p.id} name={nameOf(p.id)} size="xs" />
                         {nameOf(p.id) || "—"}
                       </span>
                       <span className="text-text-muted">
@@ -825,7 +831,7 @@ export default function TimeTrackingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.map((log) => {
+                {filteredLogs.slice(0, rowLimit).map((log) => {
                   const editable = canModify(log);
                   return (
                     <tr key={log.id} className="transition hover:bg-surface-alt">
@@ -872,6 +878,7 @@ export default function TimeTrackingPage() {
                 })}
               </tbody>
             </table>
+            <ShowMore total={filteredLogs.length} shown={rowLimit} onMore={() => setRowLimit((n) => n + ROW_PAGE)} />
           </div>
         )}
       </div>
